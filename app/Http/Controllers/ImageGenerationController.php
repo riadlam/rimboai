@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientTokensException;
 use App\Models\UserImageCreation;
 use App\Services\Credits\ImageGenerationCostEstimator;
 use App\Services\FalImageInputBuilder;
+use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\ImageReferenceStorage;
+use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -24,6 +27,8 @@ class ImageGenerationController extends Controller
         FalImageInputBuilder $inputBuilder,
         ImageReferenceStorage $referenceStorage,
         ImageGenerationCostEstimator $costEstimator,
+        TokenService $tokens,
+        FalPricingService $pricing,
     ): JsonResponse {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
@@ -119,43 +124,78 @@ class ImageGenerationController extends Controller
         ]);
 
         $submitEndpoint = $inputBuilder->resolveEndpoint($model->endpoint_id, $referenceUrls);
+        $billing = $pricing->resolve($submitEndpoint);
+        if ($billing === null) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $submitEndpoint,
+            ], 503);
+        }
 
         $cost = $costEstimator->estimate([
-            'endpoint_id' => $model->endpoint_id,
-            'unit' => $model->unit ?? null,
-            'unit_price' => $model->unit_price ?? null,
+            'endpoint_id' => $submitEndpoint,
+            'unit' => $billing['unit'],
+            'unit_price' => $billing['unit_price'],
             'aspect' => $aspect,
             'resolution' => $resolution,
             'quantity' => $quantity,
             'reference_count' => count($referenceUrls),
         ]);
 
-        $creation = UserImageCreation::create([
-            'user_id' => $request->user()->id,
-            'mode' => $creationMode,
-            'endpoint_id' => $model->endpoint_id,
-            'model_name' => $model->name,
-            'prompt' => $data['prompt'],
-            'input_assets' => $inputAssets ?: null,
-            'settings' => [
-                'aspect' => $aspect,
-                'resolution' => $resolution,
-                'quantity' => $quantity,
-                'mode' => $mode,
-                'fal_input' => $falInput,
-                'fal_endpoint' => $submitEndpoint,
-                'fal_cost_usd' => $cost['fal_cost_usd'],
-                'credits' => $cost['credits'],
-                'cost_breakdown' => $cost['breakdown'],
-            ],
-            'status' => UserImageCreation::STATUS_PENDING,
-        ]);
+        if ((int) $cost['credits'] <= 0) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $submitEndpoint,
+            ], 503);
+        }
+
+        try {
+            /** @var UserImageCreation $creation */
+            $creation = $tokens->reserve(
+                $request->user(),
+                (int) $cost['credits'],
+                'image',
+                fn () => UserImageCreation::create([
+                    'user_id' => $request->user()->id,
+                    'mode' => $creationMode,
+                    'endpoint_id' => $submitEndpoint,
+                    'model_name' => $model->name,
+                    'prompt' => $data['prompt'],
+                    'input_assets' => $inputAssets ?: null,
+                    'settings' => [
+                        'aspect' => $aspect,
+                        'resolution' => $resolution,
+                        'quantity' => $quantity,
+                        'mode' => $mode,
+                        'fal_input' => $falInput,
+                        'catalog_endpoint' => $model->endpoint_id,
+                        'fal_endpoint' => $submitEndpoint,
+                        'billing_endpoint' => $billing['endpoint_id'],
+                        'billing_source' => $billing['source'],
+                        'billing_unit' => $billing['unit'],
+                        'billing_unit_price' => $billing['unit_price'],
+                        'fal_cost_usd' => $cost['fal_cost_usd'],
+                        'credits' => $cost['credits'],
+                        'cost_breakdown' => $cost['breakdown'],
+                    ],
+                    'credits_charged' => $cost['credits'],
+                    'status' => UserImageCreation::STATUS_PENDING,
+                ]),
+            );
+        } catch (InsufficientTokensException $e) {
+            return response()->json([
+                'message' => 'You do not have enough tokens for this creation.',
+                'required_tokens' => $e->required,
+                'available_tokens' => $e->available,
+            ], 402);
+        }
 
         try {
             $submit = $fal->submit($submitEndpoint, $falInput);
         } catch (\Throwable $e) {
             report($e);
             $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $tokens->refund($request->user(), $creation, 'image', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
         }
@@ -313,6 +353,7 @@ class ImageGenerationController extends Controller
             'preview_url' => $creation->result_preview_url,
             'error' => $creation->error_message,
             'credits' => $creation->settings['credits'] ?? null,
+            'token_balance' => (int) (auth()->user()?->fresh()->tokens ?? 0),
             'fal_cost_usd' => $creation->settings['fal_cost_usd'] ?? null,
             'created_at' => optional($creation->created_at)->toIso8601String(),
         ];

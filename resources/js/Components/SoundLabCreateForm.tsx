@@ -26,6 +26,7 @@ type Props = {
     ) => void;
     loading?: boolean;
     creditsConfig?: CreditsConfig;
+    tokenBalance?: number;
     draft?: LabReuseDraft | null;
 };
 
@@ -80,6 +81,7 @@ export default function SoundLabCreateForm({
     onGenerate,
     loading = false,
     creditsConfig,
+    tokenBalance = 0,
     draft = null,
 }: Props) {
     const [style, setStyle] = useState('');
@@ -173,6 +175,7 @@ export default function SoundLabCreateForm({
         [selectedModelRecord, autoEnhance, creditsConfig, needsSourceAudio, sourceDurationSec],
     );
     const creditCost = creditEstimate.credits;
+    const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
     const sourceDurationLabel = formatMusicDuration(sourceDurationSec);
     const maxSourceSeconds =
         typeof selectedModelRecord?.max_duration === 'number' && selectedModelRecord.max_duration > 0
@@ -187,7 +190,7 @@ export default function SoundLabCreateForm({
         sourceDurationSec > maxSourceSeconds;
 
     const canGenerate =
-        Boolean(style.trim()) && (!needsSourceAudio || Boolean(sourceAudio)) && !sourceTooLong;
+        Boolean(style.trim()) && (!needsSourceAudio || Boolean(sourceAudio)) && !sourceTooLong && hasEnoughTokens;
 
     useEffect(() => {
         setSourceAudio(null);
@@ -941,6 +944,8 @@ export default function SoundLabCreateForm({
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                             Creating…
                         </span>
+                    ) : !hasEnoughTokens ? (
+                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

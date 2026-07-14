@@ -2,6 +2,7 @@ export type User = {
     id: number;
     name: string;
     email: string;
+    tokens: number;
 };
 
 export type BrandVoice = {

@@ -20,11 +20,13 @@ export function apiUrl(path: string): string {
 
 export class ApiError extends Error {
     status: number;
+    payload: Record<string, unknown> | null;
 
-    constructor(message: string, status: number) {
+    constructor(message: string, status: number, payload: Record<string, unknown> | null = null) {
         super(message);
         this.name = 'ApiError';
         this.status = status;
+        this.payload = payload;
     }
 }
 
@@ -59,7 +61,11 @@ async function request<T>(url: string, method: 'GET' | 'POST', body?: unknown): 
             (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message: unknown }).message === 'string'
                 ? (payload as { message: string }).message
                 : null) || `Request failed (${res.status})`;
-        throw new ApiError(message, res.status);
+        throw new ApiError(
+            message,
+            res.status,
+            payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null,
+        );
     }
 
     return payload as T;
@@ -97,7 +103,11 @@ async function requestForm<T>(url: string, form: FormData): Promise<T> {
             (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message: unknown }).message === 'string'
                 ? (payload as { message: string }).message
                 : null) || `Request failed (${res.status})`;
-        throw new ApiError(message, res.status);
+        throw new ApiError(
+            message,
+            res.status,
+            payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null,
+        );
     }
 
     return payload as T;

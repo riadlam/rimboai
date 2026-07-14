@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientTokensException;
 use App\Models\UserMusicCreation;
 use App\Services\Credits\MusicGenerationCostEstimator;
 use App\Services\FalMusicInputBuilder;
+use App\Services\FalPricingService;
 use App\Services\FalService;
+use App\Services\Tokens\TokenService;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +23,8 @@ class MusicGenerationController extends Controller
         FalService $fal,
         FalMusicInputBuilder $inputBuilder,
         MusicGenerationCostEstimator $costEstimator,
+        TokenService $tokens,
+        FalPricingService $pricing,
     ): JsonResponse {
         $data = $request->validate([
             'endpoint_id' => ['required', 'string', 'max:191'],
@@ -108,12 +113,27 @@ class MusicGenerationController extends Controller
             ? (int) ceil((float) $data['duration_seconds'])
             : null;
 
+        $billing = $pricing->resolve((string) $model->endpoint_id);
+        if ($billing === null) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $model->endpoint_id,
+            ], 503);
+        }
+
         $cost = $costEstimator->estimate([
-            'unit' => $model->unit ?? null,
-            'unit_price' => $model->unit_price ?? null,
+            'unit' => $billing['unit'],
+            'unit_price' => $billing['unit_price'],
             'default_duration_seconds' => $model->default_duration_seconds ?? null,
             'max_duration' => $model->max_duration ?? null,
         ], $autoEnhance, $durationSeconds);
+
+        if ((int) $cost['credits'] <= 0) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $model->endpoint_id,
+            ], 503);
+        }
 
         $title = trim((string) ($data['title'] ?? ''));
         if ($title === '') {
@@ -122,38 +142,53 @@ class MusicGenerationController extends Controller
                 : $data['prompt'];
         }
 
-        $creation = UserMusicCreation::create([
-            'user_id' => $request->user()->id,
-            'mode' => $supportsAudio ? 'audio-to-audio' : 'text-to-music',
-            'endpoint_id' => $model->endpoint_id,
-            'model_name' => $model->name,
-            'title' => $title,
-            'prompt' => $data['prompt'],
-            'lyrics' => $lyrics !== '' ? $lyrics : null,
-            'instrumental' => $instrumental,
-            'input_assets' => $audioUrl ? [['url' => $audioUrl, 'kind' => 'audio']] : null,
-            'settings' => [
-                'auto_enhance' => $autoEnhance,
-                'vocal_gender' => $vocalGender,
-                'audio_url' => $audioUrl,
-                'edit_mode' => $editMode ?? ($falInput['edit_mode'] ?? null),
-                'fal_input' => $falInput,
-                'fal_endpoint' => $model->endpoint_id,
-                'fal_cost_usd' => $cost['fal_cost_usd'],
-                'credits' => $cost['credits'],
-                'assumed_seconds' => $cost['assumed_seconds'],
-            ],
-            'duration_seconds' => $cost['assumed_seconds'],
-            'credits_charged' => $cost['credits'],
-            'status' => UserMusicCreation::STATUS_PENDING,
-            'progress_message' => 'Starting…',
-        ]);
+        try {
+            /** @var UserMusicCreation $creation */
+            $creation = $tokens->reserve(
+                $request->user(),
+                (int) $cost['credits'],
+                'music',
+                fn () => UserMusicCreation::create([
+                    'user_id' => $request->user()->id,
+                    'mode' => $supportsAudio ? 'audio-to-audio' : 'text-to-music',
+                    'endpoint_id' => $model->endpoint_id,
+                    'model_name' => $model->name,
+                    'title' => $title,
+                    'prompt' => $data['prompt'],
+                    'lyrics' => $lyrics !== '' ? $lyrics : null,
+                    'instrumental' => $instrumental,
+                    'input_assets' => $audioUrl ? [['url' => $audioUrl, 'kind' => 'audio']] : null,
+                    'settings' => [
+                        'auto_enhance' => $autoEnhance,
+                        'vocal_gender' => $vocalGender,
+                        'audio_url' => $audioUrl,
+                        'edit_mode' => $editMode ?? ($falInput['edit_mode'] ?? null),
+                        'fal_input' => $falInput,
+                        'fal_endpoint' => $model->endpoint_id,
+                        'fal_cost_usd' => $cost['fal_cost_usd'],
+                        'credits' => $cost['credits'],
+                        'assumed_seconds' => $cost['assumed_seconds'],
+                    ],
+                    'duration_seconds' => $cost['assumed_seconds'],
+                    'credits_charged' => $cost['credits'],
+                    'status' => UserMusicCreation::STATUS_PENDING,
+                    'progress_message' => 'Starting…',
+                ]),
+            );
+        } catch (InsufficientTokensException $e) {
+            return response()->json([
+                'message' => 'You do not have enough tokens for this creation.',
+                'required_tokens' => $e->required,
+                'available_tokens' => $e->available,
+            ], 402);
+        }
 
         try {
             $submit = $fal->submit($model->endpoint_id, $falInput);
         } catch (\Throwable $e) {
             report($e);
             $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $tokens->refund($request->user(), $creation, 'music', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
         }
@@ -398,6 +433,7 @@ class MusicGenerationController extends Controller
             'duration' => $durationLabel,
             'error' => $creation->error_message,
             'credits' => $creation->settings['credits'] ?? $creation->credits_charged,
+            'token_balance' => (int) (auth()->user()?->fresh()->tokens ?? 0),
             'fal_cost_usd' => $creation->settings['fal_cost_usd'] ?? null,
             'created_at' => optional($creation->created_at)->toIso8601String(),
         ];

@@ -1,6 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/react';
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import CreditsModal from '@/Components/CreditsModal';
 import type { PageProps } from '@/types';
 
@@ -12,11 +12,26 @@ export default function AppHeader({ onMenuClick }: Props) {
     const { props } = usePage<PageProps>();
     const user = props.auth.user;
     const [creditsOpen, setCreditsOpen] = useState(false);
-    const credits = 33;
-    const maxCredits = 100;
-    const pct = Math.min(100, Math.round((credits / maxCredits) * 100));
+    const [tokens, setTokens] = useState(() => Math.max(0, user?.tokens ?? 0));
+    const meterMax = Math.max(100, tokens);
+    const pct = Math.min(100, Math.round((tokens / meterMax) * 100));
     const initials = user?.name?.slice(0, 2).toUpperCase() || 'U';
     const firstName = user?.name?.split(' ')[0] || 'Guest';
+
+    useEffect(() => {
+        setTokens(Math.max(0, user?.tokens ?? 0));
+    }, [user?.tokens]);
+
+    useEffect(() => {
+        const sync = (event: Event) => {
+            const balance = (event as CustomEvent<{ balance?: number }>).detail?.balance;
+            if (typeof balance === 'number' && Number.isFinite(balance)) {
+                setTokens(Math.max(0, Math.floor(balance)));
+            }
+        };
+        window.addEventListener('tokens:updated', sync);
+        return () => window.removeEventListener('tokens:updated', sync);
+    }, []);
 
     return (
         <div className="fixed inset-x-0 top-0 z-50 flex-shrink-0">
@@ -57,8 +72,8 @@ export default function AppHeader({ onMenuClick }: Props) {
                         </span>
                         <div className="flex flex-col justify-center gap-1">
                             <div className="flex items-center gap-1.5 leading-none">
-                                <span className="text-[13px] font-semibold tabular-nums text-white">{credits}</span>
-                                <span className="text-[11px] text-zinc-500">credits</span>
+                                <span className="text-[13px] font-semibold tabular-nums text-white">{tokens}</span>
+                                <span className="text-[11px] text-zinc-500">tokens</span>
                             </div>
                             <div className="h-1 w-24 overflow-hidden rounded-full bg-white/10">
                                 <div
@@ -82,7 +97,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                             <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
                             <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />
                         </svg>
-                        <span className="relative">Buy Credits</span>
+                        <span className="relative">Buy Tokens</span>
                     </button>
 
                     <div className="mx-0.5 hidden h-6 w-px bg-white/[0.08] md:block" />
@@ -134,10 +149,9 @@ export default function AppHeader({ onMenuClick }: Props) {
                                 {/* Credit summary */}
                                 <div className="border-b border-white/[0.06] px-3.5 py-3">
                                     <div className="mb-1.5 flex items-center justify-between">
-                                        <span className="text-[12px] text-zinc-400">Credits</span>
+                                        <span className="text-[12px] text-zinc-400">Tokens</span>
                                         <span className="text-[12px] font-medium tabular-nums text-white">
-                                            {credits}
-                                            <span className="text-zinc-600"> / {maxCredits}</span>
+                                            {tokens}
                                         </span>
                                     </div>
                                     <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
@@ -159,7 +173,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                                                 }`}
                                             >
                                                 <IconSpark />
-                                                Buy credits
+                                                Buy tokens
                                             </button>
                                         )}
                                     </MenuItem>

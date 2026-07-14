@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Services\Tokens;
+
+use App\Exceptions\InsufficientTokensException;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use Throwable;
+
+class TokenService
+{
+    /**
+     * Atomically lock the user's balance, create a generation, and debit tokens.
+     *
+     * @template TCreation of Model
+     *
+     * @param  callable(): TCreation  $create
+     * @return TCreation
+     */
+    public function reserve(User $user, int $amount, string $creationType, callable $create): Model
+    {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Token charge must be greater than zero.');
+        }
+
+        return DB::transaction(function () use ($user, $amount, $creationType, $create) {
+            /** @var User $lockedUser */
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->getKey());
+            $available = (int) $lockedUser->tokens;
+
+            if ($available < $amount) {
+                throw new InsufficientTokensException($amount, $available);
+            }
+
+            $creation = $create();
+            if (! $creation instanceof Model || ! $creation->exists) {
+                throw new InvalidArgumentException('Token reservation requires a persisted creation.');
+            }
+
+            $lockedUser->tokens = $available - $amount;
+            $lockedUser->save();
+
+            DB::table('token_transactions')->insert([
+                'user_id' => $lockedUser->getKey(),
+                'kind' => 'debit',
+                'amount' => $amount,
+                'balance_after' => $lockedUser->tokens,
+                'creation_type' => $creationType,
+                'creation_id' => $creation->getKey(),
+                'metadata' => json_encode(['reason' => 'generation_reserved'], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $user->setAttribute('tokens', $lockedUser->tokens);
+
+            return $creation;
+        }, 3);
+    }
+
+    /**
+     * Idempotently refund a reservation when fal rejects the initial submission.
+     */
+    public function refund(User $user, Model $creation, string $creationType, string $reason): bool
+    {
+        try {
+            return DB::transaction(function () use ($user, $creation, $creationType, $reason) {
+                $debit = DB::table('token_transactions')
+                    ->where('creation_type', $creationType)
+                    ->where('creation_id', $creation->getKey())
+                    ->where('kind', 'debit')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $debit) {
+                    return false;
+                }
+
+                $alreadyRefunded = DB::table('token_transactions')
+                    ->where('creation_type', $creationType)
+                    ->where('creation_id', $creation->getKey())
+                    ->where('kind', 'refund')
+                    ->exists();
+
+                if ($alreadyRefunded) {
+                    return false;
+                }
+
+                /** @var User $lockedUser */
+                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->getKey());
+                $amount = (int) $debit->amount;
+                $lockedUser->tokens = (int) $lockedUser->tokens + $amount;
+                $lockedUser->save();
+
+                DB::table('token_transactions')->insert([
+                    'user_id' => $lockedUser->getKey(),
+                    'kind' => 'refund',
+                    'amount' => $amount,
+                    'balance_after' => $lockedUser->tokens,
+                    'creation_type' => $creationType,
+                    'creation_id' => $creation->getKey(),
+                    'metadata' => json_encode(['reason' => $reason], JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $user->setAttribute('tokens', $lockedUser->tokens);
+
+                return true;
+            }, 3);
+        } catch (Throwable $e) {
+            report($e);
+
+            return false;
+        }
+    }
+}

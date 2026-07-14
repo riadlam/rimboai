@@ -21,6 +21,7 @@ type Props = {
     onGenerate?: (prompt: string, options?: ImageGenerateOptions) => void;
     loading?: boolean;
     creditsConfig?: CreditsConfig;
+    tokenBalance?: number;
     draft?: LabReuseDraft | null;
 };
 
@@ -41,6 +42,7 @@ export default function ImageLabCreateForm({
     onGenerate,
     loading = false,
     creditsConfig,
+    tokenBalance = 0,
     draft = null,
 }: Props) {
     const [mode, setMode] = useState<'create' | 'variations'>('create');
@@ -101,11 +103,13 @@ export default function ImageLabCreateForm({
         [selectedModelRecord, aspect, resolution, quantity, imageRefs.length, creditsConfig],
     );
     const creditCost = creditEstimate.credits;
+    const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
     const canGenerate =
         Boolean(prompt.trim()) &&
         (!isVariations || imageRefs.length > 0) &&
-        (!isVariations || selectedSupportsVariations);
+        (!isVariations || selectedSupportsVariations) &&
+        hasEnoughTokens;
 
     const selectedModelMeta =
         allModels.find((m) => m.name === selectedModel) ||
@@ -719,6 +723,8 @@ export default function ImageLabCreateForm({
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                             Generating…
                         </span>
+                    ) : !hasEnoughTokens ? (
+                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
                     ) : !canGenerate && isVariations && imageRefs.length === 0 ? (
                         <span className="relative text-white/90">Add source images to continue</span>
                     ) : (

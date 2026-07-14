@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientTokensException;
 use App\Models\UserVideoCreation;
 use App\Services\Credits\VideoGenerationCostEstimator;
+use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalVideoInputBuilder;
 use App\Services\MediaReferenceStorage;
+use App\Services\Tokens\TokenService;
 use App\Services\VideoModelCapabilities;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +26,8 @@ class VideoGenerationController extends Controller
         VideoGenerationCostEstimator $costEstimator,
         MediaReferenceStorage $mediaStorage,
         VideoModelCapabilities $capabilities,
+        TokenService $tokens,
+        FalPricingService $pricing,
     ): JsonResponse {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
@@ -151,57 +156,86 @@ class VideoGenerationController extends Controller
         $durationSeconds = $built['duration_seconds'];
         $withAudio = $built['with_audio'];
 
-        // Prefer I2V/R2V catalog pricing when available
-        $billingModel = DB::table('image_to_video_models')
-            ->where('endpoint_id', $submitEndpoint)
-            ->where('status', 'active')
-            ->first() ?: $model;
+        // Prefer pricing for the exact submit route (I2V/R2V). No live fal lookup; cron owns prices.
+        $billing = $pricing->resolve($submitEndpoint);
+        if ($billing === null) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $submitEndpoint,
+            ], 503);
+        }
 
         $cost = $costEstimator->estimate([
             'endpoint_id' => $submitEndpoint,
-            'unit' => $billingModel->unit ?? $model->unit ?? null,
-            'unit_price' => $billingModel->unit_price ?? $model->unit_price ?? null,
+            'unit' => $billing['unit'],
+            'unit_price' => $billing['unit_price'],
             'duration_seconds' => $durationSeconds,
             'audio' => $withAudio,
             'resolution' => $built['resolution'] ?? ($data['resolution'] ?? '720p'),
             'aspect' => $built['aspect_ratio'] ?? ($data['aspect'] ?? '16:9'),
         ]);
 
-        $creation = UserVideoCreation::create([
-            'user_id' => $request->user()->id,
-            'mode' => $mode,
-            'endpoint_id' => $submitEndpoint,
-            'model_name' => $model->name,
-            'prompt' => $data['prompt'],
-            'input_assets' => $inputAssets ?: null,
-            'settings' => [
-                'aspect' => $built['aspect_ratio'],
-                'resolution' => $built['resolution'],
-                'duration' => $data['duration'] ?? $built['duration_value'],
-                'speed' => $data['speed'] ?? 'pro',
-                'audio' => $withAudio,
-                'catalog_endpoint' => $model->endpoint_id,
-                'fal_input' => $falInput,
-                'fal_endpoint' => $submitEndpoint,
-                'fal_cost_usd' => $cost['fal_cost_usd'],
-                'credits' => $cost['credits'],
-                'cost_breakdown' => $cost['breakdown'],
-                'media_counts' => $counts,
-            ],
-            'duration_value' => $built['duration_value'],
-            'duration_seconds' => $durationSeconds,
-            'aspect_ratio' => $built['aspect_ratio'],
-            'resolution' => $built['resolution'],
-            'with_audio' => $withAudio,
-            'credits_charged' => $cost['credits'],
-            'status' => UserVideoCreation::STATUS_PENDING,
-        ]);
+        if ((int) $cost['credits'] <= 0) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $submitEndpoint,
+            ], 503);
+        }
+
+        try {
+            /** @var UserVideoCreation $creation */
+            $creation = $tokens->reserve(
+                $request->user(),
+                (int) $cost['credits'],
+                'video',
+                fn () => UserVideoCreation::create([
+                    'user_id' => $request->user()->id,
+                    'mode' => $mode,
+                    'endpoint_id' => $submitEndpoint,
+                    'model_name' => $model->name,
+                    'prompt' => $data['prompt'],
+                    'input_assets' => $inputAssets ?: null,
+                    'settings' => [
+                        'aspect' => $built['aspect_ratio'],
+                        'resolution' => $built['resolution'],
+                        'duration' => $data['duration'] ?? $built['duration_value'],
+                        'speed' => $data['speed'] ?? 'pro',
+                        'audio' => $withAudio,
+                        'catalog_endpoint' => $model->endpoint_id,
+                        'fal_input' => $falInput,
+                        'fal_endpoint' => $submitEndpoint,
+                        'billing_endpoint' => $billing['endpoint_id'],
+                        'billing_source' => $billing['source'],
+                        'billing_unit' => $billing['unit'],
+                        'billing_unit_price' => $billing['unit_price'],
+                        'fal_cost_usd' => $cost['fal_cost_usd'],
+                        'credits' => $cost['credits'],
+                        'cost_breakdown' => $cost['breakdown'],
+                        'media_counts' => $counts,
+                    ],
+                    'duration_value' => $built['duration_value'],
+                    'duration_seconds' => $durationSeconds,
+                    'aspect_ratio' => $built['aspect_ratio'],
+                    'resolution' => $built['resolution'],
+                    'with_audio' => $withAudio,
+                    'credits_charged' => $cost['credits'],
+                    'status' => UserVideoCreation::STATUS_PENDING,
+                ]),
+            );
+        } catch (InsufficientTokensException $e) {
+            return response()->json([
+                'message' => 'You do not have enough tokens for this creation.',
+                'required_tokens' => $e->required,
+                'available_tokens' => $e->available,
+            ], 402);
+        }
 
         try {
             $submit = $fal->submit($submitEndpoint, $falInput);
         } catch (\Throwable $e) {
             report($e);
             $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $tokens->refund($request->user(), $creation, 'video', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
         }
@@ -378,6 +412,7 @@ class VideoGenerationController extends Controller
             'aspect' => $creation->aspect_ratio,
             'error' => $creation->error_message,
             'credits' => $settings['credits'] ?? $creation->credits_charged,
+            'token_balance' => (int) (auth()->user()?->fresh()->tokens ?? 0),
             'fal_cost_usd' => $settings['fal_cost_usd'] ?? null,
             'mode' => $creation->mode,
             'created_at' => optional($creation->created_at)->toIso8601String(),

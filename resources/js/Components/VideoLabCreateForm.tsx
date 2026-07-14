@@ -39,6 +39,7 @@ type Props = {
     onGenerate?: (prompt: string, options?: VideoGenerateOptions) => void;
     loading?: boolean;
     creditsConfig?: CreditsConfig;
+    tokenBalance?: number;
     /** Apply reuse / use-result from details modal or History */
     draft?: LabReuseDraft | null;
 };
@@ -138,6 +139,7 @@ export default function VideoLabCreateForm({
     onGenerate,
     loading = false,
     creditsConfig,
+    tokenBalance = 0,
     draft = null,
 }: Props) {
     const [prompt, setPrompt] = useState('');
@@ -256,13 +258,14 @@ export default function VideoLabCreateForm({
         [selectedModelRecord, durationSeconds, effectiveAudio, resolution, aspect, creditsConfig],
     );
     const creditCost = creditEstimate.credits;
+    const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
     const routeMode = resolveMediaRouteMode(selectedModelRecord, mediaCounts);
     const mediaGuidance = describeMediaGuidance(mediaCounts, modelsForPicker.length);
     const showInfoGuidance = Boolean(mediaGuidance && mediaGuidance.tone !== 'error' && !guidanceDismissed);
     const showErrorGuidance = Boolean(mediaGuidance && mediaGuidance.tone === 'error');
     const blockReason = generateBlockReason(Boolean(prompt.trim()), mediaCounts, selectedModelRecord, modelsForPicker.length);
-    const canGenerate = !blockReason && routeMode !== null;
+    const canGenerate = !blockReason && routeMode !== null && hasEnoughTokens;
     const durationPct =
         durationStops.length <= 1 ? 100 : (durationIndex / (durationStops.length - 1)) * 100;
 
@@ -1049,6 +1052,8 @@ export default function VideoLabCreateForm({
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                             Creating…
                         </span>
+                    ) : !hasEnoughTokens ? (
+                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

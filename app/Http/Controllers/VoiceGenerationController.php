@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientTokensException;
 use App\Models\UserVoiceCreation;
 use App\Services\Credits\VoiceGenerationCostEstimator;
+use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalVoiceInputBuilder;
+use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +20,8 @@ class VoiceGenerationController extends Controller
         FalService $fal,
         FalVoiceInputBuilder $inputBuilder,
         VoiceGenerationCostEstimator $costEstimator,
+        TokenService $tokens,
+        FalPricingService $pricing,
     ): JsonResponse {
         $data = $request->validate([
             'text' => ['required', 'string', 'min:1', 'max:70000'],
@@ -70,43 +75,73 @@ class VoiceGenerationController extends Controller
             'speed' => $data['speed'] ?? null,
         ]);
 
+        $billing = $pricing->resolve((string) $model->endpoint_id);
+        if ($billing === null) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $model->endpoint_id,
+            ], 503);
+        }
+
         $cost = $costEstimator->estimate([
-            'endpoint_id' => $model->endpoint_id,
-            'unit' => $model->unit ?? null,
-            'unit_price' => $model->unit_price ?? null,
+            'endpoint_id' => $billing['endpoint_id'],
+            'unit' => $billing['unit'],
+            'unit_price' => $billing['unit_price'],
             'character_count' => mb_strlen($data['text']),
         ]);
 
-        $creation = UserVoiceCreation::create([
-            'user_id' => $request->user()->id,
-            'mode' => 'text-to-voice',
-            'endpoint_id' => $model->endpoint_id,
-            'model_name' => $model->name,
-            'prompt' => $data['text'],
-            'voice_id' => $voiceKey,
-            'voice_name' => $voiceName,
-            'use_custom_voice' => false,
-            'settings' => [
-                'stability' => isset($data['stability']) ? (float) $data['stability'] : null,
-                'clarity' => isset($data['clarity']) ? (float) $data['clarity'] : null,
-                'style' => isset($data['style']) ? (float) $data['style'] : null,
-                'speed' => isset($data['speed']) ? (float) $data['speed'] : null,
-                'controls' => $inputBuilder->controlCapabilities($model->endpoint_id),
-                'fal_input' => $falInput,
-                'fal_endpoint' => $model->endpoint_id,
-                'fal_cost_usd' => $cost['fal_cost_usd'],
-                'credits' => $cost['credits'],
-                'cost_breakdown' => $cost['breakdown'],
-            ],
-            'credits_charged' => $cost['credits'],
-            'status' => UserVoiceCreation::STATUS_PENDING,
-        ]);
+        if ((int) $cost['credits'] <= 0) {
+            return response()->json([
+                'message' => 'This model is out of service. Please try another one.',
+                'endpoint_id' => $model->endpoint_id,
+            ], 503);
+        }
+
+        try {
+            /** @var UserVoiceCreation $creation */
+            $creation = $tokens->reserve(
+                $request->user(),
+                (int) $cost['credits'],
+                'voice',
+                fn () => UserVoiceCreation::create([
+                    'user_id' => $request->user()->id,
+                    'mode' => 'text-to-voice',
+                    'endpoint_id' => $model->endpoint_id,
+                    'model_name' => $model->name,
+                    'prompt' => $data['text'],
+                    'voice_id' => $voiceKey,
+                    'voice_name' => $voiceName,
+                    'use_custom_voice' => false,
+                    'settings' => [
+                        'stability' => isset($data['stability']) ? (float) $data['stability'] : null,
+                        'clarity' => isset($data['clarity']) ? (float) $data['clarity'] : null,
+                        'style' => isset($data['style']) ? (float) $data['style'] : null,
+                        'speed' => isset($data['speed']) ? (float) $data['speed'] : null,
+                        'controls' => $inputBuilder->controlCapabilities($model->endpoint_id),
+                        'fal_input' => $falInput,
+                        'fal_endpoint' => $model->endpoint_id,
+                        'fal_cost_usd' => $cost['fal_cost_usd'],
+                        'credits' => $cost['credits'],
+                        'cost_breakdown' => $cost['breakdown'],
+                    ],
+                    'credits_charged' => $cost['credits'],
+                    'status' => UserVoiceCreation::STATUS_PENDING,
+                ]),
+            );
+        } catch (InsufficientTokensException $e) {
+            return response()->json([
+                'message' => 'You do not have enough tokens for this creation.',
+                'required_tokens' => $e->required,
+                'available_tokens' => $e->available,
+            ], 402);
+        }
 
         try {
             $submit = $fal->submit($model->endpoint_id, $falInput);
         } catch (\Throwable $e) {
             report($e);
             $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $tokens->refund($request->user(), $creation, 'voice', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
         }
@@ -260,6 +295,7 @@ class VoiceGenerationController extends Controller
             'duration_seconds' => $creation->duration_seconds,
             'error' => $creation->error_message,
             'credits' => $creation->settings['credits'] ?? $creation->credits_charged,
+            'token_balance' => (int) (auth()->user()?->fresh()->tokens ?? 0),
             'fal_cost_usd' => $creation->settings['fal_cost_usd'] ?? null,
             'created_at' => optional($creation->created_at)->toIso8601String(),
         ];

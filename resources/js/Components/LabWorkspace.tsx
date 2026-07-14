@@ -5,7 +5,7 @@ import SoundLabLibrary, { type LabTrack } from '@/Components/SoundLabLibrary';
 import VideoLabCreateForm, { type VideoGenerateOptions } from '@/Components/VideoLabCreateForm';
 import VoiceLabCreateForm, { type VoiceGenerateOptions } from '@/Components/VoiceLabCreateForm';
 import VoiceLabLibrary, { type LabVoice } from '@/Components/VoiceLabLibrary';
-import { apiGet, apiPost, apiPostForm } from '@/lib/api';
+import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import {
     buildReuseSettingsDraft,
@@ -13,9 +13,9 @@ import {
     consumeLabReuseDraft,
     type LabReuseDraft,
 } from '@/lib/labReuse';
-import type { Brand } from '@/types';
+import type { Brand, PageProps } from '@/types';
 import Button from '@/Components/Button';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -52,6 +52,7 @@ type CreationResponse = {
     error: string | null;
     created_at: string | null;
     credits?: number | null;
+    token_balance?: number;
 };
 
 type ApiImageItem = {
@@ -209,13 +210,30 @@ export default function LabWorkspace({
     placeholder = 'Enter your prompt…',
     creditsConfig,
 }: Props) {
+    const { props: pageProps } = usePage<PageProps>();
     const [prompt, setPrompt] = useState('');
-    const [credits] = useState(1205);
+    const [tokenBalance, setTokenBalance] = useState(() => Math.max(0, pageProps.auth.user?.tokens ?? 0));
     const [loading, setLoading] = useState(false);
     const isImageLab = type === 'text-to-image';
     const isVideoLab = type === 'text-to-video';
     const isMusicLab = type === 'text-to-music' || type === 'text-to-sound';
     const isVoiceLab = type === 'text-to-voice';
+
+    const syncTokenBalance = useCallback((balance?: number) => {
+        if (typeof balance !== 'number' || !Number.isFinite(balance)) return;
+        const normalized = Math.max(0, Math.floor(balance));
+        setTokenBalance(normalized);
+        window.dispatchEvent(new CustomEvent('tokens:updated', { detail: { balance: normalized } }));
+    }, []);
+
+    const syncTokenBalanceFromError = useCallback(
+        (error: unknown) => {
+            if (!(error instanceof ApiError)) return;
+            const value = error.payload?.token_balance ?? error.payload?.available_tokens;
+            if (typeof value === 'number') syncTokenBalance(value);
+        },
+        [syncTokenBalance],
+    );
     const usesStudioLab = isImageLab || isVideoLab || isMusicLab || isVoiceLab;
     const [images, setImages] = useState<LabImage[]>([]);
     const [tracks, setTracks] = useState<LabTrack[]>([]);
@@ -611,6 +629,7 @@ export default function LabWorkspace({
                 options?.referenceFiles?.forEach((file) => form.append('references[]', file));
 
                 const data = await apiPostForm<CreationResponse>('/lab/image/generate', form);
+                syncTokenBalance(data.token_balance);
                 setImages((prev) =>
                     prev.map((i) =>
                         i.batchId === batchId
@@ -630,10 +649,11 @@ export default function LabWorkspace({
                 }
                 pollImage(batchId, data.id, aspect, quantity);
             } catch (e) {
+                syncTokenBalanceFromError(e);
                 failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
             }
         },
-        [failBatch, pollImage],
+        [failBatch, pollImage, syncTokenBalance, syncTokenBalanceFromError],
     );
 
     const startVideoGenerate = useCallback(
@@ -697,6 +717,7 @@ export default function LabWorkspace({
                 options?.audioFiles?.forEach((file) => form.append('audios[]', file));
 
                 const data = await apiPostForm<CreationResponse>('/lab/video/generate', form);
+                syncTokenBalance(data.token_balance);
                 setImages((prev) =>
                     prev.map((i) =>
                         i.batchId === batchId
@@ -717,10 +738,11 @@ export default function LabWorkspace({
                 }
                 pollVideo(batchId, data.id, aspect);
             } catch (e) {
+                syncTokenBalanceFromError(e);
                 failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
             }
         },
-        [failBatch, pollVideo],
+        [failBatch, pollVideo, syncTokenBalance, syncTokenBalanceFromError],
     );
 
     const startGenerate = (
@@ -808,6 +830,7 @@ export default function LabWorkspace({
                         ...(durationSeconds != null ? { duration_seconds: durationSeconds } : {}),
                     });
                 }
+                syncTokenBalance(data.token_balance);
 
                 setTracks((prev) =>
                     prev.map((t) =>
@@ -840,6 +863,7 @@ export default function LabWorkspace({
 
                 pollMusicRef.current(localId, data.id);
             } catch (e) {
+                syncTokenBalanceFromError(e);
                 setTracks((prev) =>
                     prev.map((t) =>
                         t.id === localId
@@ -855,7 +879,7 @@ export default function LabWorkspace({
                 setLoading(false);
             }
         },
-        [],
+        [syncTokenBalance, syncTokenBalanceFromError],
     );
 
     const pollMusic = useCallback((localId: string, creationId: number) => {
@@ -1025,6 +1049,7 @@ export default function LabWorkspace({
                     style: options.styleExaggeration,
                     speed: options.speed,
                 });
+                syncTokenBalance(data.token_balance);
 
                 setVoices((prev) =>
                     prev.map((v) =>
@@ -1055,6 +1080,7 @@ export default function LabWorkspace({
 
                 pollVoiceRef.current(localId, data.id);
             } catch (e) {
+                syncTokenBalanceFromError(e);
                 setVoices((prev) =>
                     prev.map((v) =>
                         v.id === localId
@@ -1070,7 +1096,7 @@ export default function LabWorkspace({
                 setLoading(false);
             }
         },
-        [],
+        [syncTokenBalance, syncTokenBalanceFromError],
     );
 
     const pollVoice = useCallback((localId: string, creationId: number) => {
@@ -1221,6 +1247,7 @@ export default function LabWorkspace({
                     brands={brands}
                     loading={loading || voiceGenerating}
                     creditsConfig={creditsConfig}
+                    tokenBalance={tokenBalance}
                     onGenerate={startVoiceGenerate}
                 />
             );
@@ -1231,6 +1258,7 @@ export default function LabWorkspace({
                     brands={brands}
                     loading={loading || musicGenerating}
                     creditsConfig={creditsConfig}
+                    tokenBalance={tokenBalance}
                     onGenerate={startSoundGenerate}
                     draft={reuseDraft?.lab === 'music' ? reuseDraft : null}
                 />
@@ -1243,6 +1271,7 @@ export default function LabWorkspace({
                     placeholder={placeholder}
                     loading={videoGenerating}
                     creditsConfig={creditsConfig}
+                    tokenBalance={tokenBalance}
                     onGenerate={startVideoGenerate}
                     draft={reuseDraft?.lab === 'video' ? reuseDraft : null}
                 />
@@ -1254,6 +1283,7 @@ export default function LabWorkspace({
                 placeholder={placeholder}
                 loading={imageGenerating}
                 creditsConfig={creditsConfig}
+                tokenBalance={tokenBalance}
                 onGenerate={startImageGenerate}
                 draft={reuseDraft?.lab === 'image' ? reuseDraft : null}
             />

@@ -74,10 +74,10 @@ export default function CreditsModal({ open, onClose }: Props) {
                                                     <path d="M20 3v4M22 5h-4M4 17v2M5 18H3" />
                                                 </svg>
                                                 <DialogTitle className="font-[family-name:Outfit,sans-serif] text-xl font-bold tracking-tight">
-                                                    RIMBOAI Credits
+                                                    RIMBOAI Tokens
                                                 </DialogTitle>
                                             </div>
-                                            <p className="mt-1 text-[13px] text-white/80">Credits Top-Up</p>
+                                            <p className="mt-1 text-[13px] text-white/80">Token Top-Up</p>
                                             <p className="mt-0.5 text-[12px] text-white/65">Top up and keep creating without limits</p>
                                         </div>
 
@@ -180,7 +180,7 @@ export default function CreditsModal({ open, onClose }: Props) {
                                         <svg className="h-4 w-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.5 11 14.5 15.5 10M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" />
                                         </svg>
-                                        Secure checkout — credits never expire.
+                                        Secure checkout — tokens never expire.
                                     </div>
 
                                     <button
@@ -195,7 +195,7 @@ export default function CreditsModal({ open, onClose }: Props) {
                                         </svg>
                                         <span className="relative">
                                             {selectedPack
-                                                ? `Proceed to Checkout · ${price(selectedPack.usd)} for ${selectedPack.credits.toLocaleString()} credits`
+                                                ? `Proceed to Checkout · ${price(selectedPack.usd)} for ${selectedPack.credits.toLocaleString()} tokens`
                                                 : 'Select a pack'}
                                         </span>
                                     </button>

@@ -22,6 +22,7 @@ type Props = {
     onGenerate?: (text: string, options?: VoiceGenerateOptions) => void;
     loading?: boolean;
     creditsConfig?: CreditsConfig;
+    tokenBalance?: number;
 };
 
 const MAX_CHARS = 70000;
@@ -160,6 +161,7 @@ export default function VoiceLabCreateForm({
     onGenerate,
     loading = false,
     creditsConfig,
+    tokenBalance = 0,
 }: Props) {
     const [text, setText] = useState('');
     const [modelOpen, setModelOpen] = useState(false);
@@ -244,8 +246,9 @@ export default function VoiceLabCreateForm({
         return estimateVoiceCredits(selectedModelRecord, Math.max(1, text.trim().length), creditsConfig);
     }, [selectedModelRecord, text, creditsConfig]);
     const creditCost = creditEstimate.credits;
+    const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
-    const canGenerate = Boolean(text.trim()) && Boolean(selectedVoice?.voice_key);
+    const canGenerate = Boolean(text.trim()) && Boolean(selectedVoice?.voice_key) && hasEnoughTokens;
 
     const stopPreview = () => {
         if (previewAudioRef.current) {
@@ -571,6 +574,8 @@ export default function VoiceLabCreateForm({
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                             Creating…
                         </span>
+                    ) : !hasEnoughTokens ? (
+                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
