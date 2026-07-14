@@ -1,0 +1,18 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Block access to app files outside the Laravel public/ folder
+    RewriteRule ^(app|bootstrap|config|database|node_modules|resources|routes|storage|tests|vendor)(/|$) - [F,L]
+    RewriteRule ^(\.env|\.env\..*|composer\.(json|lock)|artisan|package\.json|package-lock\.json|phpunit\.xml|vite\.config\..*)(/|$) - [F,L]
+
+    # Redirect /public/... → /... so the URL never shows /public
+    RewriteCond %{THE_REQUEST} \s/+public/([^\s?]*) [NC]
+    RewriteRule ^public/(.*)$ /$1 [R=301,L,QSA]
+
+    # Internally serve everything from Laravel's public/ folder
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

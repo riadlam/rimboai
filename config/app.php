@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Asset URL
+    |--------------------------------------------------------------------------
+    |
+    | Prefix for Vite / asset() URLs. Needed when the app is served from a
+    | subdirectory (e.g. https://rimboai.com/public) so JS/CSS resolve to
+    | /public/build/... Prefer pointing the domain document root at public/.
+    |
+    */
+
+    'asset_url' => env('ASSET_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Force HTTPS
     |--------------------------------------------------------------------------
     |
