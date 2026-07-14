@@ -94,6 +94,11 @@ export type Tool = {
 };
 
 export type PageProps = {
+    app?: {
+        name: string;
+        url: string;
+        env: string;
+    };
     auth: {
         user: User | null;
     };

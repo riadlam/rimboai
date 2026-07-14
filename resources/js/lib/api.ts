@@ -3,6 +3,21 @@ function getCookie(name: string): string | null {
     return match ? decodeURIComponent(match[1]) : null;
 }
 
+/** Base origin from env (production build) or same-origin when empty. */
+function apiBase(): string {
+    const fromEnv = (import.meta.env.VITE_APP_URL as string | undefined)?.trim();
+    if (fromEnv) return fromEnv.replace(/\/$/, '');
+    return '';
+}
+
+/** Turn `/lab/...` into an absolute URL when VITE_APP_URL is set; otherwise keep relative. */
+export function apiUrl(path: string): string {
+    if (/^https?:\/\//i.test(path)) return path;
+    const base = apiBase();
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    return base ? `${base}${normalized}` : normalized;
+}
+
 export class ApiError extends Error {
     status: number;
 
@@ -25,7 +40,7 @@ async function request<T>(url: string, method: 'GET' | 'POST', body?: unknown): 
         if (token) headers['X-XSRF-TOKEN'] = token;
     }
 
-    const res = await fetch(url, {
+    const res = await fetch(apiUrl(url), {
         method,
         headers,
         credentials: 'same-origin',
@@ -63,7 +78,7 @@ async function requestForm<T>(url: string, form: FormData): Promise<T> {
     const token = getCookie('XSRF-TOKEN');
     if (token) headers['X-XSRF-TOKEN'] = token;
 
-    const res = await fetch(url, {
+    const res = await fetch(apiUrl(url), {
         method: 'POST',
         headers,
         credentials: 'same-origin',

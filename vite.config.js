@@ -24,8 +24,8 @@ export default defineConfig({
         strictPort: true,
         cors: true,
         hmr: {
-            // Must match the LAN IP you open in the browser (see `ipconfig` / Vite “Network”)
-            host: '192.168.1.10',
+            // From .env VITE_DEV_SERVER_HOST (LAN IP) or localhost
+            host: process.env.VITE_DEV_SERVER_HOST || '127.0.0.1',
         },
         watch: {
             ignored: ['**/storage/framework/views/**'],
