@@ -41,7 +41,8 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            // Host-relative so Storage::url() never bakes localhost / APP_URL into the DB.
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

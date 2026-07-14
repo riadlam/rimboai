@@ -6,6 +6,7 @@ use App\Models\TextToVoiceModel;
 use App\Models\TextToVoiceVoice;
 use App\Services\FalService;
 use App\Services\VoiceUseCaseClassifier;
+use App\Support\PublicMediaUrl;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -341,12 +342,11 @@ class FalSyncVoiceVoices extends Command
                 }
 
                 Storage::disk('public')->put($path, $bytes);
-                $publicUrl = Storage::disk('public')->url($path);
 
                 $voice->forceFill([
                     'sample_remote_url' => $remoteUrl,
                     'sample_path' => $path,
-                    'sample_url' => $publicUrl,
+                    'sample_url' => PublicMediaUrl::storagePath($path),
                 ])->save();
 
                 $this->line("  ✓ {$voice->voice_key}");

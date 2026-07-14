@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\PublicMediaUrl;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -39,7 +39,7 @@ class MediaReferenceStorage
             $ext = strtolower($file->guessExtension() ?: ($kind === 'video' ? 'mp4' : ($kind === 'audio' ? 'mp3' : 'jpg')));
             $filename = Str::uuid()->toString().'.'.$ext;
             $path = $file->storeAs("lab/references/{$userId}", $filename, 'public');
-            $localUrl = Storage::disk('public')->url($path);
+            $localUrl = PublicMediaUrl::storagePath($path);
             $falUrl = $this->fal->uploadToCdn($file);
 
             $assets[] = [

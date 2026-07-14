@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Brand, BrandVoice } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateVoiceCredits } from '@/lib/voiceCredits';
+import { publicAsset } from '@/lib/publicAsset';
 import { LabModelPickerModal, LabModelPickerTrigger, type LabPickerModel } from '@/Components/LabModelPicker';
 
 export type VoiceGenerateOptions = {
@@ -123,7 +124,7 @@ function mapBrandVoice(v: BrandVoice): VoiceOption {
         name: v.name,
         category,
         language: v.language ? v.language.toLowerCase() : null,
-        sample_url: v.sample_url ?? null,
+        sample_url: publicAsset(v.sample_url),
         gradient: voiceGradient(v.voice_key || v.name),
     };
 }

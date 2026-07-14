@@ -5,6 +5,7 @@ import { LabModelPickerModal, LabModelPickerTrigger, type LabPickerModel } from 
 import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateMusicCredits, formatMusicDuration, readAudioFileDuration } from '@/lib/musicCredits';
 import { matchLabModel, type LabReuseDraft } from '@/lib/labReuse';
+import { publicAsset } from '@/lib/publicAsset';
 
 type Props = {
     brands?: Brand[];
@@ -42,9 +43,9 @@ function mapBrandExample(ex: BrandMusicExample): MusicSample {
         id: ex.example_key || String(ex.id),
         title: ex.title,
         vocals: Boolean(ex.vocals),
-        cover: ex.cover_url || '',
+        cover: publicAsset(ex.cover_url) || '',
         style: ex.style || '',
-        sample_url: ex.sample_url || null,
+        sample_url: publicAsset(ex.sample_url),
     };
 }
 

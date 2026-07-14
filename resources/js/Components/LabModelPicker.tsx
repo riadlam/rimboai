@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import type { BrandModel } from '@/types';
+import { publicAsset } from '@/lib/publicAsset';
 
 export type LabPickerModel = BrandModel & {
     brandName: string;
@@ -16,8 +17,8 @@ export function resolveModelMedia(model: {
     icon?: string | null;
     image_cover?: string | null;
 }): { icon: string | null; cover: string | null; iconIsBrandMark: boolean } {
-    const icon = model.icon || model.image_cover || null;
-    const coverCandidate = model.image_cover || model.icon || null;
+    const icon = publicAsset(model.icon || model.image_cover || null);
+    const coverCandidate = publicAsset(model.image_cover || model.icon || null);
     const iconIsBrandMark = isBrandIconUrl(icon);
     const cover = coverCandidate && !isBrandIconUrl(coverCandidate) ? coverCandidate : null;
     return { icon, cover, iconIsBrandMark };

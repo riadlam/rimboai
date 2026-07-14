@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\PublicMediaUrl;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -33,7 +33,7 @@ class ImageReferenceStorage
             $ext = strtolower($file->guessExtension() ?: 'jpg');
             $filename = Str::uuid()->toString().'.'.$ext;
             $path = $file->storeAs("lab/references/{$userId}", $filename, 'public');
-            $localUrl = Storage::disk('public')->url($path);
+            $localUrl = PublicMediaUrl::storagePath($path);
 
             // fal must fetch references from the public internet — localhost URLs fail.
             $falUrl = $this->fal->uploadToCdn($file);

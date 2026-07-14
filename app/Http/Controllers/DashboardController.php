@@ -9,6 +9,7 @@ use App\Services\ToolsService;
 use App\Services\TrendsFeedService;
 use App\Services\VideoModelCapabilities;
 use App\Services\VoiceUseCaseClassifier;
+use App\Support\PublicMediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -335,19 +336,11 @@ class DashboardController extends Controller
                         }
 
                         $icon = $hasImageUrl ? ($m->image_url ?? null) : null;
-                        if (is_string($icon) && $icon !== '') {
-                            // Support local public paths like storage/ai_icons/gemini-color.svg
-                            if (! str_starts_with($icon, 'http://') && ! str_starts_with($icon, 'https://') && ! str_starts_with($icon, '/')) {
-                                $icon = '/'.$icon;
-                            }
-                        }
+                        $icon = PublicMediaUrl::normalize(is_string($icon) ? $icon : null);
 
-                        $imageCover = $m->image_cover ?? null;
-                        if (is_string($imageCover) && $imageCover !== '') {
-                            if (! str_starts_with($imageCover, 'http://') && ! str_starts_with($imageCover, 'https://') && ! str_starts_with($imageCover, '/')) {
-                                $imageCover = '/'.$imageCover;
-                            }
-                        }
+                        $imageCover = PublicMediaUrl::normalize(
+                            isset($m->image_cover) && is_string($m->image_cover) ? $m->image_cover : null
+                        );
 
                         $endpointId = $m->endpoint_id ?? '';
 
@@ -412,20 +405,11 @@ class DashboardController extends Controller
                                 ?? collect();
                             $payload['voices'] = collect($voiceRows)
                                 ->map(function ($voice) use ($voiceClassifier) {
-                                    $sampleUrl = $voice->sample_url ?: $voice->sample_remote_url;
-                                    if (is_string($sampleUrl) && $sampleUrl !== '') {
-                                        // Prefer path-only so it works across hosts
-                                        $path = parse_url($sampleUrl, PHP_URL_PATH);
-                                        if (is_string($path) && str_starts_with($path, '/storage/')) {
-                                            $sampleUrl = $path;
-                                        } elseif (is_string($voice->sample_path) && $voice->sample_path !== '') {
-                                            $sampleUrl = '/storage/'.$voice->sample_path;
-                                        }
-                                    } elseif (is_string($voice->sample_path) && $voice->sample_path !== '') {
-                                        $sampleUrl = '/storage/'.$voice->sample_path;
-                                    } else {
-                                        $sampleUrl = null;
-                                    }
+                                    $sampleUrl = PublicMediaUrl::sample(
+                                        is_string($voice->sample_path ?? null) ? $voice->sample_path : null,
+                                        is_string($voice->sample_url ?? null) ? $voice->sample_url : null,
+                                        is_string($voice->sample_remote_url ?? null) ? $voice->sample_remote_url : null,
+                                    );
 
                                     $voiceTags = [];
                                     if (isset($voice->tags) && $voice->tags !== null && $voice->tags !== '') {
@@ -468,28 +452,15 @@ class DashboardController extends Controller
                                 ?? collect();
                             $payload['examples'] = collect($exampleRows)
                                 ->map(function ($example) {
-                                    $sampleUrl = $example->sample_url ?: $example->sample_remote_url;
-                                    if (is_string($sampleUrl) && $sampleUrl !== '') {
-                                        $path = parse_url($sampleUrl, PHP_URL_PATH);
-                                        if (is_string($path) && str_starts_with($path, '/storage/')) {
-                                            $sampleUrl = $path;
-                                        } elseif (is_string($example->sample_path) && $example->sample_path !== '') {
-                                            $sampleUrl = '/storage/'.$example->sample_path;
-                                        }
-                                    } elseif (is_string($example->sample_path) && $example->sample_path !== '') {
-                                        $sampleUrl = '/storage/'.$example->sample_path;
-                                    } else {
-                                        $sampleUrl = null;
-                                    }
+                                    $sampleUrl = PublicMediaUrl::sample(
+                                        is_string($example->sample_path ?? null) ? $example->sample_path : null,
+                                        is_string($example->sample_url ?? null) ? $example->sample_url : null,
+                                        is_string($example->sample_remote_url ?? null) ? $example->sample_remote_url : null,
+                                    );
 
-                                    $coverUrl = $example->cover_url ?? null;
-                                    if (is_string($coverUrl) && $coverUrl !== '') {
-                                        if (! str_starts_with($coverUrl, 'http://') && ! str_starts_with($coverUrl, 'https://') && ! str_starts_with($coverUrl, '/')) {
-                                            $coverUrl = '/'.$coverUrl;
-                                        }
-                                    } else {
-                                        $coverUrl = null;
-                                    }
+                                    $coverUrl = PublicMediaUrl::normalize(
+                                        is_string($example->cover_url ?? null) ? $example->cover_url : null
+                                    );
 
                                     $exampleTags = [];
                                     if (isset($example->tags) && $example->tags !== null && $example->tags !== '') {
@@ -520,7 +491,7 @@ class DashboardController extends Controller
 
                 return [
                     'name' => $cat->name,
-                    'icon' => $cat->icon_url ?? null,
+                    'icon' => PublicMediaUrl::normalize(is_string($cat->icon_url ?? null) ? $cat->icon_url : null),
                     'sort' => $cat->sort ?? 999,
                     'models' => $models,
                 ];
