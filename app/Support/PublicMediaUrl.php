@@ -4,7 +4,7 @@ namespace App\Support;
 
 /**
  * Build browser-safe public URLs that work on any host (local / production).
- * Prefer relative /storage/... paths over URLs baked with APP_URL / localhost.
+ * App-local assets use url()/APP_URL; external CDNs are left absolute.
  */
 final class PublicMediaUrl
 {
@@ -15,11 +15,13 @@ final class PublicMediaUrl
     {
         $relative = ltrim(str_replace('\\', '/', $relativePath), '/');
 
-        return '/storage/'.$relative;
+        return self::toAppUrl('/storage/'.$relative);
     }
 
     /**
-     * Turn absolute app/localhost URLs into relative paths; leave external CDNs alone.
+     * Normalize a stored URL for the frontend.
+     * - External CDNs (fal, etc.): unchanged
+     * - Localhost / relative /storage paths: absolute via APP_URL
      */
     public static function normalize(?string $url): ?string
     {
@@ -32,8 +34,11 @@ final class PublicMediaUrl
             return null;
         }
 
+        // Relative / path-only
         if (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://')) {
-            return str_starts_with($url, '/') ? $url : '/'.$url;
+            $path = str_starts_with($url, '/') ? $url : '/'.$url;
+
+            return self::toAppUrl($path);
         }
 
         $parts = parse_url($url);
@@ -45,11 +50,6 @@ final class PublicMediaUrl
         $path = (string) ($parts['path'] ?? '');
         $query = isset($parts['query']) && $parts['query'] !== '' ? '?'.$parts['query'] : '';
 
-        // Local /storage assets should never hardcode a host
-        if ($path !== '' && str_starts_with($path, '/storage/')) {
-            return $path.$query;
-        }
-
         $localHosts = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
         $appHost = strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST));
 
@@ -58,10 +58,16 @@ final class PublicMediaUrl
             || ($appHost !== '' && ($host === $appHost || str_ends_with($host, '.'.$appHost)))
         );
 
-        if ($isAppHost && $path !== '') {
-            return $path.$query;
+        // App /storage assets → absolute APP_URL (never leave as localhost)
+        if ($path !== '' && str_starts_with($path, '/storage/')) {
+            return self::toAppUrl($path.$query);
         }
 
+        if ($isAppHost && $path !== '') {
+            return self::toAppUrl($path.$query);
+        }
+
+        // External CDN — keep as-is
         return $url;
     }
 
@@ -75,5 +81,16 @@ final class PublicMediaUrl
         }
 
         return self::normalize($sampleUrl) ?? self::normalize($remoteUrl);
+    }
+
+    /**
+     * Prefix a path with APP_URL (respects ASSET_URL when set via url()/UrlGenerator).
+     */
+    public static function toAppUrl(string $path): string
+    {
+        $path = '/'.ltrim($path, '/');
+
+        // asset() honors ASSET_URL; falls back to APP_URL
+        return asset(ltrim($path, '/'));
     }
 }

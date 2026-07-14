@@ -1,6 +1,6 @@
 /**
- * Rewrite localhost / absolute same-host media URLs to relative paths
- * so samples and icons work in production without baking APP_URL.
+ * Normalize media URLs for <img>/<audio>.
+ * Keeps external CDNs; rewrites localhost → current origin.
  */
 export function publicAsset(url?: string | null): string | null {
     if (!url) return null;
@@ -8,7 +8,11 @@ export function publicAsset(url?: string | null): string | null {
     if (!trimmed) return null;
 
     if (!/^https?:\/\//i.test(trimmed)) {
-        return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+        const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+        if (typeof window !== 'undefined' && window.location?.origin) {
+            return `${window.location.origin}${path}`;
+        }
+        return path;
     }
 
     try {
@@ -16,16 +20,11 @@ export function publicAsset(url?: string | null): string | null {
         const localHosts = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
         const path = `${parsed.pathname}${parsed.search}`;
 
-        if (path.startsWith('/storage/')) {
-            return path;
-        }
-
-        if (typeof window !== 'undefined' && parsed.hostname === window.location.hostname) {
-            return path || null;
-        }
-
         if (localHosts.has(parsed.hostname.toLowerCase())) {
-            return path || null;
+            if (typeof window !== 'undefined' && window.location?.origin) {
+                return `${window.location.origin}${path}`;
+            }
+            return path;
         }
 
         return trimmed;
