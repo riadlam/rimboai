@@ -50,6 +50,7 @@ class UserVideoCreation extends Model
     protected function casts(): array
     {
         return [
+            'user_id' => 'integer',
             'input_assets' => 'array',
             'settings' => 'array',
             'result_assets' => 'array',

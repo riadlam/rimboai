@@ -3,6 +3,7 @@
 namespace App\Models\Concerns;
 
 use App\Models\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 trait BelongsToUserCreation
@@ -22,6 +23,16 @@ trait BelongsToUserCreation
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function isOwnedBy(?Authenticatable $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        // Cast both sides — MySQL PDO often returns user_id as string; === would 403.
+        return (int) $this->user_id === (int) $user->getAuthIdentifier();
     }
 
     public function isTerminal(): bool

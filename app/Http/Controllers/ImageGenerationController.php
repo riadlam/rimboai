@@ -178,7 +178,7 @@ class ImageGenerationController extends Controller
      */
     public function status(Request $request, UserImageCreation $creation, FalService $fal): JsonResponse
     {
-        abort_unless($creation->user_id === $request->user()->id, 403);
+        abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
             $this->refresh($creation, $fal);
