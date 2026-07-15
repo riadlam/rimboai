@@ -35,6 +35,29 @@ class MusicGenerationController extends Controller
             ], 422);
         }
 
+        // Inspect the raw PHP upload BEFORE Laravel's "file" rule, which only says
+        // "The audio failed to upload." and hides UPLOAD_ERR_* details.
+        $preflightAudio = $request->file('audio');
+        if ($preflightAudio instanceof UploadedFile && ! $preflightAudio->isValid()) {
+            $code = $preflightAudio->getError();
+            $detail = $this->uploadErrorMessage($code);
+
+            Log::warning('Music audio PHP upload error', [
+                'upload_error' => $code,
+                'upload_message' => $preflightAudio->getErrorMessage(),
+                'name' => $preflightAudio->getClientOriginalName(),
+                'size_client' => $preflightAudio->getSize(),
+                'content_length' => $contentLength,
+                'upload_tmp_dir' => ini_get('upload_tmp_dir') ?: sys_get_temp_dir(),
+                'tmp_writable' => is_writable(ini_get('upload_tmp_dir') ?: sys_get_temp_dir()),
+            ]);
+
+            return response()->json([
+                'message' => $detail,
+                'upload_error' => $code,
+            ], 422);
+        }
+
         try {
             $data = $request->validate([
                 'endpoint_id' => ['required', 'string', 'max:191'],
@@ -48,9 +71,13 @@ class MusicGenerationController extends Controller
                 'audio_url' => ['nullable', 'string', 'max:2048'],
                 'edit_mode' => ['nullable', 'string', 'in:remix,lyrics'],
                 'duration_seconds' => ['nullable', 'numeric', 'min:0', 'max:7200'],
-                // Only require that a file arrived; type is checked manually below
-                // (shared hosts often mis-detect MP3 MIME → extensions/mimetypes 422).
-                'audio' => ['nullable', 'file', 'max:51200'],
+                // Do NOT use the "file" rule here — invalid PHP uploads already handled above.
+                // "max" alone is enough once isValid() is true.
+                'audio' => ['nullable', 'max:51200'],
+                // Base64 bypass for hosts where PHP multipart temp uploads fail.
+                'audio_base64' => ['nullable', 'string'],
+                'audio_filename' => ['nullable', 'string', 'max:255'],
+                'audio_mime' => ['nullable', 'string', 'max:100'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $first = collect($e->errors())->flatten()->first();
@@ -60,6 +87,9 @@ class MusicGenerationController extends Controller
                 'has_audio_file' => $request->hasFile('audio'),
                 'keys' => array_keys($request->all()),
                 'file_keys' => array_keys($request->allFiles()),
+                'audio_error' => $request->file('audio') instanceof UploadedFile
+                    ? $request->file('audio')->getError()
+                    : null,
             ]);
 
             return response()->json([
@@ -118,12 +148,53 @@ class MusicGenerationController extends Controller
         $audioUrl = null;
         if ($supportsAudio) {
             $audioUrl = trim((string) ($data['audio_url'] ?? ''));
+
+            // Preferred path on shared hosting: JSON base64 (avoids PHP multipart /tmp failures).
+            $audioBase64 = trim((string) ($data['audio_base64'] ?? ''));
+            if ($audioBase64 !== '') {
+                $decoded = base64_decode($audioBase64, true);
+                if ($decoded === false || $decoded === '') {
+                    return response()->json(['message' => 'Could not decode the audio file. Please try another MP3.'], 422);
+                }
+
+                // ~20MB decoded limit to keep memory safe.
+                if (strlen($decoded) > 20 * 1024 * 1024) {
+                    return response()->json(['message' => 'Audio file is too large. Please use an MP3 under 20MB.'], 422);
+                }
+
+                $filename = trim((string) ($data['audio_filename'] ?? 'source.mp3'));
+                if ($filename === '' || ! preg_match('/\.(mp3|wav|flac|ogg|m4a|aac|mpeg|mpga)$/i', $filename)) {
+                    $filename = 'source.mp3';
+                }
+
+                $mime = trim((string) ($data['audio_mime'] ?? ''));
+                if ($mime === '' || $mime === 'application/octet-stream') {
+                    $mime = null;
+                }
+
+                try {
+                    $audioUrl = $fal->uploadBytesToCdn($decoded, $filename, $mime);
+                } catch (\Throwable $e) {
+                    report($e);
+                    Log::error('ACE base64 audio upload to fal CDN failed', [
+                        'error' => $e->getMessage(),
+                        'filename' => $filename,
+                        'bytes' => strlen($decoded),
+                    ]);
+
+                    return response()->json([
+                        'message' => 'Could not upload the source audio file to the music service. Try a smaller MP3, or check that the server can reach rest.fal.ai.',
+                    ], 502);
+                }
+            }
+
             /** @var UploadedFile|null $audioFile */
             $audioFile = $request->file('audio');
-            if ($audioFile instanceof UploadedFile) {
+            if ($audioUrl === '' && $audioFile instanceof UploadedFile) {
                 if (! $audioFile->isValid()) {
                     return response()->json([
-                        'message' => 'Audio upload failed on the server (file too large or incomplete). Try a smaller MP3, or raise PHP upload_max_filesize / post_max_size.',
+                        'message' => $this->uploadErrorMessage($audioFile->getError()),
+                        'upload_error' => $audioFile->getError(),
                     ], 422);
                 }
 
@@ -435,6 +506,22 @@ class MusicGenerationController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Human-readable PHP upload error (UPLOAD_ERR_*).
+     */
+    private function uploadErrorMessage(int $code): string
+    {
+        return match ($code) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Audio file is too large for the server upload limit. Try a smaller MP3 (under 15MB).',
+            UPLOAD_ERR_PARTIAL => 'Audio was only partially uploaded. Please try again (stable connection, smaller file).',
+            UPLOAD_ERR_NO_FILE => 'No audio file was received. Please choose an MP3 and try again.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server temp folder is missing (upload_tmp_dir). Ask hosting to fix PHP upload_tmp_dir.',
+            UPLOAD_ERR_CANT_WRITE => 'Server could not save the upload to disk. Check disk space and that /tmp (upload_tmp_dir) is writable.',
+            UPLOAD_ERR_EXTENSION => 'A PHP extension (or ModSecurity) blocked the audio upload. Try disabling ModSecurity for this domain, or upload a smaller MP3.',
+            default => "The audio failed to upload (PHP error code {$code}).",
+        };
     }
 
     /**

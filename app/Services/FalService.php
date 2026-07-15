@@ -112,8 +112,25 @@ class FalService
             throw new RuntimeException('Uploaded file is not readable on the server.');
         }
 
-        $size = (int) ($file->getSize() ?: @filesize($path) ?: 0);
-        // Larger audio/video needs more time on shared hosting outbound bandwidth.
+        $bytes = @file_get_contents($path);
+        if ($bytes === false || $bytes === '') {
+            throw new RuntimeException('Could not read the uploaded file from disk.');
+        }
+
+        return $this->uploadBytesToCdn($bytes, $filename, $contentType);
+    }
+
+    /**
+     * Upload raw bytes to fal CDN (used for base64 audio that bypasses PHP multipart).
+     *
+     * @throws RequestException|RuntimeException
+     */
+    public function uploadBytesToCdn(string $bytes, string $filename, ?string $contentType = null): string
+    {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'bin');
+        $contentType = $contentType ?: $this->contentTypeFromExtension($ext);
+        $safeName = Str::uuid()->toString().'.'.($ext !== '' ? $ext : 'bin');
+        $size = strlen($bytes);
         $putTimeout = $size > 5 * 1024 * 1024 ? 180 : 90;
 
         $initResponse = Http::withHeaders([
@@ -124,7 +141,7 @@ class FalService
             ->timeout(30)
             ->post('https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3', [
                 'content_type' => $contentType,
-                'file_name' => $filename,
+                'file_name' => $safeName,
             ]);
 
         if (! $initResponse->successful()) {
@@ -132,7 +149,7 @@ class FalService
                 'status' => $initResponse->status(),
                 'body' => substr($initResponse->body(), 0, 500),
                 'content_type' => $contentType,
-                'filename' => $filename,
+                'filename' => $safeName,
             ]);
             $initResponse->throw();
         }
@@ -143,11 +160,6 @@ class FalService
 
         if (! is_string($uploadUrl) || ! is_string($fileUrl) || $uploadUrl === '' || $fileUrl === '') {
             throw new RuntimeException('fal storage upload did not return URLs.');
-        }
-
-        $bytes = @file_get_contents($path);
-        if ($bytes === false || $bytes === '') {
-            throw new RuntimeException('Could not read the uploaded audio file from disk.');
         }
 
         $uploadResponse = Http::withHeaders([
@@ -168,6 +180,26 @@ class FalService
         }
 
         return $fileUrl;
+    }
+
+    private function contentTypeFromExtension(string $ext): string
+    {
+        return match ($ext) {
+            'mp3', 'mpga', 'mpeg' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'flac' => 'audio/flac',
+            'ogg', 'oga' => 'audio/ogg',
+            'm4a' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'mp4' => 'video/mp4',
+            'mov' => 'video/quicktime',
+            'webm' => 'video/webm',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+            default => 'application/octet-stream',
+        };
     }
 
     /**

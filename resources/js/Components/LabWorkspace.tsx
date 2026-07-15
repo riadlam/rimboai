@@ -805,37 +805,35 @@ export default function LabWorkspace({
             try {
                 let data: CreationResponse;
                 if (options.audioFile) {
-                    const form = new FormData();
-                    form.append('prompt', trimmed);
-                    form.append('title', options.title || '');
-                    form.append('endpoint_id', options.endpointId);
-                    form.append('lyrics', options.lyrics || '');
-                    form.append('instrumental', options.instrumental ? '1' : '0');
-                    form.append('auto_enhance', options.autoEnhance ? '1' : '0');
-                    if (options.vocalGender === 'male' || options.vocalGender === 'female') {
-                        form.append('vocal_gender', options.vocalGender);
+                    // Shared hosting often breaks PHP multipart audio uploads
+                    // (UPLOAD_ERR_CANT_WRITE / ModSecurity). Send base64 JSON instead.
+                    if (options.audioFile.size > 20 * 1024 * 1024) {
+                        throw new Error('Audio file is too large. Please use an MP3 under 20MB.');
                     }
-                    form.append('edit_mode', options.editMode === 'lyrics' ? 'lyrics' : 'remix');
-                    // Ensure the file has a usable filename/extension for server-side checks.
-                    const audio = options.audioFile;
-                    const hasExt = /\.(mp3|wav|flac|ogg|m4a|aac|mpeg|mpga)$/i.test(audio.name || '');
-                    const named =
-                        hasExt || !audio.type
-                            ? audio
-                            : new File(
-                                  [audio],
-                                  audio.name?.includes('.') ? audio.name : `source.${audio.type.includes('wav') ? 'wav' : 'mp3'}`,
-                                  { type: audio.type || 'audio/mpeg' },
-                              );
-                    form.append('audio', named, named.name);
-                    if (
-                        durationSeconds != null &&
-                        Number.isFinite(durationSeconds) &&
-                        durationSeconds > 0
-                    ) {
-                        form.append('duration_seconds', String(Math.min(7200, Math.ceil(durationSeconds))));
-                    }
-                    data = await apiPostForm<CreationResponse>('/lab/music/generate', form);
+
+                    const audioBase64 = await fileToBase64(options.audioFile);
+                    const audioName = /\.(mp3|wav|flac|ogg|m4a|aac|mpeg|mpga)$/i.test(options.audioFile.name || '')
+                        ? options.audioFile.name
+                        : `source.${(options.audioFile.type || '').includes('wav') ? 'wav' : 'mp3'}`;
+
+                    data = await apiPost<CreationResponse>('/lab/music/generate', {
+                        prompt: trimmed,
+                        title: options.title || '',
+                        endpoint_id: options.endpointId,
+                        lyrics: options.lyrics || '',
+                        instrumental: options.instrumental,
+                        auto_enhance: options.autoEnhance,
+                        ...(options.vocalGender === 'male' || options.vocalGender === 'female'
+                            ? { vocal_gender: options.vocalGender }
+                            : {}),
+                        edit_mode: options.editMode === 'lyrics' ? 'lyrics' : 'remix',
+                        audio_base64: audioBase64,
+                        audio_filename: audioName,
+                        audio_mime: options.audioFile.type || 'audio/mpeg',
+                        ...(durationSeconds != null && Number.isFinite(durationSeconds) && durationSeconds > 0
+                            ? { duration_seconds: Math.min(7200, Math.ceil(durationSeconds)) }
+                            : {}),
+                    });
                 } else {
                     data = await apiPost<CreationResponse>('/lab/music/generate', {
                         prompt: trimmed,
@@ -1418,6 +1416,19 @@ export default function LabWorkspace({
             </div>
         </div>
     );
+}
+
+function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = typeof reader.result === 'string' ? reader.result : '';
+            const comma = result.indexOf(',');
+            resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = () => reject(new Error('Could not read the audio file.'));
+        reader.readAsDataURL(file);
+    });
 }
 
 function GuestLibraryPlaceholder({ title }: { title: string }) {
