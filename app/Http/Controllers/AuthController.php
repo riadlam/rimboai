@@ -49,6 +49,7 @@ class AuthController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
+            'tokens' => 50,
         ]);
 
         Auth::login($user);

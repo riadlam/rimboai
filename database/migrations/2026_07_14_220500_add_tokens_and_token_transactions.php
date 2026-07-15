@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->unsignedBigInteger('tokens')->default(100)->after('password');
+            $table->unsignedBigInteger('tokens')->default(50)->after('password');
         });
 
         Schema::create('token_transactions', function (Blueprint $table) {

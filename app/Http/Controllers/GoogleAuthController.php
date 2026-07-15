@@ -74,6 +74,7 @@ class GoogleAuthController extends Controller
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
                 'password' => null,
+                'tokens' => 50,
                 'email_verified_at' => now(),
             ]);
         }
