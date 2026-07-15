@@ -1,13 +1,13 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import CreditsModal from '@/Components/CreditsModal';
-import type { PageProps } from '@/types';
+import type { PageProps, TokenPackage } from '@/types';
 
 type Currency = 'USD' | 'EUR' | 'GBP' | 'DZD';
 
-type PackId = 'starter' | 'creator' | 'pro' | 'business';
+type PackId = string;
 
 type YieldItem = {
     value: string;
@@ -37,84 +37,82 @@ const CURRENCIES: Record<Currency, { label: string; name: string; symbol: string
     GBP: { label: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧', rateFromDzd: 0.79 / 134 },
 };
 
-const PACKS: Pack[] = [
-    {
-        id: 'starter',
-        name: 'Starter',
-        dzd: 3750,
-        tokens: 5000,
+/** UI chrome only — price/tokens/name always come from token_packages. */
+const PACK_META: Record<
+    string,
+    Omit<Pack, 'id' | 'name' | 'dzd' | 'tokens' | 'yields'> & { yieldsFromTokens?: boolean }
+> = {
+    starter: {
         tagline: 'Perfect for trying out AI generation',
         accent: 'border-white/10 hover:border-white/20',
         check: 'text-emerald-400',
         btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
-        yields: [
-            { value: '333', label: 'images (Nano Banana Pro)', icon: 'image' },
-            { value: '48', label: 'videos (Kling 2.6)', icon: 'video' },
-            { value: '12', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
-            { value: '119', label: 'songs (Suno)', icon: 'music' },
-            { value: '500', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
-        ],
         perks: ['Access to all AI models', 'HD quality output', 'Email support'],
     },
-    {
-        id: 'creator',
-        name: 'Creator',
-        dzd: 10000,
-        tokens: 15000,
+    creator: {
         tagline: 'Perfect for content creators',
         accent: 'border-sky-500/40 hover:border-sky-400/60',
         check: 'text-emerald-400',
         btn: 'bg-sky-600 text-white hover:bg-sky-500',
-        yields: [
-            { value: '1,000', label: 'images (Nano Banana Pro)', icon: 'image' },
-            { value: '145', label: 'videos (Kling 2.6)', icon: 'video' },
-            { value: '37', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
-            { value: '357', label: 'songs (Suno)', icon: 'music' },
-            { value: '1,500', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
-        ],
         perks: ['Access to all AI models', 'HD quality output', 'Priority support', 'Fast generation queue'],
     },
-    {
-        id: 'pro',
-        name: 'Pro',
-        dzd: 18750,
-        tokens: 30000,
+    pro: {
         popular: true,
         tagline: 'Perfect for professionals and studios',
         accent: 'border-[#FF5733]/55 ring-2 ring-[#FF5733]/20 hover:border-[#FF5733]/70',
         check: 'text-[#FF8A65]',
         btn: 'bg-gradient-to-b from-[#FF6A45] to-[#E24216] text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] hover:brightness-110',
-        yields: [
-            { value: '2,000', label: 'images (Nano Banana Pro)', icon: 'image' },
-            { value: '291', label: 'videos (Kling 2.6)', icon: 'video' },
-            { value: '75', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
-            { value: '714', label: 'songs (Suno)', icon: 'music' },
-            { value: '3,000', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
-        ],
         perks: ['Access to all AI models', '4K quality output', 'Priority support', 'Fast generation queue', 'Bulk generation'],
     },
-    {
-        id: 'business',
-        name: 'Business',
-        dzd: 55000,
-        tokens: 100000,
+    business: {
         best: true,
         tagline: 'Perfect for teams and enterprises',
         accent: 'border-amber-400/45 hover:border-amber-300/65',
         check: 'text-amber-400',
         btn: 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-semibold hover:brightness-105',
-        yields: [
-            { value: '6,666', label: 'images (Nano Banana Pro)', icon: 'image' },
-            { value: '970', label: 'videos (Kling 2.6)', icon: 'video' },
-            { value: '250', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
-            { value: '2,380', label: 'songs (Suno)', icon: 'music' },
-            { value: '10,000', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
-        ],
         perks: ['Access to all AI models', '4K quality output', 'Dedicated support', 'Fast generation queue', 'Bulk generation', 'API access'],
     },
-];
+};
 
-const FEATURES: { name: string; packs: Record<PackId, boolean> }[] = [
+const DEFAULT_META = {
+    tagline: 'Token pack for the Lab',
+    accent: 'border-white/10 hover:border-white/20',
+    check: 'text-emerald-400',
+    btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
+    perks: ['Access to all AI models', 'HD quality output'],
+};
+
+function yieldsFor(tokens: number): YieldItem[] {
+    return [
+        { value: Math.max(0, Math.floor(tokens / 15)).toLocaleString(), label: 'images (Nano Banana Pro)', icon: 'image' },
+        { value: Math.max(0, Math.floor(tokens / 104)).toLocaleString(), label: 'videos (Kling 2.6)', icon: 'video' },
+        { value: Math.max(0, Math.floor(tokens / 400)).toLocaleString(), label: 'videos (Veo 3.1)', icon: 'videoAlt' },
+        { value: Math.max(0, Math.floor(tokens / 42)).toLocaleString(), label: 'songs (Suno)', icon: 'music' },
+        { value: Math.max(0, Math.floor(tokens / 10)).toLocaleString(), label: 'voiceovers (ElevenLabs)', icon: 'mic' },
+    ];
+}
+
+function packsFromDb(packages: TokenPackage[]): Pack[] {
+    return packages.map((p) => {
+        const meta = PACK_META[p.slug] ?? DEFAULT_META;
+        return {
+            id: p.slug,
+            name: p.name,
+            dzd: Number(p.price_dzd),
+            tokens: Number(p.tokens),
+            tagline: meta.tagline,
+            popular: 'popular' in meta ? meta.popular : undefined,
+            best: 'best' in meta ? meta.best : undefined,
+            accent: meta.accent,
+            check: meta.check,
+            btn: meta.btn,
+            perks: meta.perks,
+            yields: yieldsFor(Number(p.tokens)),
+        };
+    });
+}
+
+const FEATURES: { name: string; packs: Record<string, boolean> }[] = [
     { name: 'Access to all AI models', packs: { starter: true, creator: true, pro: true, business: true } },
     { name: 'HD quality output', packs: { starter: true, creator: true, pro: true, business: true } },
     { name: '4K quality output', packs: { starter: false, creator: false, pro: true, business: true } },
@@ -222,6 +220,8 @@ export default function Pricing() {
     const [busyPack, setBusyPack] = useState<PackId | null>(null);
     const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
+    const PACKS = useMemo(() => packsFromDb(props.tokenPackages ?? []), [props.tokenPackages]);
+
     // Show the SofizPay return result, then strip the query so a refresh won't repeat it.
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -296,7 +296,7 @@ export default function Pricing() {
 
     const cur = CURRENCIES[currency];
     const activeModels = MODEL_TABS.find((t) => t.id === modelTab) ?? MODEL_TABS[0];
-    const proPack = PACKS.find((p) => p.id === 'pro')!;
+    const proPack = PACKS.find((p) => p.id === 'pro') ?? PACKS[Math.min(2, Math.max(0, PACKS.length - 1))] ?? null;
 
     const formatPrice = (dzd: number) => {
         const value = dzd * cur.rateFromDzd;
@@ -307,7 +307,7 @@ export default function Pricing() {
         return { amount: `${cur.symbol}${rounded}`, suffix: '' };
     };
 
-    const proPrice = formatPrice(proPack.dzd);
+    const proPrice = proPack ? formatPrice(proPack.dzd) : { amount: '—', suffix: '' };
     const ctaHref = user ? '/lab' : '/register';
 
     return (
@@ -354,9 +354,13 @@ export default function Pricing() {
                                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">Most loved pack</p>
                                     <div className="mt-3 flex items-center gap-2">
                                         <span className="rounded-full bg-gradient-to-r from-[#FF6A45] to-[#E24216] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                                            Pro
+                                            {proPack?.name ?? 'Pro'}
                                         </span>
-                                        <span className="text-sm text-white/55">30,000 tokens · everything unlocked</span>
+                                        <span className="text-sm text-white/55">
+                                            {proPack
+                                                ? `${proPack.tokens.toLocaleString()} tokens · everything unlocked`
+                                                : 'everything unlocked'}
+                                        </span>
                                     </div>
                                     <div className="mt-6 flex items-end justify-between gap-4 border-t border-white/[0.06] pt-5">
                                         <div>
@@ -495,11 +499,14 @@ export default function Pricing() {
                         </div>
 
                         <div className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02]">
-                            <div className="grid grid-cols-[1.4fr_repeat(4,0.7fr)] gap-0 border-b border-white/[0.06] bg-white/[0.03] px-3 py-3 text-[11px] font-semibold uppercase tracking-wider text-white/40 sm:px-5 sm:text-xs">
+                            <div
+                                className="grid gap-0 border-b border-white/[0.06] bg-white/[0.03] px-3 py-3 text-[11px] font-semibold uppercase tracking-wider text-white/40 sm:px-5 sm:text-xs"
+                                style={{ gridTemplateColumns: `1.4fr repeat(${Math.max(PACKS.length, 1)}, 0.7fr)` }}
+                            >
                                 <span className="ps-1">Feature</span>
-                                {(['Starter', 'Creator', 'Pro', 'Business'] as const).map((name) => (
-                                    <span key={name} className="text-center text-white/70">
-                                        {name}
+                                {PACKS.map((pack) => (
+                                    <span key={pack.id} className="text-center text-white/70">
+                                        {pack.name}
                                     </span>
                                 ))}
                             </div>
@@ -510,14 +517,15 @@ export default function Pricing() {
                                     whileInView={{ opacity: 1, x: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: i * 0.04 }}
-                                    className={`grid grid-cols-[1.4fr_repeat(4,0.7fr)] items-center gap-0 px-3 py-3.5 sm:px-5 ${
+                                    className={`grid items-center gap-0 px-3 py-3.5 sm:px-5 ${
                                         i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.015]'
                                     }`}
+                                    style={{ gridTemplateColumns: `1.4fr repeat(${Math.max(PACKS.length, 1)}, 0.7fr)` }}
                                 >
                                     <span className="pe-2 text-[13px] text-white/75">{row.name}</span>
-                                    {(['starter', 'creator', 'pro', 'business'] as PackId[]).map((id) => (
-                                        <span key={id} className="flex justify-center">
-                                            {row.packs[id] ? (
+                                    {PACKS.map((pack) => (
+                                        <span key={pack.id} className="flex justify-center">
+                                            {row.packs[pack.id] ? (
                                                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF5733]/15 text-[#FF8A65]">
                                                     <CheckIcon />
                                                 </span>

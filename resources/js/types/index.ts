@@ -94,6 +94,13 @@ export type Tool = {
     badge?: string;
 };
 
+export type TokenPackage = {
+    slug: string;
+    name: string;
+    tokens: number;
+    price_dzd: number;
+};
+
 export type PageProps = {
     app?: {
         name: string;
@@ -103,6 +110,7 @@ export type PageProps = {
     auth: {
         user: User | null;
     };
+    tokenPackages?: TokenPackage[];
     flash?: {
         success?: string | null;
         error?: string | null;
