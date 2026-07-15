@@ -7,6 +7,7 @@ import VoiceLabCreateForm, { type VoiceGenerateOptions } from '@/Components/Voic
 import VoiceLabLibrary, { type LabVoice } from '@/Components/VoiceLabLibrary';
 import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
 import type { CreditsConfig } from '@/lib/imageCredits';
+import { hasMeaningfulPrompt } from '@/lib/promptText';
 import {
     buildReuseSettingsDraft,
     buildUseResultDraft,
@@ -586,7 +587,7 @@ export default function LabWorkspace({
     const startImageGenerate = useCallback(
         async (nextPrompt?: string, options?: ImageGenerateOptions) => {
             const text = (nextPrompt ?? '').trim();
-            if (!text) return;
+            if (!hasMeaningfulPrompt(text)) return;
 
             const aspect = options?.aspect ?? '1:1';
             const quantity = Math.max(1, Math.min(4, options?.quantity ?? 1));
@@ -662,7 +663,7 @@ export default function LabWorkspace({
     const startVideoGenerate = useCallback(
         async (nextPrompt?: string, options?: VideoGenerateOptions) => {
             const text = (nextPrompt ?? '').trim();
-            if (!text) return;
+            if (!hasMeaningfulPrompt(text)) return;
 
             const aspect = options?.aspect ?? '16:9';
             const batchId = `vbatch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -775,7 +776,7 @@ export default function LabWorkspace({
             },
         ) => {
             const trimmed = style.trim();
-            if (!trimmed || !options?.endpointId) return;
+            if (!hasMeaningfulPrompt(trimmed) || !options?.endpointId) return;
 
             const localId = `music-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const startedAt = Date.now();

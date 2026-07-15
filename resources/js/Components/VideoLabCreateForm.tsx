@@ -23,6 +23,7 @@ import {
     parseDurationDraft,
     type LabReuseDraft,
 } from '@/lib/labReuse';
+import { hasMeaningfulPrompt } from '@/lib/promptText';
 
 export type VideoGenerateOptions = {
     quantity: number;
@@ -283,7 +284,7 @@ export default function VideoLabCreateForm({
     const mediaGuidance = describeMediaGuidance(mediaCounts, modelsForPicker.length);
     const showInfoGuidance = Boolean(mediaGuidance && mediaGuidance.tone !== 'error' && !guidanceDismissed);
     const showErrorGuidance = Boolean(mediaGuidance && mediaGuidance.tone === 'error');
-    const rawBlockReason = generateBlockReason(Boolean(prompt.trim()), mediaCounts, selectedModelRecord, modelsForPicker.length);
+    const rawBlockReason = generateBlockReason(hasMeaningfulPrompt(prompt), mediaCounts, selectedModelRecord, modelsForPicker.length);
     const blockReason = !rawBlockReason
         ? null
         : rawBlockReason === 'Add a prompt to generate.'
@@ -1034,9 +1035,10 @@ export default function VideoLabCreateForm({
 
                 <motion.button
                     type="button"
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={canGenerate && !loading ? { scale: 0.98 } : undefined}
                     disabled={loading || !canGenerate}
-                    onClick={() =>
+                    onClick={() => {
+                        if (loading || !canGenerate || !hasMeaningfulPrompt(prompt)) return;
                         onGenerate?.(prompt, {
                             quantity: 1,
                             aspect,
@@ -1049,8 +1051,8 @@ export default function VideoLabCreateForm({
                             imageFiles: media.filter((m) => m.kind === 'image').map((m) => m.file),
                             videoFiles: media.filter((m) => m.kind === 'video').map((m) => m.file),
                             audioFiles: media.filter((m) => m.kind === 'audio').map((m) => m.file),
-                        })
-                    }
+                        });
+                    }}
                     className="relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
                 >
                     <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),transparent_40%)]" />
@@ -1068,6 +1070,8 @@ export default function VideoLabCreateForm({
                         </span>
                     ) : !hasEnoughTokens ? (
                         <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
+                    ) : !hasMeaningfulPrompt(prompt) ? (
+                        <span className="relative text-white/90">{t('video.blockPrompt')}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

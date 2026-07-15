@@ -578,6 +578,10 @@ export default function VoiceLabCreateForm({
                         </span>
                     ) : !hasEnoughTokens ? (
                         <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
+                    ) : !text.trim() ? (
+                        <span className="relative text-white/90">{t('voice.needText')}</span>
+                    ) : !selectedVoice?.voice_key ? (
+                        <span className="relative text-white/90">{t('voice.needVoice')}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

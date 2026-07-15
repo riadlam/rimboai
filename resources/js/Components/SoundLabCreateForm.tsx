@@ -11,6 +11,7 @@ import AssetMentionTextarea, {
     rebasePromptAfterAssetRemoval,
     type AssetMention,
 } from '@/Components/AssetMentionTextarea';
+import { hasMeaningfulPrompt } from '@/lib/promptText';
 
 type Props = {
     brands?: Brand[];
@@ -225,8 +226,9 @@ export default function SoundLabCreateForm({
         maxSourceSeconds != null &&
         sourceDurationSec > maxSourceSeconds;
 
+    const hasStyle = hasMeaningfulPrompt(style);
     const canGenerate =
-        Boolean(style.trim()) && (!needsSourceAudio || Boolean(sourceAudio)) && !sourceTooLong && hasEnoughTokens;
+        hasStyle && (!needsSourceAudio || Boolean(sourceAudio)) && !sourceTooLong && hasEnoughTokens;
 
     useEffect(() => {
         setSourceAudio(null);
@@ -1034,9 +1036,10 @@ export default function SoundLabCreateForm({
 
                 <motion.button
                     type="button"
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={canGenerate && !loading ? { scale: 0.98 } : undefined}
                     disabled={loading || !canGenerate}
-                    onClick={() =>
+                    onClick={() => {
+                        if (loading || !canGenerate || !hasMeaningfulPrompt(style)) return;
                         onGenerate?.(buildStyleForGenerate(), {
                             title,
                             instrumental: needsSourceAudio
@@ -1060,8 +1063,8 @@ export default function SoundLabCreateForm({
                                 : supportsDurationControl
                                   ? durationSeconds
                                   : null,
-                        })
-                    }
+                        });
+                    }}
                     className="relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
                 >
                     <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),transparent_40%)]" />
@@ -1079,6 +1082,8 @@ export default function SoundLabCreateForm({
                         </span>
                     ) : !hasEnoughTokens ? (
                         <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
+                    ) : !hasStyle ? (
+                        <span className="relative text-white/90">{t('music.needStyle')}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

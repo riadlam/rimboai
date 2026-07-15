@@ -70,7 +70,8 @@
     "resMax": "أقصى تفصيل",
     "generateOne": "توليد صورة",
     "generateN": "توليد {{count}} صور",
-    "needSources": "أضف صور المصدر للمتابعة"
+    "needSources": "أضف صور المصدر للمتابعة",
+    "needPrompt": "أضف وصفاً للتوليد"
   },
   "video": {
     "uploadMedia": "رفع وسائط",
@@ -103,7 +104,9 @@
     "styleExaggeration": "مبالغة الأسلوب",
     "speed": "السرعة",
     "textToConvert": "النص للتحويل",
-    "voiceControls": "تحكمات الصوت"
+    "voiceControls": "تحكمات الصوت",
+    "needText": "أضف نصاً للتوليد",
+    "needVoice": "اختر صوتاً"
   },
   "music": {
     "title": "موسيقى",
@@ -131,7 +134,8 @@
     "autoEnhance": "تحسين تلقائي · رصيد واحد",
     "uploadTrackHint": "ارفع مقطوعة، ثم اختر ريمكس (أسلوب جديد) أو تعديل الكلمات (إبقاء الإيقاع وإعادة كتابة الغناء).",
     "lyrics": "الكلمات",
-    "lyricsPlaceholder": "اكتب كلماتك…"
+    "lyricsPlaceholder": "اكتب كلماتك…",
+    "needStyle": "أضف أسلوباً للتوليد"
   },
   "uploader": {
     "uploadVideo": "رفع فيديو",

@@ -70,7 +70,8 @@
     "resMax": "Max detail",
     "generateOne": "Generate image",
     "generateN": "Generate {{count}} images",
-    "needSources": "Add source images to continue"
+    "needSources": "Add source images to continue",
+    "needPrompt": "Add a prompt to generate"
   },
   "video": {
     "uploadMedia": "Upload media",
@@ -103,7 +104,9 @@
     "styleExaggeration": "Style Exaggeration",
     "speed": "Speed",
     "textToConvert": "Text to convert",
-    "voiceControls": "Voice Controls"
+    "voiceControls": "Voice Controls",
+    "needText": "Add text to generate",
+    "needVoice": "Select a voice"
   },
   "music": {
     "title": "Music",
@@ -131,7 +134,8 @@
     "autoEnhance": "Auto-enhance · 1 credit",
     "uploadTrackHint": "Upload a track, then choose Remix (new style) or Lyrics edit (keep beat, rewrite vocals).",
     "lyrics": "Lyrics",
-    "lyricsPlaceholder": "Write your lyrics…"
+    "lyricsPlaceholder": "Write your lyrics…",
+    "needStyle": "Add a style to generate"
   },
   "uploader": {
     "uploadVideo": "Upload Video",

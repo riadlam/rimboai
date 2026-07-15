@@ -9,6 +9,7 @@ import AssetMentionTextarea, {
     type AssetMention,
 } from '@/Components/AssetMentionTextarea';
 import { loadDraftMediaFiles, matchLabModel, type LabReuseDraft } from '@/lib/labReuse';
+import { hasMeaningfulPrompt } from '@/lib/promptText';
 
 export type ImageGenerateOptions = {
     quantity: number;
@@ -121,8 +122,9 @@ export default function ImageLabCreateForm({
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
+    const hasPrompt = hasMeaningfulPrompt(prompt);
     const canGenerate =
-        Boolean(prompt.trim()) &&
+        hasPrompt &&
         (!isVariations || imageRefs.length > 0) &&
         (!isVariations || selectedSupportsVariations) &&
         hasEnoughTokens;
@@ -732,9 +734,10 @@ export default function ImageLabCreateForm({
                 </div>
                 <motion.button
                     type="button"
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={canGenerate && !loading ? { scale: 0.98 } : undefined}
                     disabled={loading || !canGenerate}
-                    onClick={() =>
+                    onClick={() => {
+                        if (loading || !hasMeaningfulPrompt(prompt)) return;
                         onGenerate?.(prompt, {
                             quantity,
                             aspect,
@@ -743,8 +746,8 @@ export default function ImageLabCreateForm({
                             modelName: selectedModelMeta.name,
                             mode,
                             referenceFiles: imageRefs.map((r) => r.file),
-                        })
-                    }
+                        });
+                    }}
                     className="relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
                 >
                     <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),transparent_40%)]" />
@@ -755,6 +758,8 @@ export default function ImageLabCreateForm({
                         </span>
                     ) : !hasEnoughTokens ? (
                         <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
+                    ) : !hasPrompt ? (
+                        <span className="relative text-white/90">{t('image.needPrompt')}</span>
                     ) : !canGenerate && isVariations && imageRefs.length === 0 ? (
                         <span className="relative text-white/90">{t('image.needSources')}</span>
                     ) : (
