@@ -30,6 +30,26 @@ export class ApiError extends Error {
     }
 }
 
+function messageFromPayload(payload: unknown, status: number): string {
+    let message =
+        payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message: unknown }).message === 'string'
+            ? (payload as { message: string }).message
+            : `Request failed (${status})`;
+
+    // Prefer the first Laravel validation error when present.
+    if (payload && typeof payload === 'object' && 'errors' in payload) {
+        const errors = (payload as { errors?: Record<string, string[]> }).errors;
+        if (errors && typeof errors === 'object') {
+            const first = Object.values(errors)
+                .flat()
+                .find((m) => typeof m === 'string' && m.trim() !== '');
+            if (first) message = first;
+        }
+    }
+
+    return message;
+}
+
 async function request<T>(url: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
         Accept: 'application/json',
@@ -57,12 +77,8 @@ async function request<T>(url: string, method: 'GET' | 'POST', body?: unknown): 
     }
 
     if (!res.ok) {
-        const message =
-            (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message: unknown }).message === 'string'
-                ? (payload as { message: string }).message
-                : null) || `Request failed (${res.status})`;
         throw new ApiError(
-            message,
+            messageFromPayload(payload, res.status),
             res.status,
             payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null,
         );
@@ -99,12 +115,8 @@ async function requestForm<T>(url: string, form: FormData): Promise<T> {
     }
 
     if (!res.ok) {
-        const message =
-            (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message: unknown }).message === 'string'
-                ? (payload as { message: string }).message
-                : null) || `Request failed (${res.status})`;
         throw new ApiError(
-            message,
+            messageFromPayload(payload, res.status),
             res.status,
             payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null,
         );

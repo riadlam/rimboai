@@ -27,20 +27,54 @@ class MusicGenerationController extends Controller
         TokenService $tokens,
         FalPricingService $pricing,
     ): JsonResponse {
-        $data = $request->validate([
-            'endpoint_id' => ['required', 'string', 'max:191'],
-            'prompt' => ['required', 'string', 'min:1', 'max:5000'],
-            'title' => ['nullable', 'string', 'max:120'],
-            'lyrics' => ['nullable', 'string', 'max:5000'],
-            'instrumental' => ['nullable', 'boolean'],
-            'auto_enhance' => ['nullable', 'boolean'],
-            'vocal_gender' => ['nullable', 'string', 'in:male,female'],
-            'audio_url' => ['nullable', 'string', 'max:2048'],
-            'edit_mode' => ['nullable', 'string', 'in:remix,lyrics'],
-            'duration_seconds' => ['nullable', 'numeric', 'min:1', 'max:3600'],
-            // Prefer extension check: shared hosts often mis-detect MP3 MIME as octet-stream.
-            'audio' => ['nullable', 'file', 'max:51200', 'extensions:mp3,wav,flac,ogg,m4a,aac,mpeg,mpga'],
-        ]);
+        // When PHP post_max_size is exceeded, $_POST/$_FILES are empty → fake 422s.
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+        if ($contentLength > 0 && $request->all() === [] && $request->allFiles() === []) {
+            return response()->json([
+                'message' => 'Audio upload was blocked by the server size limit (post_max_size / upload_max_filesize). Use a smaller MP3 (under 15MB) or raise those PHP limits in cPanel.',
+            ], 422);
+        }
+
+        try {
+            $data = $request->validate([
+                'endpoint_id' => ['required', 'string', 'max:191'],
+                'prompt' => ['required', 'string', 'min:1', 'max:5000'],
+                'title' => ['nullable', 'string', 'max:120'],
+                'lyrics' => ['nullable', 'string', 'max:5000'],
+                // FormData sends "1"/"0" — avoid strict boolean rule edge cases.
+                'instrumental' => ['nullable'],
+                'auto_enhance' => ['nullable'],
+                'vocal_gender' => ['nullable', 'string'],
+                'audio_url' => ['nullable', 'string', 'max:2048'],
+                'edit_mode' => ['nullable', 'string', 'in:remix,lyrics'],
+                'duration_seconds' => ['nullable', 'numeric', 'min:0', 'max:7200'],
+                // Only require that a file arrived; type is checked manually below
+                // (shared hosts often mis-detect MP3 MIME → extensions/mimetypes 422).
+                'audio' => ['nullable', 'file', 'max:51200'],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $first = collect($e->errors())->flatten()->first();
+
+            Log::warning('Music generate validation failed', [
+                'errors' => $e->errors(),
+                'has_audio_file' => $request->hasFile('audio'),
+                'keys' => array_keys($request->all()),
+                'file_keys' => array_keys($request->allFiles()),
+            ]);
+
+            return response()->json([
+                'message' => is_string($first) && $first !== ''
+                    ? $first
+                    : 'Invalid music request.',
+                'errors' => $e->errors(),
+            ], 422);
+        }
+
+        $vocalGenderRaw = strtolower(trim((string) ($data['vocal_gender'] ?? '')));
+        if ($vocalGenderRaw !== '' && ! in_array($vocalGenderRaw, ['male', 'female'], true)) {
+            // Ignore bad FormData values like the literal string "undefined".
+            $vocalGenderRaw = '';
+        }
 
         if (! $fal->configured()) {
             return response()->json(['message' => 'Music service is not configured.'], 503);
@@ -77,7 +111,9 @@ class MusicGenerationController extends Controller
 
         $lyrics = $supportsLyrics && ! $instrumental ? trim((string) ($data['lyrics'] ?? '')) : '';
         $autoEnhance = $request->boolean('auto_enhance', false);
-        $vocalGender = ! $instrumental ? ($data['vocal_gender'] ?? 'female') : null;
+        $vocalGender = ! $instrumental
+            ? ($vocalGenderRaw === 'male' || $vocalGenderRaw === 'female' ? $vocalGenderRaw : 'female')
+            : null;
 
         $audioUrl = null;
         if ($supportsAudio) {
@@ -88,6 +124,17 @@ class MusicGenerationController extends Controller
                 if (! $audioFile->isValid()) {
                     return response()->json([
                         'message' => 'Audio upload failed on the server (file too large or incomplete). Try a smaller MP3, or raise PHP upload_max_filesize / post_max_size.',
+                    ], 422);
+                }
+
+                if (! $this->isAllowedAudioUpload($audioFile)) {
+                    return response()->json([
+                        'message' => 'Unsupported audio file. Please upload MP3, WAV, FLAC, OGG, M4A, or AAC.',
+                        'debug' => [
+                            'name' => $audioFile->getClientOriginalName(),
+                            'ext' => $audioFile->getClientOriginalExtension(),
+                            'mime' => $audioFile->getMimeType(),
+                        ],
                     ], 422);
                 }
 
@@ -388,6 +435,48 @@ class MusicGenerationController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Accept common audio uploads by extension OR mime.
+     * Shared hosts frequently report MP3 as application/octet-stream.
+     */
+    private function isAllowedAudioUpload(UploadedFile $file): bool
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $allowedExt = ['mp3', 'wav', 'flac', 'ogg', 'oga', 'm4a', 'aac', 'mpeg', 'mpga'];
+
+        if (in_array($ext, $allowedExt, true)) {
+            return true;
+        }
+
+        // Fallback: filename ends with .mp3 even if getClientOriginalExtension is empty.
+        $name = strtolower((string) $file->getClientOriginalName());
+        foreach ($allowedExt as $allowed) {
+            if (str_ends_with($name, '.'.$allowed)) {
+                return true;
+            }
+        }
+
+        $mime = strtolower((string) ($file->getMimeType() ?: ''));
+        $allowedMime = [
+            'audio/mpeg',
+            'audio/mp3',
+            'audio/x-mp3',
+            'audio/x-mpeg',
+            'audio/mpeg3',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/wave',
+            'audio/flac',
+            'audio/ogg',
+            'audio/mp4',
+            'audio/aac',
+            'audio/x-aac',
+            'audio/webm',
+        ];
+
+        return in_array($mime, $allowedMime, true);
     }
 
     private function messageFromFalException(\Throwable $e): string

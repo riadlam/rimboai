@@ -812,11 +812,28 @@ export default function LabWorkspace({
                     form.append('lyrics', options.lyrics || '');
                     form.append('instrumental', options.instrumental ? '1' : '0');
                     form.append('auto_enhance', options.autoEnhance ? '1' : '0');
-                    form.append('vocal_gender', options.vocalGender);
+                    if (options.vocalGender === 'male' || options.vocalGender === 'female') {
+                        form.append('vocal_gender', options.vocalGender);
+                    }
                     form.append('edit_mode', options.editMode === 'lyrics' ? 'lyrics' : 'remix');
-                    form.append('audio', options.audioFile);
-                    if (durationSeconds != null) {
-                        form.append('duration_seconds', String(durationSeconds));
+                    // Ensure the file has a usable filename/extension for server-side checks.
+                    const audio = options.audioFile;
+                    const hasExt = /\.(mp3|wav|flac|ogg|m4a|aac|mpeg|mpga)$/i.test(audio.name || '');
+                    const named =
+                        hasExt || !audio.type
+                            ? audio
+                            : new File(
+                                  [audio],
+                                  audio.name?.includes('.') ? audio.name : `source.${audio.type.includes('wav') ? 'wav' : 'mp3'}`,
+                                  { type: audio.type || 'audio/mpeg' },
+                              );
+                    form.append('audio', named, named.name);
+                    if (
+                        durationSeconds != null &&
+                        Number.isFinite(durationSeconds) &&
+                        durationSeconds > 0
+                    ) {
+                        form.append('duration_seconds', String(Math.min(7200, Math.ceil(durationSeconds))));
                     }
                     data = await apiPostForm<CreationResponse>('/lab/music/generate', form);
                 } else {
