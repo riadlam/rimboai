@@ -326,7 +326,7 @@ function Hero() {
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,transparent_0%,#070708_78%)]" />
             </div>
 
-            <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-3 py-3 sm:gap-4 sm:py-4 lg:gap-5">
+            <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-start gap-3 pb-3 pt-3 sm:justify-center sm:gap-4 sm:py-4 lg:gap-5">
                 {/* Headline */}
                 <motion.div
                     initial={{ opacity: 0, y: 28, filter: 'blur(12px)' }}
