@@ -99,6 +99,7 @@ export default function SoundLabCreateForm({
     const [selectedModel, setSelectedModel] = useState(brands[0]?.models[0]?.name || 'MiniMax Music 2.6');
     const [sourceAudio, setSourceAudio] = useState<File | null>(null);
     const [sourceDurationSec, setSourceDurationSec] = useState<number | null>(null);
+    const [durationSeconds, setDurationSeconds] = useState(90);
     const [editMode, setEditMode] = useState<'remix' | 'lyrics'>('remix');
     const [draftNotice, setDraftNotice] = useState<string | null>(null);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -153,6 +154,10 @@ export default function SoundLabCreateForm({
     const canUseVocals = Boolean(selectedModelRecord?.supports_vocals);
     const canUseLyrics = Boolean(selectedModelRecord?.supports_lyrics);
     const needsSourceAudio = Boolean(selectedModelRecord?.supports_audio);
+    const supportsDurationControl = Boolean(selectedModelRecord?.supports_duration_control);
+    const minDuration = Math.max(1, selectedModelRecord?.min_duration_seconds ?? 1);
+    const maxDuration = Math.max(minDuration, selectedModelRecord?.max_duration ?? 180);
+    const durationStep = Math.max(1, selectedModelRecord?.duration_step_seconds ?? 1);
     const maxPromptChars = selectedModelRecord?.max_prompt_chars || 2000;
     const maxLyricsChars = selectedModelRecord?.max_lyrics_chars || 3000;
 
@@ -168,11 +173,23 @@ export default function SoundLabCreateForm({
                 selectedModelRecord,
                 {
                     autoEnhance,
-                    durationSeconds: needsSourceAudio ? sourceDurationSec : null,
+                    durationSeconds: needsSourceAudio
+                        ? sourceDurationSec
+                        : supportsDurationControl
+                          ? durationSeconds
+                          : null,
                 },
                 creditsConfig,
             ),
-        [selectedModelRecord, autoEnhance, creditsConfig, needsSourceAudio, sourceDurationSec],
+        [
+            selectedModelRecord,
+            autoEnhance,
+            creditsConfig,
+            needsSourceAudio,
+            sourceDurationSec,
+            supportsDurationControl,
+            durationSeconds,
+        ],
     );
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
@@ -203,6 +220,18 @@ export default function SoundLabCreateForm({
     }, [selectedModelRecord?.endpoint_id, needsSourceAudio]);
 
     useEffect(() => {
+        if (!supportsDurationControl) return;
+        const configured = selectedModelRecord?.default_duration_seconds ?? Math.min(90, maxDuration);
+        setDurationSeconds(Math.max(minDuration, Math.min(maxDuration, configured)));
+    }, [
+        selectedModelRecord?.endpoint_id,
+        supportsDurationControl,
+        selectedModelRecord?.default_duration_seconds,
+        minDuration,
+        maxDuration,
+    ]);
+
+    useEffect(() => {
         if (!sourceAudio) {
             setSourceDurationSec(null);
             return;
@@ -217,6 +246,13 @@ export default function SoundLabCreateForm({
     }, [sourceAudio]);
 
     const visibleStyles = moreStyles ? STYLE_SUGGESTIONS : STYLE_SUGGESTIONS.slice(0, 5);
+    const durationPresets = Array.from(
+        new Set(
+            [30, 60, 90, 120, 180, maxDuration].filter(
+                (seconds) => seconds >= minDuration && seconds <= maxDuration,
+            ),
+        ),
+    );
 
     useEffect(() => {
         if (brands[0] && !brands.find((b) => b.name === selectedBrand)) {
@@ -657,6 +693,77 @@ export default function SoundLabCreateForm({
                         />
                     </div>
 
+                    <AnimatePresence initial={false}>
+                        {supportsDurationControl && !needsSourceAudio && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden"
+                            >
+                                <div className="space-y-3 rounded-2xl border border-white/10 bg-black p-3.5 sm:p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex min-w-0 items-center gap-2.5">
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF5733]/12 text-orange-300">
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                                                    <circle cx="12" cy="12" r="9" />
+                                                    <path strokeLinecap="round" d="M12 7v5l3 2" />
+                                                </svg>
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-white">Track duration</p>
+                                                <p className="truncate text-[11px] text-white/40">
+                                                    Supported by {selectedModelRecord?.name || selectedModel}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="shrink-0 rounded-xl border border-orange-400/20 bg-[#FF5733]/10 px-3 py-1.5 text-center">
+                                            <span className="font-[family-name:Outfit,sans-serif] text-lg font-bold tabular-nums text-orange-200">
+                                                {formatMusicDuration(durationSeconds)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <input
+                                        type="range"
+                                        min={minDuration}
+                                        max={maxDuration}
+                                        step={durationStep}
+                                        value={durationSeconds}
+                                        onChange={(event) => setDurationSeconds(Number(event.target.value))}
+                                        aria-label="Track duration"
+                                        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[#FF5733]"
+                                    />
+
+                                    <div className="flex items-center justify-between text-[10px] tabular-nums text-white/30">
+                                        <span>{formatMusicDuration(minDuration)} min</span>
+                                        <span>{formatMusicDuration(maxDuration)} max</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap">
+                                        {durationPresets.map((seconds) => {
+                                            const active = durationSeconds === seconds;
+                                            return (
+                                                <button
+                                                    key={seconds}
+                                                    type="button"
+                                                    onClick={() => setDurationSeconds(seconds)}
+                                                    className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium tabular-nums transition ${
+                                                        active
+                                                            ? 'border-[#FF5733]/50 bg-[#FF5733]/15 text-orange-200'
+                                                            : 'border-white/10 bg-white/[0.025] text-white/45 hover:border-white/20 hover:text-white/75'
+                                                    }`}
+                                                >
+                                                    {formatMusicDuration(seconds)}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                     {/* Instrumental / Vocals — not used for ACE audio edit (Remix / Lyrics edit drive that) */}
                     {!needsSourceAudio && (
                     <div className={`space-y-3 rounded-2xl border border-white/10 bg-black p-3 ${!canUseVocals ? 'opacity-70' : ''}`}>
@@ -926,7 +1033,11 @@ export default function SoundLabCreateForm({
                             vocalGender,
                             audioFile: needsSourceAudio ? sourceAudio : null,
                             editMode: needsSourceAudio ? editMode : undefined,
-                            durationSeconds: needsSourceAudio ? sourceDurationSec : null,
+                            durationSeconds: needsSourceAudio
+                                ? sourceDurationSec
+                                : supportsDurationControl
+                                  ? durationSeconds
+                                  : null,
                         })
                     }
                     className="relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"

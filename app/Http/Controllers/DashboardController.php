@@ -225,6 +225,9 @@ class DashboardController extends Controller
             'max_lyrics_chars',
             'max_prompt_chars',
             'default_duration_seconds',
+            'supports_duration_control',
+            'min_duration_seconds',
+            'duration_step_seconds',
         ]));
 
         if ($selectCols === []) {
@@ -242,6 +245,7 @@ class DashboardController extends Controller
         $hasMaxLyricsChars = in_array('max_lyrics_chars', $columns, true);
         $hasMaxPromptChars = in_array('max_prompt_chars', $columns, true);
         $hasDefaultDurationSeconds = in_array('default_duration_seconds', $columns, true);
+        $hasDurationControls = in_array('supports_duration_control', $columns, true);
         $isImageCatalog = $modelsTable === 'text_to_image_models';
         $isVideoCatalog = $modelsTable === 'text_to_video_models';
         $isVoiceCatalog = $modelsTable === 'text_to_voice_models';
@@ -284,6 +288,7 @@ class DashboardController extends Controller
                 $hasMaxLyricsChars,
                 $hasMaxPromptChars,
                 $hasDefaultDurationSeconds,
+                $hasDurationControls,
                 $isImageCatalog,
                 $isVideoCatalog,
                 $isVoiceCatalog,
@@ -324,6 +329,7 @@ class DashboardController extends Controller
                         $hasMaxLyricsChars,
                         $hasMaxPromptChars,
                         $hasDefaultDurationSeconds,
+                        $hasDurationControls,
                         $isImageCatalog,
                         $isVideoCatalog,
                         $isVoiceCatalog,
@@ -392,6 +398,16 @@ class DashboardController extends Controller
                         if ($hasDefaultDurationSeconds) {
                             $payload['default_duration_seconds'] = isset($m->default_duration_seconds)
                                 ? (int) $m->default_duration_seconds
+                                : null;
+                        }
+
+                        if ($hasDurationControls) {
+                            $payload['supports_duration_control'] = (bool) ($m->supports_duration_control ?? false);
+                            $payload['min_duration_seconds'] = isset($m->min_duration_seconds)
+                                ? (int) $m->min_duration_seconds
+                                : null;
+                            $payload['duration_step_seconds'] = isset($m->duration_step_seconds)
+                                ? (int) $m->duration_step_seconds
                                 : null;
                         }
 

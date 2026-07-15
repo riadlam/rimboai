@@ -14,6 +14,7 @@ class FalMusicInputBuilder
      *   instrumental?: bool,
      *   vocal_gender?: 'male'|'female'|null,
      *   auto_enhance?: bool,
+     *   duration_seconds?: int|null,
      *   default_duration_seconds?: int|null,
      *   max_duration?: int|null,
      *   audio_url?: string|null,
@@ -160,10 +161,20 @@ class FalMusicInputBuilder
     }
 
     /**
-     * @param  array{default_duration_seconds?: int|null, max_duration?: int|null}  $options
+     * @param  array{duration_seconds?: int|null, default_duration_seconds?: int|null, max_duration?: int|null}  $options
      */
     private function resolveDurationSeconds(array $options): int
     {
+        $requested = $options['duration_seconds'] ?? null;
+        if (is_numeric($requested) && (int) $requested > 0) {
+            $duration = (int) $requested;
+            $max = $options['max_duration'] ?? null;
+
+            return is_numeric($max) && (int) $max > 0
+                ? min($duration, (int) $max)
+                : $duration;
+        }
+
         $configured = $options['default_duration_seconds'] ?? null;
         if (is_numeric($configured) && (int) $configured > 0) {
             return (int) $configured;

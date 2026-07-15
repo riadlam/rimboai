@@ -59,7 +59,10 @@ class FalSyncMusicModels extends Command
      *     max_lyrics_chars: int|null,
      *     max_prompt_chars: int|null,
      *     max_duration: int|null,
-     *     default_duration_seconds: int|null
+     *     default_duration_seconds: int|null,
+     *     supports_duration_control: bool,
+     *     min_duration_seconds: int|null,
+     *     duration_step_seconds: int|null
      * }>
      */
     private const CURATED_COPY = [
@@ -75,6 +78,9 @@ class FalSyncMusicModels extends Command
             'max_prompt_chars' => 2000,
             'max_duration' => null,
             'default_duration_seconds' => null,
+            'supports_duration_control' => false,
+            'min_duration_seconds' => null,
+            'duration_step_seconds' => null,
         ],
         'fal-ai/ace-step/audio-to-audio' => [
             'name' => 'ACE-Step Audio Edit',
@@ -88,6 +94,9 @@ class FalSyncMusicModels extends Command
             'max_prompt_chars' => 2000,
             'max_duration' => 651,
             'default_duration_seconds' => 90,
+            'supports_duration_control' => false,
+            'min_duration_seconds' => null,
+            'duration_step_seconds' => null,
         ],
         'fal-ai/lyria3/pro' => [
             'name' => 'Lyria 3 Pro',
@@ -101,6 +110,9 @@ class FalSyncMusicModels extends Command
             'max_prompt_chars' => 5000,
             'max_duration' => 180,
             'default_duration_seconds' => null,
+            'supports_duration_control' => false,
+            'min_duration_seconds' => null,
+            'duration_step_seconds' => null,
         ],
         'fal-ai/elevenlabs/music' => [
             'name' => 'ElevenLabs Music',
@@ -113,8 +125,10 @@ class FalSyncMusicModels extends Command
             'max_lyrics_chars' => 3000,
             'max_prompt_chars' => 4100,
             'max_duration' => 600,
-            // Billing assumption only (fal bills per minute) — not a UI slider
             'default_duration_seconds' => 120,
+            'supports_duration_control' => true,
+            'min_duration_seconds' => 3,
+            'duration_step_seconds' => 1,
         ],
         'cassetteai/music-generator' => [
             'name' => 'CassetteAI Music',
@@ -128,6 +142,9 @@ class FalSyncMusicModels extends Command
             'max_prompt_chars' => 2000,
             'max_duration' => 180,
             'default_duration_seconds' => 90,
+            'supports_duration_control' => true,
+            'min_duration_seconds' => 1,
+            'duration_step_seconds' => 1,
         ],
         'fal-ai/stable-audio-25/text-to-audio' => [
             'name' => 'Stable Audio 2.5',
@@ -140,7 +157,10 @@ class FalSyncMusicModels extends Command
             'max_lyrics_chars' => null,
             'max_prompt_chars' => 2000,
             'max_duration' => 190,
-            'default_duration_seconds' => null,
+            'default_duration_seconds' => 90,
+            'supports_duration_control' => true,
+            'min_duration_seconds' => 1,
+            'duration_step_seconds' => 1,
         ],
     ];
 
@@ -336,6 +356,11 @@ class FalSyncMusicModels extends Command
 
         if (Schema::hasColumn(self::MODELS_TABLE, 'supports_audio')) {
             $row['supports_audio'] = (bool) ($curated['supports_audio'] ?? false);
+        }
+        if (Schema::hasColumn(self::MODELS_TABLE, 'supports_duration_control')) {
+            $row['supports_duration_control'] = (bool) ($curated['supports_duration_control'] ?? false);
+            $row['min_duration_seconds'] = $curated['min_duration_seconds'] ?? null;
+            $row['duration_step_seconds'] = $curated['duration_step_seconds'] ?? null;
         }
 
         return $row;

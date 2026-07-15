@@ -61,8 +61,12 @@ export type BrandModel = {
     max_lyrics_chars?: number | null;
     /** Music lab: max style/prompt characters */
     max_prompt_chars?: number | null;
-    /** Music lab: hidden billing assumption for time-based units (not a UI slider) */
+    /** Music lab: default generation/billing duration */
     default_duration_seconds?: number | null;
+    /** Music lab: provider accepts an explicit generated-track duration */
+    supports_duration_control?: boolean;
+    min_duration_seconds?: number | null;
+    duration_step_seconds?: number | null;
     /** Music lab: curated examples (sample_url may be empty until pasted) */
     examples?: BrandMusicExample[];
     /** Voice lab: available voices for this model */

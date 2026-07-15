@@ -231,21 +231,38 @@ class MusicGenerationController extends Controller
             }
         }
 
+        $durationSeconds = isset($data['duration_seconds']) && is_numeric($data['duration_seconds'])
+            ? (int) ceil((float) $data['duration_seconds'])
+            : null;
+        $supportsDurationControl = (bool) ($model->supports_duration_control ?? false);
+
+        if ($supportsDurationControl) {
+            $minimumDuration = max(1, (int) ($model->min_duration_seconds ?? 1));
+            $maximumDuration = max($minimumDuration, (int) ($model->max_duration ?? $minimumDuration));
+            $durationSeconds ??= (int) ($model->default_duration_seconds ?? $minimumDuration);
+
+            if ($durationSeconds < $minimumDuration || $durationSeconds > $maximumDuration) {
+                return response()->json([
+                    'message' => "Duration must be between {$minimumDuration} and {$maximumDuration} seconds for this model.",
+                ], 422);
+            }
+        } elseif (! $supportsAudio) {
+            // Never let clients inject unsupported duration fields or alter billing.
+            $durationSeconds = null;
+        }
+
         $falInput = $inputBuilder->build($model->endpoint_id, [
             'prompt' => $data['prompt'],
             'lyrics' => $lyrics,
             'instrumental' => $instrumental,
             'vocal_gender' => $vocalGender,
             'auto_enhance' => $autoEnhance,
+            'duration_seconds' => $supportsDurationControl ? $durationSeconds : null,
             'default_duration_seconds' => $model->default_duration_seconds ?? null,
             'max_duration' => $model->max_duration ?? null,
             'audio_url' => $audioUrl,
             'edit_mode' => $editMode,
         ]);
-
-        $durationSeconds = isset($data['duration_seconds']) && is_numeric($data['duration_seconds'])
-            ? (int) ceil((float) $data['duration_seconds'])
-            : null;
 
         $billing = $pricing->resolve((string) $model->endpoint_id);
         if ($billing === null) {
