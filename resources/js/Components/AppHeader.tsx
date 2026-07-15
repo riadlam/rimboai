@@ -50,12 +50,11 @@ export default function AppHeader({ onMenuClick }: Props) {
                     </button>
 
                     <Link href="/" className="group flex items-center gap-2.5">
-                        <span className="relative flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#FF7A55] to-[#E24216] font-[family-name:Outfit,sans-serif] text-[15px] font-bold tracking-tight text-white shadow-[0_4px_16px_-4px_rgba(255,87,51,0.6)]">
-                            R
-                        </span>
-                        <span className="font-[family-name:Outfit,sans-serif] text-[16px] font-semibold tracking-[-0.02em] text-white">
-                            RIMBOAI
-                        </span>
+                        <img
+                            src="/storage/ai_icons/logo_with_icon_text.png"
+                            alt="RIMBOAI"
+                            className="h-11 w-auto object-contain md:h-20"
+                        />
                     </Link>
                 </div>
 
