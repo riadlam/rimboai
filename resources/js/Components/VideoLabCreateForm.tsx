@@ -4,6 +4,10 @@ import type { Brand } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateVideoCredits } from '@/lib/videoCredits';
 import LabFormSkeleton from '@/Components/LabFormSkeleton';
+import AssetMentionTextarea, {
+    rebasePromptAfterAssetRemoval,
+    type AssetMention,
+} from '@/Components/AssetMentionTextarea';
 import {
     describeMediaGuidance,
     generateBlockReason,
@@ -158,6 +162,18 @@ export default function VideoLabCreateForm({
     const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]['id']>('720p');
     const [aspect, setAspect] = useState<(typeof ASPECTS)[number]>('16:9');
     const [media, setMedia] = useState<MediaItem[]>([]);
+    const assetMentions = useMemo<AssetMention[]>(() => {
+        const indexes: Record<MediaItem['kind'], number> = { image: 0, video: 0, audio: 0 };
+        return media.map((item) => {
+            indexes[item.kind] += 1;
+            return {
+                alias: `@${item.kind}${indexes[item.kind]}`,
+                kind: item.kind,
+                name: item.name,
+                previewUrl: item.url,
+            };
+        });
+    }, [media]);
     const [switchNotice, setSwitchNotice] = useState<string | null>(null);
     const [guidanceDismissed, setGuidanceDismissed] = useState(false);
     const [mediaNotice, setMediaNotice] = useState<string | null>(null);
@@ -484,9 +500,14 @@ export default function VideoLabCreateForm({
     };
 
     const removeMedia = (id: string) => {
+        const target = media.find((item) => item.id === id);
+        if (target) {
+            const removedIndex = media.filter((item) => item.kind === target.kind).findIndex((item) => item.id === id) + 1;
+            setPrompt((value) => rebasePromptAfterAssetRemoval(value, target.kind, removedIndex));
+        }
         setMedia((prev) => {
-            const target = prev.find((m) => m.id === id);
-            if (target) URL.revokeObjectURL(target.url);
+            const removed = prev.find((m) => m.id === id);
+            if (removed) URL.revokeObjectURL(removed.url);
             return prev.filter((m) => m.id !== id);
         });
         setSwitchNotice(null);
@@ -659,7 +680,7 @@ export default function VideoLabCreateForm({
                                     )}
                                 </div>
                                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                    {media.map((m) => (
+                                    {media.map((m, index) => (
                                         <div
                                             key={m.id}
                                             className="group/thumb relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl bg-black/40 ring-1 ring-white/10"
@@ -678,8 +699,8 @@ export default function VideoLabCreateForm({
                                                     <span className="max-w-[56px] truncate text-[9px] text-white/50">{m.name}</span>
                                                 </div>
                                             )}
-                                            <span className="absolute bottom-1 start-1 rounded bg-black/60 px-1 py-px text-[9px] capitalize text-white/80 backdrop-blur-sm">
-                                                {m.kind}
+                                            <span className="absolute bottom-1 start-1 rounded bg-black/70 px-1 py-px text-[9px] font-semibold text-orange-200 backdrop-blur-sm">
+                                                {assetMentions[index]?.alias ?? m.kind}
                                             </span>
                                             <button
                                                 type="button"
@@ -793,9 +814,11 @@ export default function VideoLabCreateForm({
                         </div>
 
                         <div className="px-3 pb-2">
-                            <textarea
+                            <AssetMentionTextarea
                                 value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
+                                onChange={setPrompt}
+                                mentions={assetMentions}
+                                maxLength={1500}
                                 placeholder={placeholder}
                                 rows={5}
                                 className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
@@ -1105,10 +1128,12 @@ export default function VideoLabCreateForm({
                                 </button>
                             </div>
                             <div className="p-4">
-                                <textarea
+                                <AssetMentionTextarea
                                     autoFocus
                                     value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
+                                    onChange={setPrompt}
+                                    mentions={assetMentions}
+                                    maxLength={1500}
                                     rows={12}
                                     className="w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3.5 text-sm leading-relaxed text-white outline-none focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                                     placeholder={placeholder}

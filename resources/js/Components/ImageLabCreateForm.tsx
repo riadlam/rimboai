@@ -3,6 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Brand } from '@/types';
 import { estimateImageCredits, type CreditsConfig } from '@/lib/imageCredits';
 import LabFormSkeleton from '@/Components/LabFormSkeleton';
+import AssetMentionTextarea, {
+    rebasePromptAfterAssetRemoval,
+    type AssetMention,
+} from '@/Components/AssetMentionTextarea';
 import { loadDraftMediaFiles, matchLabModel, type LabReuseDraft } from '@/lib/labReuse';
 
 export type ImageGenerateOptions = {
@@ -63,6 +67,16 @@ export default function ImageLabCreateForm({
     refsRef.current = refs;
     const isVariations = mode === 'variations';
     const imageRefs = useMemo(() => refs.filter((r) => r.kind === 'image'), [refs]);
+    const assetMentions = useMemo<AssetMention[]>(
+        () =>
+            imageRefs.map((ref, index) => ({
+                alias: `@image${index + 1}`,
+                kind: 'image',
+                name: ref.file.name,
+                previewUrl: ref.url,
+            })),
+        [imageRefs],
+    );
 
     const allModels = useMemo(
         () =>
@@ -240,9 +254,14 @@ export default function ImageLabCreateForm({
     };
 
     const removeRef = (id: string) => {
+        const target = refs.find((ref) => ref.id === id);
+        if (target) {
+            const removedIndex = refs.filter((ref) => ref.kind === target.kind).findIndex((ref) => ref.id === id) + 1;
+            setPrompt((value) => rebasePromptAfterAssetRemoval(value, target.kind, removedIndex));
+        }
         setRefs((prev) => {
-            const target = prev.find((r) => r.id === id);
-            if (target) URL.revokeObjectURL(target.url);
+            const removed = prev.find((r) => r.id === id);
+            if (removed) URL.revokeObjectURL(removed.url);
             return prev.filter((r) => r.id !== id);
         });
     };
@@ -404,13 +423,16 @@ export default function ImageLabCreateForm({
                                             )}
                                         </div>
                                         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                            {refs.map((r) => (
+                                            {refs.map((r, index) => (
                                                 <div key={r.id} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
                                                     {r.kind === 'video' ? (
                                                         <video src={r.url} className="size-full object-cover" muted />
                                                     ) : (
                                                         <img src={r.url} alt="" className="size-full object-cover" />
                                                     )}
+                                                    <span className="absolute bottom-1 start-1 rounded bg-black/75 px-1 py-0.5 text-[8px] font-semibold text-orange-200">
+                                                        @{r.kind}{refs.slice(0, index + 1).filter((item) => item.kind === r.kind).length}
+                                                    </span>
                                                     <button
                                                         type="button"
                                                         onClick={() => removeRef(r.id)}
@@ -491,13 +513,16 @@ export default function ImageLabCreateForm({
                                             </button>
                                         </div>
                                         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                            {refs.map((r) => (
+                                            {refs.map((r, index) => (
                                                 <div key={r.id} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
                                                     {r.kind === 'video' ? (
                                                         <video src={r.url} className="size-full object-cover" muted />
                                                     ) : (
                                                         <img src={r.url} alt="" className="size-full object-cover" />
                                                     )}
+                                                    <span className="absolute bottom-1 start-1 rounded bg-black/75 px-1 py-0.5 text-[8px] font-semibold text-orange-200">
+                                                        @{r.kind}{refs.slice(0, index + 1).filter((item) => item.kind === r.kind).length}
+                                                    </span>
                                                     <button
                                                         type="button"
                                                         onClick={() => removeRef(r.id)}
@@ -527,9 +552,11 @@ export default function ImageLabCreateForm({
                         />
 
                         <div className="px-3 pb-2">
-                            <textarea
+                            <AssetMentionTextarea
                                 value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
+                                onChange={setPrompt}
+                                mentions={assetMentions}
+                                maxLength={1200}
                                 placeholder={
                                     isVariations
                                         ? 'e.g. Same subject, softer lighting, cinematic color grade…'
@@ -761,10 +788,12 @@ export default function ImageLabCreateForm({
                                     Close
                                 </button>
                             </div>
-                            <textarea
+                            <AssetMentionTextarea
                                 autoFocus
                                 value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
+                                onChange={setPrompt}
+                                mentions={assetMentions}
+                                maxLength={1200}
                                 rows={10}
                                 className="w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3 text-sm leading-relaxed text-white outline-none focus:border-orange-400/40"
                                 placeholder={placeholder}

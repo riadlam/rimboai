@@ -6,6 +6,10 @@ import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateMusicCredits, formatMusicDuration, readAudioFileDuration } from '@/lib/musicCredits';
 import { matchLabModel, type LabReuseDraft } from '@/lib/labReuse';
 import { publicAsset } from '@/lib/publicAsset';
+import AssetMentionTextarea, {
+    rebasePromptAfterAssetRemoval,
+    type AssetMention,
+} from '@/Components/AssetMentionTextarea';
 
 type Props = {
     brands?: Brand[];
@@ -104,6 +108,19 @@ export default function SoundLabCreateForm({
     const [draftNotice, setDraftNotice] = useState<string | null>(null);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
+    const assetMentions = useMemo<AssetMention[]>(
+        () =>
+            sourceAudio
+                ? [
+                      {
+                          alias: '@audio1',
+                          kind: 'audio',
+                          name: sourceAudio.name,
+                      },
+                  ]
+                : [],
+        [sourceAudio],
+    );
 
     const allModels = useMemo(
         (): LabPickerModel[] =>
@@ -212,6 +229,7 @@ export default function SoundLabCreateForm({
     useEffect(() => {
         setSourceAudio(null);
         setSourceDurationSec(null);
+        setStyle((value) => rebasePromptAfterAssetRemoval(value, 'audio', 1));
         if (audioInputRef.current) audioInputRef.current.value = '';
         setEditMode('remix');
         if (needsSourceAudio) {
@@ -457,7 +475,7 @@ export default function SoundLabCreateForm({
                                     </div>
                                     <span className="min-w-0 flex-1 pe-6">
                                         <span className="block truncate text-[13px] font-semibold tracking-tight text-white">
-                                            {sourceAudio ? sourceAudio.name : 'Choose audio file'}
+                                            {sourceAudio ? `@audio1 · ${sourceAudio.name}` : 'Choose audio file'}
                                         </span>
                                         <span className="mt-0.5 block text-[11px] text-white/45">
                                             {sourceAudio
@@ -485,6 +503,7 @@ export default function SoundLabCreateForm({
                                         e.preventDefault();
                                         e.stopPropagation();
                                         setSourceAudio(null);
+                                        setStyle((value) => rebasePromptAfterAssetRemoval(value, 'audio', 1));
                                         if (audioInputRef.current) audioInputRef.current.value = '';
                                     }}
                                     className="absolute end-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-sm text-white ring-1 ring-white/20 transition hover:bg-red-500/80 md:h-6 md:w-6 md:text-xs"
@@ -604,9 +623,11 @@ export default function SoundLabCreateForm({
                                 </span>
                             </div>
                         </div>
-                        <textarea
+                        <AssetMentionTextarea
                             value={style}
-                            onChange={(e) => setStyle(e.target.value.slice(0, maxPromptChars))}
+                            onChange={setStyle}
+                            mentions={assetMentions}
+                            maxLength={maxPromptChars}
                             onWheel={(e) => e.stopPropagation()}
                             rows={5}
                             placeholder={

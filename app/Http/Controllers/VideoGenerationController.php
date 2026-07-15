@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientTokensException;
 use App\Models\UserVideoCreation;
+use App\Services\AssetPromptReferences;
 use App\Services\Credits\VideoGenerationCostEstimator;
 use App\Services\FalPricingService;
 use App\Services\FalService;
@@ -28,6 +29,7 @@ class VideoGenerationController extends Controller
         VideoModelCapabilities $capabilities,
         TokenService $tokens,
         FalPricingService $pricing,
+        AssetPromptReferences $promptReferences,
     ): JsonResponse {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
@@ -138,8 +140,14 @@ class VideoGenerationController extends Controller
         $submitEndpoint = $route['endpoint_id'];
         $mode = $route['mode'];
 
+        $providerPrompt = $promptReferences->resolve($data['prompt'], [
+            'image' => count($imageUrls),
+            'video' => count($videoUrls),
+            'audio' => count($audioUrls),
+        ]);
+
         $built = $inputBuilder->build($submitEndpoint, [
-            'prompt' => $data['prompt'],
+            'prompt' => $providerPrompt,
             'aspect' => $data['aspect'] ?? '16:9',
             'resolution' => $data['resolution'] ?? '720p',
             'duration' => $data['duration'] ?? null,

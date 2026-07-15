@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientTokensException;
 use App\Models\UserImageCreation;
+use App\Services\AssetPromptReferences;
 use App\Services\Credits\ImageGenerationCostEstimator;
 use App\Services\FalImageInputBuilder;
 use App\Services\FalPricingService;
@@ -29,6 +30,7 @@ class ImageGenerationController extends Controller
         ImageGenerationCostEstimator $costEstimator,
         TokenService $tokens,
         FalPricingService $pricing,
+        AssetPromptReferences $promptReferences,
     ): JsonResponse {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
@@ -115,8 +117,12 @@ class ImageGenerationController extends Controller
         $hasReferences = $referenceUrls !== [];
         $creationMode = $mode === 'variations' || $hasReferences ? 'image-to-image' : 'text-to-image';
 
+        $providerPrompt = $promptReferences->resolve($data['prompt'], [
+            'image' => count($referenceUrls),
+        ]);
+
         $falInput = $inputBuilder->build($model->endpoint_id, [
-            'prompt' => $data['prompt'],
+            'prompt' => $providerPrompt,
             'aspect' => $aspect,
             'resolution' => $resolution,
             'quantity' => $quantity,

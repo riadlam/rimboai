@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientTokensException;
 use App\Models\UserMusicCreation;
+use App\Services\AssetPromptReferences;
 use App\Services\Credits\MusicGenerationCostEstimator;
 use App\Services\FalMusicInputBuilder;
 use App\Services\FalPricingService;
@@ -26,6 +27,7 @@ class MusicGenerationController extends Controller
         MusicGenerationCostEstimator $costEstimator,
         TokenService $tokens,
         FalPricingService $pricing,
+        AssetPromptReferences $promptReferences,
     ): JsonResponse {
         // When PHP post_max_size is exceeded, $_POST/$_FILES are empty → fake 422s.
         $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
@@ -251,8 +253,12 @@ class MusicGenerationController extends Controller
             $durationSeconds = null;
         }
 
+        $providerPrompt = $promptReferences->resolve($data['prompt'], [
+            'audio' => $supportsAudio && $audioUrl !== '' ? 1 : 0,
+        ]);
+
         $falInput = $inputBuilder->build($model->endpoint_id, [
-            'prompt' => $data['prompt'],
+            'prompt' => $providerPrompt,
             'lyrics' => $lyrics,
             'instrumental' => $instrumental,
             'vocal_gender' => $vocalGender,
