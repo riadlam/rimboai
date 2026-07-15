@@ -20,7 +20,7 @@ class FalSyncPricing extends Command
 {
     protected $signature = 'fal:sync-pricing
         {--table= : Limit to a single model table}
-        {--sleep=2 : Seconds to wait between fal requests}
+        {--sleep=2 : Seconds to wait between fal batch requests (50 models per batch)}
         {--skip-status : Only sync pricing, do not touch status}
         {--dry-run : Show what would change without writing}';
 
@@ -36,6 +36,12 @@ class FalSyncPricing extends Command
         'text_to_video_models',
         'image_to_video_models',
     ];
+
+    /**
+     * fal accepts 1-50 endpoint IDs per pricing/status request. Batching keeps
+     * us well under the rate limit (2 requests per 50 models instead of 100).
+     */
+    private const BATCH_SIZE = 50;
 
     /** @var list<string> */
     private const ALL_TABLES = [
@@ -95,94 +101,103 @@ class FalSyncPricing extends Command
             $count = $rows->count();
             $this->info("[{$table}] syncing {$count} endpoints...");
 
-            foreach ($rows->values() as $i => $row) {
-                $endpointId = $row->endpoint_id;
-                $label = $row->name ?: $endpointId;
-                $changes = [];
+            // fal allows 1-50 endpoint IDs per request. Batch to avoid rate limits.
+            $chunks = $rows->chunk(self::BATCH_SIZE)->values();
 
-                // 1) Status: only change when fal gives a definitive answer.
-                if (! $skipStatus) {
-                    $status = $this->fetchStatus($key, $endpointId);
+            foreach ($chunks as $chunkIndex => $chunk) {
+                $endpointIds = $chunk->pluck('endpoint_id')->all();
 
-                    if ($status !== null && $status !== $row->status) {
-                        $changes['status'] = $status;
+                // One request for status, one for pricing — for the whole chunk.
+                $statusMap = $skipStatus ? [] : $this->fetchStatusBatch($key, $endpointIds);
+                $priceMap = $this->fetchPricingBatch($key, $endpointIds);
 
-                        $changeEvents[] = [
-                            'table' => $table,
-                            'endpoint' => $endpointId,
-                            'name' => $label,
-                            'field' => 'status',
-                            'old' => $row->status,
-                            'new' => $status,
-                        ];
+                foreach ($chunk as $row) {
+                    $endpointId = $row->endpoint_id;
+                    $label = $row->name ?: $endpointId;
+                    $changes = [];
 
-                        if ($status === 'active') {
-                            $reactivated++;
-                        } else {
-                            $deactivated++;
+                    // 1) Status: only change when fal gives a definitive answer.
+                    // null (transient failure or unknown) => keep current status.
+                    if (! $skipStatus && $statusMap !== null) {
+                        $status = $statusMap[$endpointId] ?? null;
+
+                        if ($status !== null && $status !== $row->status) {
+                            $changes['status'] = $status;
+
+                            $changeEvents[] = [
+                                'table' => $table,
+                                'endpoint' => $endpointId,
+                                'name' => $label,
+                                'field' => 'status',
+                                'old' => $row->status,
+                                'new' => $status,
+                            ];
+
+                            if ($status === 'active') {
+                                $reactivated++;
+                            } else {
+                                $deactivated++;
+                            }
                         }
                     }
 
-                    if ($sleep > 0) {
-                        sleep($sleep);
-                    }
-                }
+                    // 2) Pricing — only recorded when it actually changed.
+                    $price = $priceMap[$endpointId] ?? null;
 
-                // 2) Pricing — only recorded when it actually changed.
-                $price = $this->fetchPricing($key, $endpointId);
-
-                if ($price === null) {
-                    $priceFailed++;
-                    $this->warn("  ! {$endpointId}: no pricing returned");
-                } else {
-                    [$unit, $unitPrice] = $this->normalize($table, $endpointId, $price['unit'], $price['unit_price']);
-
-                    if ($unitPrice === null || $unitPrice <= 0) {
+                    if ($price === null) {
                         $priceFailed++;
-                        $this->warn("  ! {$endpointId}: invalid price ({$price['unit_price']})");
+                        $this->warn("  ! {$endpointId}: no pricing returned");
                     } else {
-                        $priced++;
+                        [$unit, $unitPrice] = $this->normalize($table, $endpointId, $price['unit'], $price['unit_price']);
 
-                        $oldUnit = $row->unit;
-                        $oldPrice = $row->unit_price !== null ? (float) $row->unit_price : null;
+                        if ($unitPrice === null || $unitPrice <= 0) {
+                            $priceFailed++;
+                            $this->warn("  ! {$endpointId}: invalid price ({$price['unit_price']})");
+                        } else {
+                            $priced++;
 
-                        if ((string) $oldUnit !== (string) $unit) {
-                            $changes['unit'] = $unit;
-                            $changeEvents[] = [
-                                'table' => $table,
-                                'endpoint' => $endpointId,
-                                'name' => $label,
-                                'field' => 'unit',
-                                'old' => $oldUnit,
-                                'new' => $unit,
-                            ];
+                            $oldUnit = $row->unit;
+                            $oldPrice = $row->unit_price !== null ? (float) $row->unit_price : null;
+
+                            if ((string) $oldUnit !== (string) $unit) {
+                                $changes['unit'] = $unit;
+                                $changeEvents[] = [
+                                    'table' => $table,
+                                    'endpoint' => $endpointId,
+                                    'name' => $label,
+                                    'field' => 'unit',
+                                    'old' => $oldUnit,
+                                    'new' => $unit,
+                                ];
+                            }
+
+                            if ($oldPrice === null || round($oldPrice, 6) !== round($unitPrice, 6)) {
+                                $changes['unit_price'] = $unitPrice;
+                                $changeEvents[] = [
+                                    'table' => $table,
+                                    'endpoint' => $endpointId,
+                                    'name' => $label,
+                                    'field' => 'unit_price',
+                                    'old' => $oldPrice,
+                                    'new' => $unitPrice,
+                                ];
+                            }
                         }
+                    }
 
-                        if ($oldPrice === null || round($oldPrice, 6) !== round($unitPrice, 6)) {
-                            $changes['unit_price'] = $unitPrice;
-                            $changeEvents[] = [
-                                'table' => $table,
-                                'endpoint' => $endpointId,
-                                'name' => $label,
-                                'field' => 'unit_price',
-                                'old' => $oldPrice,
-                                'new' => $unitPrice,
-                            ];
-                        }
+                    if ($changes === []) {
+                        // nothing definitive to write
+                    } elseif ($dryRun) {
+                        $this->line("  ~ {$endpointId}: " . $this->describe($changes) . ' (dry-run)');
+                    } else {
+                        $changes['updated_at'] = now();
+                        DB::table($table)->where('endpoint_id', $endpointId)->update($changes);
+                        $this->line("  + {$endpointId}: " . $this->describe($changes));
                     }
                 }
 
-                if ($changes === []) {
-                    // nothing definitive to write
-                } elseif ($dryRun) {
-                    $this->line("  ~ {$endpointId}: " . $this->describe($changes) . ' (dry-run)');
-                } else {
-                    $changes['updated_at'] = now();
-                    DB::table($table)->where('endpoint_id', $endpointId)->update($changes);
-                    $this->line("  + {$endpointId}: " . $this->describe($changes));
-                }
-
-                if ($sleep > 0 && $i < $count - 1) {
+                // Breathe between batches (not after the final chunk).
+                if ($sleep > 0 && $chunkIndex < $chunks->count() - 1) {
                     sleep($sleep);
                 }
             }
@@ -388,13 +403,21 @@ class FalSyncPricing extends Command
     }
 
     /**
-     * Resolve the fal status for an endpoint.
+     * Resolve fal status for a batch of endpoints (1-50) in a single request.
      *
-     * Returns 'active'/'inactive' when fal answers definitively, or null when the
-     * request fails transiently (429/5xx/timeout) so the current status is kept.
+     * @param  list<string>  $endpointIds
+     * @return array<string, string>|null  map endpoint_id => 'active'|'inactive'.
+     *                                      Endpoints returned with an unknown/empty
+     *                                      status are omitted (keep current status).
+     *                                      Returns null on transient failure so the
+     *                                      whole chunk keeps its current status.
      */
-    private function fetchStatus(string $key, string $endpointId): ?string
+    private function fetchStatusBatch(string $key, array $endpointIds): ?array
     {
+        if ($endpointIds === []) {
+            return [];
+        }
+
         $maxRetries = 5;
 
         for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
@@ -402,50 +425,78 @@ class FalSyncPricing extends Command
                 $response = Http::withHeaders([
                     'Authorization' => 'Key ' . $key,
                     'Content-Type' => 'application/json',
-                ])->get('https://api.fal.ai/v1/models', [
-                    'endpoint_id' => $endpointId,
-                ]);
+                ])->get('https://api.fal.ai/v1/models?' . $this->idQuery($endpointIds));
             } catch (\Throwable $e) {
-                $this->warn("  Status fetch error for {$endpointId}: {$e->getMessage()}");
+                $this->warn("  Status batch fetch error: {$e->getMessage()}");
 
                 return null;
             }
 
-            // Endpoint no longer exists on fal → definitively inactive.
-            if ($response->status() === 404) {
-                return 'inactive';
-            }
-
             if ($response->successful()) {
                 $models = $response->json('models', []);
-                $first = $models[0] ?? null;
+                $map = [];
+                $seen = [];
 
-                if (! is_array($first)) {
-                    return 'inactive';
+                foreach ($models as $model) {
+                    if (! is_array($model)) {
+                        continue;
+                    }
+
+                    $eid = $model['endpoint_id'] ?? null;
+
+                    if (! is_string($eid)) {
+                        continue;
+                    }
+
+                    $seen[$eid] = true;
+                    $status = $model['metadata']['status'] ?? null;
+
+                    // Unknown/empty status: leave unset → caller keeps current value.
+                    if (! is_string($status) || $status === '') {
+                        continue;
+                    }
+
+                    $map[$eid] = strtolower($status) === 'active' ? 'active' : 'inactive';
                 }
 
-                $status = $first['metadata']['status'] ?? null;
-
-                if (! is_string($status) || $status === '') {
-                    return null;
+                // Requested but not returned at all → no longer on fal → inactive.
+                foreach ($endpointIds as $eid) {
+                    if (! isset($seen[$eid]) && ! array_key_exists($eid, $map)) {
+                        $map[$eid] = 'inactive';
+                    }
                 }
 
-                return strtolower($status) === 'active' ? 'active' : 'inactive';
+                return $map;
             }
 
             if ($response->status() === 429 && $attempt < $maxRetries - 1) {
                 $wait = ($attempt + 1) * 10;
-                $this->warn("  Rate limited (status) on {$endpointId}, waiting {$wait}s...");
+                $this->warn("  Rate limited (status batch), waiting {$wait}s...");
                 sleep($wait);
 
                 continue;
             }
 
-            // Transient/unknown error: keep existing status.
+            // Transient/unknown error: keep existing statuses for this chunk.
+            $this->warn("  Status batch failed (HTTP {$response->status()}) — keeping current statuses.");
+
             return null;
         }
 
         return null;
+    }
+
+    /**
+     * Build a repeated ?endpoint_id=a&endpoint_id=b query string (fal's expected form).
+     *
+     * @param  list<string>  $endpointIds
+     */
+    private function idQuery(array $endpointIds): string
+    {
+        return implode('&', array_map(
+            static fn (string $id): string => 'endpoint_id=' . rawurlencode($id),
+            $endpointIds,
+        ));
     }
 
     /**
@@ -464,48 +515,70 @@ class FalSyncPricing extends Command
     }
 
     /**
-     * @return array{unit: string|null, unit_price: float|null}|null
+     * Fetch pricing for a batch of endpoints (1-50) in a single request.
+     *
+     * @param  list<string>  $endpointIds
+     * @return array<string, array{unit: string|null, unit_price: float|null}>
+     *         map endpoint_id => price. Endpoints without pricing are simply absent.
      */
-    private function fetchPricing(string $key, string $endpointId): ?array
+    private function fetchPricingBatch(string $key, array $endpointIds): array
     {
+        if ($endpointIds === []) {
+            return [];
+        }
+
         $maxRetries = 5;
 
         for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
-            $response = Http::withHeaders([
-                'Authorization' => 'Key ' . $key,
-                'Content-Type' => 'application/json',
-            ])->get('https://api.fal.ai/v1/models/pricing', [
-                'endpoint_id' => $endpointId,
-            ]);
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Key ' . $key,
+                    'Content-Type' => 'application/json',
+                ])->get('https://api.fal.ai/v1/models/pricing?' . $this->idQuery($endpointIds));
+            } catch (\Throwable $e) {
+                $this->warn("  Pricing batch fetch error: {$e->getMessage()}");
+
+                return [];
+            }
 
             if ($response->successful()) {
                 $prices = $response->json('prices', []);
-                $first = $prices[0] ?? null;
+                $map = [];
 
-                if (! is_array($first)) {
-                    return null;
+                foreach ($prices as $price) {
+                    if (! is_array($price)) {
+                        continue;
+                    }
+
+                    $eid = $price['endpoint_id'] ?? null;
+
+                    if (! is_string($eid)) {
+                        continue;
+                    }
+
+                    $map[$eid] = [
+                        'unit' => isset($price['unit']) && is_string($price['unit']) ? $price['unit'] : null,
+                        'unit_price' => isset($price['unit_price']) ? (float) $price['unit_price'] : null,
+                    ];
                 }
 
-                return [
-                    'unit' => isset($first['unit']) && is_string($first['unit']) ? $first['unit'] : null,
-                    'unit_price' => isset($first['unit_price']) ? (float) $first['unit_price'] : null,
-                ];
+                return $map;
             }
 
             if ($response->status() === 429 && $attempt < $maxRetries - 1) {
                 $wait = ($attempt + 1) * 10;
-                $this->warn("  Rate limited on {$endpointId}, waiting {$wait}s...");
+                $this->warn("  Rate limited (pricing batch), waiting {$wait}s...");
                 sleep($wait);
 
                 continue;
             }
 
-            $this->warn("  Pricing fetch failed for {$endpointId} (HTTP {$response->status()})");
+            $this->warn("  Pricing batch failed (HTTP {$response->status()})");
 
-            return null;
+            return [];
         }
 
-        return null;
+        return [];
     }
 
     /**
