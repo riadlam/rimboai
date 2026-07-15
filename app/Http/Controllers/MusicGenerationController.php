@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class MusicGenerationController extends Controller
@@ -37,7 +38,8 @@ class MusicGenerationController extends Controller
             'audio_url' => ['nullable', 'string', 'max:2048'],
             'edit_mode' => ['nullable', 'string', 'in:remix,lyrics'],
             'duration_seconds' => ['nullable', 'numeric', 'min:1', 'max:3600'],
-            'audio' => ['nullable', 'file', 'max:51200', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave,audio/flac,audio/ogg,audio/mp4,audio/aac,audio/webm'],
+            // Prefer extension check: shared hosts often mis-detect MP3 MIME as octet-stream.
+            'audio' => ['nullable', 'file', 'max:51200', 'extensions:mp3,wav,flac,ogg,m4a,aac,mpeg,mpga'],
         ]);
 
         if (! $fal->configured()) {
@@ -83,12 +85,26 @@ class MusicGenerationController extends Controller
             /** @var UploadedFile|null $audioFile */
             $audioFile = $request->file('audio');
             if ($audioFile instanceof UploadedFile) {
+                if (! $audioFile->isValid()) {
+                    return response()->json([
+                        'message' => 'Audio upload failed on the server (file too large or incomplete). Try a smaller MP3, or raise PHP upload_max_filesize / post_max_size.',
+                    ], 422);
+                }
+
                 try {
                     $audioUrl = $fal->uploadToCdn($audioFile);
                 } catch (\Throwable $e) {
                     report($e);
+                    Log::error('ACE source audio upload to fal CDN failed', [
+                        'error' => $e->getMessage(),
+                        'original_name' => $audioFile->getClientOriginalName(),
+                        'mime' => $audioFile->getMimeType(),
+                        'size' => $audioFile->getSize(),
+                    ]);
 
-                    return response()->json(['message' => 'Could not upload the source audio file.'], 502);
+                    return response()->json([
+                        'message' => 'Could not upload the source audio file to the music service. Try MP3 under ~15MB, or check that the server can reach rest.fal.ai.',
+                    ], 502);
                 }
             }
 

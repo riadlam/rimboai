@@ -44,6 +44,20 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
     ],
 
+    'sofizpay' => [
+        'enabled' => env('SOFIZPAY_ENABLED', true),
+        'sandbox' => env('SOFIZPAY_SANDBOX', false),
+        'base_url' => env('SOFIZPAY_BASE_URL', 'https://sofizpay.com'),
+        'merchant_account' => env('SOFIZPAY_MERCHANT_ACCOUNT'),
+        'timeout' => (int) env('SOFIZPAY_TIMEOUT', 30),
+        // Use "no" for server-side create: SofizPay returns JSON with payment_url.
+        // "yes" can 302 to SATIM HTML and breaks Laravel Http::get().
+        'redirect' => env('SOFIZPAY_REDIRECT', 'no'),
+        'keep_return_url' => env('SOFIZPAY_KEEP_RETURN_URL', 'True'),
+        // Minimum accepted amount in DZD (SATIM/CIB rejects tiny amounts).
+        'min_amount_dzd' => (float) env('SOFIZPAY_MIN_AMOUNT_DZD', 75),
+    ],
+
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

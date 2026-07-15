@@ -1,6 +1,6 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import CreditsModal from '@/Components/CreditsModal';
 import type { PageProps } from '@/types';
@@ -219,6 +219,80 @@ export default function Pricing() {
     const [modelTab, setModelTab] = useState<(typeof MODEL_TABS)[number]['id']>('image');
     const [openFaq, setOpenFaq] = useState<number | null>(0);
     const [creditsOpen, setCreditsOpen] = useState(false);
+    const [busyPack, setBusyPack] = useState<PackId | null>(null);
+    const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+    // Show the SofizPay return result, then strip the query so a refresh won't repeat it.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const result = params.get('payment');
+        if (!result) return;
+
+        const message = params.get('message') ?? '';
+        const tokens = params.get('tokens');
+
+        if (result === 'success') {
+            setNotice({
+                type: 'success',
+                text: message || `Payment confirmed.${tokens ? ` ${Number(tokens).toLocaleString()} tokens added.` : ''}`,
+            });
+        } else if (result === 'failed' || result === 'error') {
+            setNotice({ type: 'error', text: message || 'Payment was not completed.' });
+        }
+
+        params.delete('payment');
+        params.delete('message');
+        params.delete('tokens');
+        const clean = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+        window.history.replaceState({}, '', clean);
+    }, []);
+
+    async function startCheckout(pack: Pack) {
+        if (!user) {
+            window.location.href = '/register';
+            return;
+        }
+
+        // SofizPay settles in Algerian Dinar only.
+        if (currency !== 'DZD') {
+            setCurrency('DZD');
+            setNotice({
+                type: 'info',
+                text: 'Payments are processed in Algerian Dinar (DZD) via SofizPay. Prices switched to DZD — tap Get Started again to continue.',
+            });
+            return;
+        }
+
+        if (busyPack) return;
+        setBusyPack(pack.id);
+        setNotice(null);
+
+        try {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+            const res = await fetch('/billing/sofizpay/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ pack: pack.id }),
+            });
+            const data = (await res.json().catch(() => ({}))) as { checkout_url?: string; message?: string };
+
+            if (res.ok && data.checkout_url) {
+                window.location.href = data.checkout_url;
+                return;
+            }
+
+            setNotice({ type: 'error', text: data.message || 'Could not start the payment. Please try again.' });
+        } catch {
+            setNotice({ type: 'error', text: 'Network error. Please try again.' });
+        } finally {
+            setBusyPack(null);
+        }
+    }
 
     const cur = CURRENCIES[currency];
     const activeModels = MODEL_TABS.find((t) => t.id === modelTab) ?? MODEL_TABS[0];
@@ -373,6 +447,31 @@ export default function Pricing() {
                             </div>
                         </div>
 
+                        {notice && (
+                            <div
+                                className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+                                    notice.type === 'success'
+                                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                                        : notice.type === 'error'
+                                          ? 'border-rose-400/30 bg-rose-500/10 text-rose-200'
+                                          : 'border-sky-400/30 bg-sky-500/10 text-sky-200'
+                                }`}
+                            >
+                                <span className="mt-0.5 shrink-0">
+                                    {notice.type === 'success' ? '✅' : notice.type === 'error' ? '⚠️' : 'ℹ️'}
+                                </span>
+                                <span className="flex-1">{notice.text}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setNotice(null)}
+                                    className="shrink-0 text-white/40 transition hover:text-white"
+                                    aria-label="Dismiss"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 gap-5 pt-3 md:grid-cols-2 xl:grid-cols-4">
                             {PACKS.map((pack, i) => (
                                 <PackCard
@@ -381,7 +480,8 @@ export default function Pricing() {
                                     price={formatPrice(pack.dzd)}
                                     index={i}
                                     user={!!user}
-                                    onBuy={() => setCreditsOpen(true)}
+                                    busy={busyPack === pack.id}
+                                    onBuy={() => startCheckout(pack)}
                                 />
                             ))}
                         </div>
@@ -576,12 +676,14 @@ function PackCard({
     price,
     index,
     user,
+    busy,
     onBuy,
 }: {
     pack: Pack;
     price: { amount: string; suffix: string };
     index: number;
     user: boolean;
+    busy: boolean;
     onBuy: () => void;
 }) {
     return (
@@ -646,7 +748,7 @@ function PackCard({
                 </ul>
             </div>
 
-            <PackCta user={user} onBuy={onBuy} className={pack.btn} />
+            <PackCta user={user} busy={busy} onBuy={onBuy} className={pack.btn} />
         </motion.article>
     );
 }
@@ -696,15 +798,24 @@ function YieldIcon({ type }: { type: YieldItem['icon'] }) {
     );
 }
 
-function PackCta({ user, onBuy, className }: { user: boolean; onBuy: () => void; className: string }) {
+function PackCta({ user, busy, onBuy, className }: { user: boolean; busy: boolean; onBuy: () => void; className: string }) {
     const base =
-        'mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition';
+        'mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60';
 
     if (user) {
         return (
-            <button type="button" onClick={onBuy} className={`${base} ${className}`}>
-                Get Started
-                <ArrowIcon />
+            <button type="button" onClick={onBuy} disabled={busy} className={`${base} ${className}`}>
+                {busy ? (
+                    <>
+                        <Spinner />
+                        Starting…
+                    </>
+                ) : (
+                    <>
+                        Get Started
+                        <ArrowIcon />
+                    </>
+                )}
             </button>
         );
     }
@@ -714,6 +825,15 @@ function PackCta({ user, onBuy, className }: { user: boolean; onBuy: () => void;
             Get Started
             <ArrowIcon />
         </Link>
+    );
+}
+
+function Spinner() {
+    return (
+        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+        </svg>
     );
 }
 

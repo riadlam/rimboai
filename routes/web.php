@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImageGenerationController;
@@ -33,6 +34,12 @@ Route::get('/tools', [DashboardController::class, 'tools'])->name('tools');
 Route::get('/pricing', [DashboardController::class, 'pricing'])->name('pricing');
 Route::redirect('/marketplace', '/trends');
 
+// SofizPay return URL is public: SATIM redirects the browser back here and the
+// session may be lost. Payment is verified server-to-server, not by this request.
+Route::get('/billing/sofizpay/return', [BillingController::class, 'sofizpayReturn'])
+    ->middleware('throttle:30,1')
+    ->name('billing.sofizpay.return');
+
 // Old studio URLs remain publicly browseable.
 Route::redirect('/text-to-video', '/lab?type=text-to-video');
 Route::redirect('/image-to-video', '/lab?type=text-to-voice');
@@ -56,6 +63,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/history', [DashboardController::class, 'history'])->name('history');
     Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
+    // Start a SofizPay (DZD) checkout for a token pack.
+    Route::post('/billing/sofizpay/create', [BillingController::class, 'createSofizPay'])
+        ->middleware('throttle:20,1')
+        ->name('billing.sofizpay.create');
+
     Route::post('/trends/use', [TrendsController::class, 'useTemplate'])
         ->middleware('throttle:60,1')
         ->name('trends.use');

@@ -61,6 +61,60 @@ class TokenService
     }
 
     /**
+     * Idempotently add tokens to a user (e.g. after a successful purchase).
+     *
+     * Idempotency is enforced by the token_transactions unique index on
+     * (creation_type, creation_id, kind); a repeated credit for the same
+     * reference is a no-op and returns false.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    public function credit(User $user, int $amount, string $creationType, int|string $creationId, array $metadata = []): bool
+    {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Token credit must be greater than zero.');
+        }
+
+        try {
+            return DB::transaction(function () use ($user, $amount, $creationType, $creationId, $metadata) {
+                $alreadyCredited = DB::table('token_transactions')
+                    ->where('creation_type', $creationType)
+                    ->where('creation_id', $creationId)
+                    ->where('kind', 'credit')
+                    ->exists();
+
+                if ($alreadyCredited) {
+                    return false;
+                }
+
+                /** @var User $lockedUser */
+                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->getKey());
+                $lockedUser->tokens = (int) $lockedUser->tokens + $amount;
+                $lockedUser->save();
+
+                DB::table('token_transactions')->insert([
+                    'user_id' => $lockedUser->getKey(),
+                    'kind' => 'credit',
+                    'amount' => $amount,
+                    'balance_after' => $lockedUser->tokens,
+                    'creation_type' => $creationType,
+                    'creation_id' => $creationId,
+                    'metadata' => json_encode($metadata, JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $user->setAttribute('tokens', $lockedUser->tokens);
+
+                return true;
+            }, 3);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // A concurrent credit for the same reference won the race — already applied.
+            return false;
+        }
+    }
+
+    /**
      * Idempotently refund a reservation when fal rejects the initial submission.
      */
     public function refund(User $user, Model $creation, string $creationType, string $reason): bool

@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
@@ -93,15 +94,27 @@ class FalService
     }
 
     /**
-     * Upload a reference image to fal CDN so inference works on localhost too.
+     * Upload a reference file to fal CDN so inference works on localhost too.
      * Flow: initiate → PUT bytes → return public v3.fal.media URL.
+     *
+     * Shared hosts often mis-detect MP3 as application/octet-stream; we normalize
+     * content_type from the file extension so fal accepts the upload.
      *
      * @throws RequestException|RuntimeException
      */
     public function uploadToCdn(UploadedFile $file): string
     {
-        $contentType = $file->getMimeType() ?: 'application/octet-stream';
-        $filename = Str::uuid()->toString().'.'.strtolower($file->guessExtension() ?: 'bin');
+        [$contentType, $ext] = $this->resolveUploadContentType($file);
+        $filename = Str::uuid()->toString().'.'.$ext;
+        $path = $file->getRealPath();
+
+        if ($path === false || ! is_readable($path)) {
+            throw new RuntimeException('Uploaded file is not readable on the server.');
+        }
+
+        $size = (int) ($file->getSize() ?: @filesize($path) ?: 0);
+        // Larger audio/video needs more time on shared hosting outbound bandwidth.
+        $putTimeout = $size > 5 * 1024 * 1024 ? 180 : 90;
 
         $initResponse = Http::withHeaders([
             'Authorization' => 'Key '.$this->key,
@@ -114,7 +127,15 @@ class FalService
                 'file_name' => $filename,
             ]);
 
-        $initResponse->throw();
+        if (! $initResponse->successful()) {
+            Log::warning('fal CDN initiate failed', [
+                'status' => $initResponse->status(),
+                'body' => substr($initResponse->body(), 0, 500),
+                'content_type' => $contentType,
+                'filename' => $filename,
+            ]);
+            $initResponse->throw();
+        }
 
         $init = $initResponse->json();
         $uploadUrl = is_array($init) ? ($init['upload_url'] ?? null) : null;
@@ -124,16 +145,85 @@ class FalService
             throw new RuntimeException('fal storage upload did not return URLs.');
         }
 
+        $bytes = @file_get_contents($path);
+        if ($bytes === false || $bytes === '') {
+            throw new RuntimeException('Could not read the uploaded audio file from disk.');
+        }
+
         $uploadResponse = Http::withHeaders([
             'Content-Type' => $contentType,
         ])
-            ->timeout(60)
-            ->withBody((string) file_get_contents($file->getRealPath()), $contentType)
+            ->timeout($putTimeout)
+            ->withBody($bytes, $contentType)
             ->put($uploadUrl);
 
-        $uploadResponse->throw();
+        if (! $uploadResponse->successful()) {
+            Log::warning('fal CDN PUT failed', [
+                'status' => $uploadResponse->status(),
+                'body' => substr($uploadResponse->body(), 0, 500),
+                'content_type' => $contentType,
+                'size' => $size,
+            ]);
+            $uploadResponse->throw();
+        }
 
         return $fileUrl;
+    }
+
+    /**
+     * @return array{0: string, 1: string}  [contentType, extension]
+     */
+    private function resolveUploadContentType(UploadedFile $file): array
+    {
+        $originalExt = strtolower((string) $file->getClientOriginalExtension());
+        $guessedExt = strtolower((string) ($file->guessExtension() ?: ''));
+        $ext = $originalExt !== '' ? $originalExt : ($guessedExt !== '' ? $guessedExt : 'bin');
+
+        $byExt = [
+            'mp3' => 'audio/mpeg',
+            'mpga' => 'audio/mpeg',
+            'mpeg' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'flac' => 'audio/flac',
+            'ogg' => 'audio/ogg',
+            'oga' => 'audio/ogg',
+            'm4a' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'mp4' => 'video/mp4',
+            'mov' => 'video/quicktime',
+            'webm' => 'video/webm',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+        ];
+
+        $mime = (string) ($file->getMimeType() ?: '');
+
+        // Shared hosts often report MP3/WAV as application/octet-stream.
+        if ($mime === '' || $mime === 'application/octet-stream' || $mime === 'binary/octet-stream') {
+            $mime = $byExt[$ext] ?? 'application/octet-stream';
+        }
+
+        // Normalize common audio aliases so fal gets a stable content_type.
+        if (in_array($mime, ['audio/mp3', 'audio/x-mp3', 'audio/x-mpeg', 'audio/mpeg3'], true)) {
+            $mime = 'audio/mpeg';
+            $ext = 'mp3';
+        } elseif (in_array($mime, ['audio/x-wav', 'audio/wave'], true)) {
+            $mime = 'audio/wav';
+            $ext = 'wav';
+        } elseif (isset($byExt[$ext]) && str_starts_with($byExt[$ext], 'audio/') && ! str_starts_with($mime, 'audio/')) {
+            // Extension says audio but finfo guessed something else — trust extension.
+            $mime = $byExt[$ext];
+        }
+
+        if ($ext === 'bin' && isset($byExt[strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION))])) {
+            $ext = strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
+            $mime = $byExt[$ext];
+        }
+
+        return [$mime, $ext !== '' ? $ext : 'bin'];
     }
 
     /**
