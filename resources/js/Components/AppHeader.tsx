@@ -53,7 +53,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                         <img
                             src="/storage/ai_icons/logo_with_icon_text.png"
                             alt="RIMBOAI"
-                            className="h-20 w-auto object-contain md:h-[84px]"
+                            className="h-[72px] w-auto object-contain md:h-[84px]"
                         />
                     </Link>
                 </div>
@@ -89,10 +89,10 @@ export default function AppHeader({ onMenuClick }: Props) {
                     <button
                         type="button"
                         onClick={() => setCreditsOpen(true)}
-                        className="group relative inline-flex h-9 items-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-3.5 text-[13px] font-semibold text-white shadow-[0_6px_18px_-8px_rgba(255,87,51,0.9)] transition-transform active:scale-[0.97]"
+                        className="group relative inline-flex h-8 items-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-3 text-[12px] font-semibold text-white shadow-[0_6px_18px_-8px_rgba(255,87,51,0.9)] transition-transform active:scale-[0.97] md:h-9 md:px-3.5 md:text-[13px]"
                     >
                         <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                        <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg className="relative h-3.5 w-3.5 md:h-4 md:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="3" y="8" width="18" height="4" rx="1" />
                             <path d="M12 8v13" />
                             <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
@@ -208,19 +208,19 @@ export default function AppHeader({ onMenuClick }: Props) {
                         <>
                             <Link
                                 href="/pricing"
-                                className="inline-flex h-7 items-center px-2.5 text-[12.5px] font-semibold text-white/65 transition hover:text-white"
+                                className="hidden h-7 items-center px-2.5 text-[12.5px] font-semibold text-white/65 transition hover:text-white sm:inline-flex"
                             >
                                 Pricing
                             </Link>
                             <Link
                                 href="/?login"
-                                className="inline-flex h-7 items-center rounded-[5px] border border-white/15 bg-white/[0.04] px-3.5 text-[12.5px] font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08]"
+                                className="inline-flex h-7 items-center rounded-[5px] border border-white/15 bg-white/[0.04] px-2.5 text-[11.5px] font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08] sm:px-3.5 sm:text-[12.5px]"
                             >
                                 Sign in
                             </Link>
                             <Link
                                 href="/register"
-                                className="inline-flex h-7 items-center rounded-[5px] bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-3.5 text-[12.5px] font-semibold text-white shadow-[0_6px_18px_-10px_rgba(255,87,51,0.95)] transition hover:brightness-110"
+                                className="inline-flex h-7 items-center rounded-[5px] bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-2.5 text-[11.5px] font-semibold text-white shadow-[0_6px_18px_-10px_rgba(255,87,51,0.95)] transition hover:brightness-110 sm:px-3.5 sm:text-[12.5px]"
                             >
                                 Sign up
                             </Link>
