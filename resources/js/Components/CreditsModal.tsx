@@ -3,6 +3,8 @@ import { usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import { intlLocale, readSavedLang } from '@/lib/i18n';
 import type { PageProps } from '@/types';
 
 type Props = {
@@ -44,7 +46,11 @@ function bonusLabel(tokens: number, dzd: number, baseTokens: number, baseDzd: nu
 }
 
 export default function CreditsModal({ open, onClose }: Props) {
+    const { t } = useTranslation('billing');
+    const { t: tc } = useTranslation('common');
+    const { t: tp, i18n } = useTranslation('pricing');
     const { props } = usePage<PageProps>();
+    const locale = intlLocale((i18n.language as 'en' | 'fr' | 'ar') || readSavedLang());
     const [currency, setCurrency] = useState<Currency>('DZD');
     const [currencyOpen, setCurrencyOpen] = useState(false);
     const [selected, setSelected] = useState<string>('');
@@ -82,7 +88,7 @@ export default function CreditsModal({ open, onClose }: Props) {
     const selectedPack = useMemo(() => packs.find((p) => p.id === selected) ?? null, [packs, selected]);
 
     const price = (dzd: number) => {
-        if (currency === 'DZD') return `${Math.round(dzd).toLocaleString()} DZD`;
+        if (currency === 'DZD') return `${Math.round(dzd).toLocaleString(locale)} DZD`;
         const value = dzd * cur.rateFromDzd;
         return `${cur.symbol}${value % 1 < 0.05 || value % 1 > 0.95 ? Math.round(value) : value.toFixed(2)}`;
     };
@@ -113,12 +119,12 @@ export default function CreditsModal({ open, onClose }: Props) {
             };
 
             if (!response.ok || !data.checkout_url) {
-                throw new Error(data.message || 'Could not start the payment. Please try again.');
+                throw new Error(data.message || tp('notices.checkoutError'));
             }
 
             window.location.assign(data.checkout_url);
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not start the payment. Please try again.');
+            setError(e instanceof Error ? e.message : tp('notices.checkoutError'));
             setLoading(false);
         }
     }
@@ -150,17 +156,17 @@ export default function CreditsModal({ open, onClose }: Props) {
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <DialogTitle className="text-base font-semibold text-white sm:text-lg">
-                                                Buy tokens
+                                                {t('modal.title')}
                                             </DialogTitle>
                                             <p className="mt-0.5 text-[12px] text-zinc-500 sm:text-[13px]">
-                                                Top up your Lab balance. Prices follow the live catalogue.
+                                                {t('modal.subtitle')}
                                             </p>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={onClose}
                                             className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/5 hover:text-white"
-                                            aria-label="Close"
+                                            aria-label={t('modal.close')}
                                         >
                                             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -171,7 +177,7 @@ export default function CreditsModal({ open, onClose }: Props) {
 
                                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
                                     <div className="flex items-center justify-between gap-3">
-                                        <span className="text-[12px] font-medium text-zinc-400">Currency</span>
+                                        <span className="text-[12px] font-medium text-zinc-400">{t('modal.currency')}</span>
                                         <div className="relative">
                                             <button
                                                 type="button"
@@ -208,12 +214,12 @@ export default function CreditsModal({ open, onClose }: Props) {
                                     </div>
 
                                     <p className="text-[12px] leading-relaxed text-zinc-500 sm:text-[13px]">
-                                        Select a pack. SofizPay processes the final payment securely in Algerian Dinar.
+                                        {t('modal.hint')}
                                     </p>
 
                                     {packs.length === 0 ? (
                                         <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-6 text-center text-[13px] text-zinc-500">
-                                            No token packs available right now.
+                                            {t('modal.emptyPacks')}
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -232,12 +238,12 @@ export default function CreditsModal({ open, onClose }: Props) {
                                                     >
                                                         {pack.popular && (
                                                             <span className="absolute -top-2 rounded-full bg-[#FF5733] px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-white">
-                                                                Popular
+                                                                {t('modal.popular')}
                                                             </span>
                                                         )}
                                                         {pack.best && (
                                                             <span className="absolute -top-2 rounded-full bg-amber-400 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-black">
-                                                                Best value
+                                                                {t('modal.bestValue')}
                                                             </span>
                                                         )}
                                                         <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{pack.label}</span>
@@ -246,7 +252,7 @@ export default function CreditsModal({ open, onClose }: Props) {
                                                             <span className="text-[10px] font-semibold text-emerald-400">{pack.bonus}</span>
                                                         )}
                                                         <span className="mt-0.5 text-[11px] text-amber-300/90">
-                                                            {pack.tokens.toLocaleString()} tokens
+                                                            {pack.tokens.toLocaleString(locale)} {tc('tokens')}
                                                         </span>
                                                     </button>
                                                 );
@@ -258,7 +264,7 @@ export default function CreditsModal({ open, onClose }: Props) {
                                         <svg className="h-4 w-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.5 11 14.5 15.5 10M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" />
                                         </svg>
-                                        Secure SofizPay checkout. Tokens are credited after server verification and never expire.
+                                        {t('modal.secureNote')}
                                     </div>
 
                                     {error && (
@@ -271,7 +277,7 @@ export default function CreditsModal({ open, onClose }: Props) {
                                 <div className="shrink-0 border-t border-white/[0.07] bg-[#0e0e11] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-5 sm:pb-5">
                                     {selectedPack && currency !== 'DZD' && (
                                         <p className="mb-2 text-center text-[11px] text-zinc-500">
-                                            You will be charged {selectedPack.dzd.toLocaleString()} DZD at checkout.
+                                            {t('modal.chargeDzd', { amount: selectedPack.dzd.toLocaleString(locale) })}
                                         </p>
                                     )}
                                     <button
@@ -287,7 +293,7 @@ export default function CreditsModal({ open, onClose }: Props) {
                                                     <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
                                                     <path className="opacity-80" fill="currentColor" d="M12 3a9 9 0 0 1 9 9h-3a6 6 0 0 0-6-6V3Z" />
                                                 </svg>
-                                                <span className="relative">Starting secure checkout…</span>
+                                                <span className="relative">{t('modal.starting')}</span>
                                             </>
                                         ) : (
                                             <>
@@ -297,8 +303,11 @@ export default function CreditsModal({ open, onClose }: Props) {
                                                 </svg>
                                                 <span className="relative truncate">
                                                     {selectedPack
-                                                        ? `Pay ${selectedPack.dzd.toLocaleString()} DZD · ${selectedPack.tokens.toLocaleString()} tokens`
-                                                        : 'Select a pack'}
+                                                        ? t('modal.payCta', {
+                                                              amount: selectedPack.dzd.toLocaleString(locale),
+                                                              tokens: selectedPack.tokens.toLocaleString(locale),
+                                                          })
+                                                        : t('modal.selectPack')}
                                                 </span>
                                             </>
                                         )}

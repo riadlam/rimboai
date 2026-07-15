@@ -1,4 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import AuthLayout from '@/Layouts/AuthLayout';
 import Input from '@/Components/Input';
 import Button from '@/Components/Button';
@@ -6,6 +7,7 @@ import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import type { FormEvent } from 'react';
 
 export default function Login() {
+    const { t } = useTranslation('auth');
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
@@ -18,14 +20,14 @@ export default function Login() {
     };
 
     return (
-        <AuthLayout title="Welcome back" subtitle="Sign in to continue to AI Studio">
-            <Head title="Sign In" />
+        <AuthLayout title={t('welcomeBack')} subtitle={t('signInSubtitle')}>
+            <Head title={t('signInTitle')} />
             <div className="mb-5">
-                <GoogleAuthButton label="Sign in with Google" />
+                <GoogleAuthButton label={t('signInWithGoogle')} />
             </div>
             <form onSubmit={submit} className="space-y-5">
                 <Input
-                    label="Email address"
+                    label={t('email')}
                     type="email"
                     name="email"
                     value={data.email}
@@ -33,18 +35,18 @@ export default function Login() {
                     autoComplete="email"
                     autoFocus
                     required
-                    placeholder="you@example.com"
+                    placeholder={t('emailPlaceholder')}
                     error={errors.email}
                 />
                 <Input
-                    label="Password"
+                    label={t('password')}
                     type="password"
                     name="password"
                     value={data.password}
                     onChange={(e) => setData('password', e.target.value)}
                     autoComplete="current-password"
                     required
-                    placeholder="Enter your password"
+                    placeholder={t('passwordPlaceholder')}
                     error={errors.password}
                 />
                 <label className="flex cursor-pointer items-center gap-2">
@@ -54,10 +56,10 @@ export default function Login() {
                         onChange={(e) => setData('remember', e.target.checked)}
                         className="size-4 rounded border border-white/10 bg-black/40 text-[#3b82f6] focus:ring-[#3b82f6]/20 focus:ring-offset-0"
                     />
-                    <span className="text-sm text-[#94a3b8]">Remember me</span>
+                    <span className="text-sm text-[#94a3b8]">{t('rememberMe')}</span>
                 </label>
                 <Button type="submit" variant="auth" className="w-full" loading={processing}>
-                    Sign In
+                    {t('signIn')}
                     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                     </svg>

@@ -1,0 +1,51 @@
+{
+  "title": "الترندات",
+  "search": "ابحث بالوصف أو المنشئ أو النموذج...",
+  "clearSearch": "مسح البحث",
+  "pills": {
+    "all": "الكل",
+    "featured": "مميّز",
+    "videos": "فيديوهات",
+    "images": "صور",
+    "music": "موسيقى"
+  },
+  "allModels": "جميع النماذج",
+  "sorts": {
+    "popular": "الأكثر شعبية",
+    "newest": "الأحدث",
+    "creditsAsc": "الأرصدة: من الأقل للأعلى",
+    "creditsDesc": "الأرصدة: من الأعلى للأقل"
+  },
+  "creationsCount": "{{count}} إبداعات",
+  "reset": "إعادة ضبط",
+  "clearFilters": "مسح عوامل التصفية",
+  "sections": {
+    "featuredTitle": "مميّز",
+    "featuredSub": "إبداعات مجتمعية مختارة بعناية",
+    "videosTitle": "فيديوهات",
+    "videosSub": "إبداعات متحركة من المجتمع",
+    "imagesTitle": "صور",
+    "imagesSub": "صور ثابتة وأعمال فنية",
+    "musicTitle": "موسيقى",
+    "musicSub": "مقطوعات وأجواء صوتية"
+  },
+  "emptyPublicTitle": "لا إبداعات عامة بعد",
+  "emptyPublicSub": "انشر صورة أو فيديو أو موسيقى مكتملة من السجل لتظهر هنا.",
+  "emptyFiltered": "لا إبداعات تطابق عوامل التصفية",
+  "useTemplate": "استخدم القالب",
+  "openingLab": "فتح Lab…",
+  "hot": "رائج",
+  "outputs": "المخرجات",
+  "prompt": "الوصف",
+  "stats": {
+    "uses": "الاستخدامات",
+    "type": "النوع",
+    "credits": "الأرصدة"
+  },
+  "audioOn": "الصوت مفعّل",
+  "audioOff": "الصوت متوقف",
+  "auto": "تلقائي",
+  "close": "إغلاق",
+  "credits": "{{count}} أرصدة",
+  "tryThis": "جرّب هذا"
+}

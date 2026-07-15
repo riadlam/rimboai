@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import type { BrandModel } from '@/types';
 import { publicAsset } from '@/lib/publicAsset';
 
@@ -88,17 +89,22 @@ export function LabModelPickerModal({
     selectedName,
     onSelect,
     onClose,
-    title = 'Select Model',
-    subtitle = 'Pick a model — each card shows its cover art and focus.',
-    fallbackDescription = 'AI generation model',
+    title,
+    subtitle,
+    fallbackDescription,
 }: ModalProps) {
+    const { t } = useTranslation('lab');
+    const modalTitle = title ?? t('selectModel');
+    const modalSubtitle = subtitle ?? t('selectModelSub');
+    const modalFallback = fallbackDescription ?? t('selectModelSub');
+
     return (
         <AnimatePresence>
             {open && (
                 <ModalShell onClose={onClose} wide>
                     <div className="pe-8">
-                        <h2 className="text-lg font-semibold tracking-tight text-white">{title}</h2>
-                        <p className="mt-1 text-[13px] text-white/45">{subtitle}</p>
+                        <h2 className="text-lg font-semibold tracking-tight text-white">{modalTitle}</h2>
+                        <p className="mt-1 text-[13px] text-white/45">{modalSubtitle}</p>
                     </div>
                     <div className="mt-4 max-h-[62vh] space-y-3 overflow-y-auto pe-1 scrollbar-thin">
                         {models.map((m) => {
@@ -164,7 +170,7 @@ export function LabModelPickerModal({
                                                 </span>
                                             </div>
                                             <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-white/55">
-                                                {m.description || fallbackDescription}
+                                                {m.description || modalFallback}
                                             </p>
                                             {tags.length > 0 && (
                                                 <div className="mt-2 flex flex-wrap gap-1">

@@ -118,7 +118,7 @@ class MusicGenerationController extends Controller
             ->first();
 
         if (! $model) {
-            return response()->json(['message' => 'The selected music model is not available.'], 422);
+            return response()->json(['message' => __('messages.model_unavailable')], 422);
         }
 
         $instrumental = $request->boolean('instrumental', true);
@@ -161,7 +161,7 @@ class MusicGenerationController extends Controller
 
                 // ~20MB decoded limit to keep memory safe.
                 if (strlen($decoded) > 20 * 1024 * 1024) {
-                    return response()->json(['message' => 'Audio file is too large. Please use an MP3 under 20MB.'], 422);
+                    return response()->json(['message' => __('messages.audio_too_large')], 422);
                 }
 
                 $filename = trim((string) ($data['audio_filename'] ?? 'source.mp3'));
@@ -273,7 +273,7 @@ class MusicGenerationController extends Controller
         $billing = $pricing->resolve((string) $model->endpoint_id);
         if ($billing === null) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $model->endpoint_id,
             ], 503);
         }
@@ -287,7 +287,7 @@ class MusicGenerationController extends Controller
 
         if ((int) $cost['credits'] <= 0) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $model->endpoint_id,
             ], 503);
         }
@@ -334,7 +334,7 @@ class MusicGenerationController extends Controller
             );
         } catch (InsufficientTokensException $e) {
             return response()->json([
-                'message' => 'You do not have enough tokens for this creation.',
+                'message' => __('messages.not_enough_tokens'),
                 'required_tokens' => $e->required,
                 'available_tokens' => $e->available,
             ], 402);
@@ -344,7 +344,7 @@ class MusicGenerationController extends Controller
             $submit = $fal->submit($model->endpoint_id, $falInput);
         } catch (\Throwable $e) {
             report($e);
-            $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
             $tokens->refund($request->user(), $creation, 'music', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
@@ -411,7 +411,7 @@ class MusicGenerationController extends Controller
         if ($state !== 'COMPLETED') {
             if (in_array($state, ['FAILED', 'ERROR', 'CANCELLED'], true) || ! empty($status['error'])) {
                 $creation->markFailed(
-                    $this->friendlyMusicError((string) ($status['error'] ?? 'Generation failed.')),
+                    $this->friendlyMusicError((string) ($status['error'] ?? __('messages.generation_failed'))),
                     $status['error_type'] ?? 'error',
                 );
             }
@@ -443,7 +443,7 @@ class MusicGenerationController extends Controller
 
         $audioUrl = $this->extractAudioUrl($result);
         if ($audioUrl === null) {
-            $creation->markFailed('Generation finished without audio.', 'empty_result');
+            $creation->markFailed(__('messages.no_audio'), 'empty_result');
 
             return;
         }
@@ -594,7 +594,8 @@ class MusicGenerationController extends Controller
 
     private function messageFromFalException(\Throwable $e): string
     {
-        $raw = 'Generation failed. Please try again.';
+        $fallback = __('messages.generation_failed');
+        $raw = $fallback;
 
         if ($e instanceof RequestException && $e->response) {
             $json = $e->response->json();
@@ -614,7 +615,7 @@ class MusicGenerationController extends Controller
                     }
                 }
 
-                if ($raw === 'Generation failed. Please try again.') {
+                if ($raw === $fallback) {
                     foreach (['error', 'message'] as $key) {
                         if (isset($json[$key]) && is_string($json[$key]) && $json[$key] !== '') {
                             $raw = $json[$key];
@@ -636,7 +637,7 @@ class MusicGenerationController extends Controller
     {
         $text = trim($raw);
         if ($text === '') {
-            return 'Generation failed. Please try again.';
+            return __('messages.generation_failed');
         }
 
         $lower = mb_strtolower($text);
@@ -653,7 +654,7 @@ class MusicGenerationController extends Controller
             || str_contains($lower, 'artist name')
             || str_contains($lower, 'voice of')
         ) {
-            return 'Blocked: your prompt looks like copyrighted or celebrity content (artist name/voice). Remove famous names and try again.';
+            return __('messages.content_blocked_copyright');
         }
 
         // Profanity / drugs / unsafe lyrics — fal often returns a vague "invalid" reject.
@@ -670,12 +671,12 @@ class MusicGenerationController extends Controller
             || str_contains($lower, 'bad word')
             || str_contains($lower, 'profan')
         ) {
-            return 'Blocked: your prompt or lyrics contain restricted words (profanity, drugs, violence, etc.). Clean them up and retry.';
+            return __('messages.content_blocked_restricted');
         }
 
         // Keep short provider hints when useful; otherwise a neutral fallback.
         if (mb_strlen($text) > 220) {
-            return 'Generation failed. Try a simpler prompt and lyrics, then retry.';
+            return __('messages.generation_simplify');
         }
 
         return $text;

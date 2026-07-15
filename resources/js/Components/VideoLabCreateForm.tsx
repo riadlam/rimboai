@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Brand } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateVideoCredits } from '@/lib/videoCredits';
@@ -139,13 +140,15 @@ function pickDurationForOptions(options: DurationOptions, current: DurationSelec
 
 export default function VideoLabCreateForm({
     brands = [],
-    placeholder = 'Describe the scene, motion, and style of your video...',
+    placeholder,
     onGenerate,
     loading = false,
     creditsConfig,
     tokenBalance = 0,
     draft = null,
 }: Props) {
+    const { t } = useTranslation('lab');
+    const resolvedPlaceholder = placeholder ?? t('video.placeholder');
     const [prompt, setPrompt] = useState('');
     const [expanded, setExpanded] = useState(false);
     const [modelOpen, setModelOpen] = useState(false);
@@ -254,7 +257,7 @@ export default function VideoLabCreateForm({
     );
 
     const durationSeconds = duration === 'auto' ? durationOptions.max : duration;
-    const durationLabel = duration === 'auto' ? 'Auto' : `${duration}s`;
+    const durationLabel = duration === 'auto' ? t('auto') : `${duration}s`;
 
     const supportsAudio = selectedModelRecord?.supports_audio === true;
     const effectiveAudio = supportsAudio && audioOn;
@@ -280,7 +283,16 @@ export default function VideoLabCreateForm({
     const mediaGuidance = describeMediaGuidance(mediaCounts, modelsForPicker.length);
     const showInfoGuidance = Boolean(mediaGuidance && mediaGuidance.tone !== 'error' && !guidanceDismissed);
     const showErrorGuidance = Boolean(mediaGuidance && mediaGuidance.tone === 'error');
-    const blockReason = generateBlockReason(Boolean(prompt.trim()), mediaCounts, selectedModelRecord, modelsForPicker.length);
+    const rawBlockReason = generateBlockReason(Boolean(prompt.trim()), mediaCounts, selectedModelRecord, modelsForPicker.length);
+    const blockReason = !rawBlockReason
+        ? null
+        : rawBlockReason === 'Add a prompt to generate.'
+          ? t('video.blockPrompt')
+          : rawBlockReason.startsWith('Add an image or video')
+            ? t('video.blockAudioAlone')
+            : rawBlockReason === 'No model supports this media mix. Remove some references.'
+              ? t('video.blockMix')
+              : rawBlockReason;
     const canGenerate = !blockReason && routeMode !== null && hasEnoughTokens;
     const durationPct =
         durationStops.length <= 1 ? 100 : (durationIndex / (durationStops.length - 1)) * 100;
@@ -400,36 +412,15 @@ export default function VideoLabCreateForm({
                     setMedia(next);
 
                     if (loaded.failed > 0 && loaded.files.length === 0) {
-                        setDraftNotice(
-                            draft.intent === 'use-result'
-                                ? 'Could not attach the result video. Settings were restored — upload the file manually.'
-                                : 'Settings restored, but reference media could not be loaded. Upload them manually if needed.',
-                        );
+                        setDraftNotice(t('settingsRestored'));
                     } else if (loaded.failed > 0) {
-                        setDraftNotice('Settings restored. Some reference files could not be loaded.');
+                        setDraftNotice(t('settingsRestored'));
                     } else {
-                        setDraftNotice(
-                            draft.intent === 'use-result'
-                                ? 'Result video attached — enter a new prompt to continue.'
-                                : 'Settings restored from your previous generation.',
-                        );
+                        setDraftNotice(t('settingsRestored'));
                     }
-                } else {
-                    setDraftNotice(
-                        draft.intent === 'use-result'
-                            ? 'Enter a new prompt to continue.'
-                            : 'Settings restored from your previous generation.',
-                    );
                 }
-                setMediaNotice(null);
-            } catch (err) {
-                if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
-                    setDraftNotice(
-                        draft.intent === 'use-result'
-                            ? 'Could not attach media. Settings were restored — upload manually if needed.'
-                            : 'Settings restored, but media could not be loaded. Upload manually if needed.',
-                    );
-                }
+            } catch {
+                // Draft media restore is best-effort.
             } finally {
                 if (!cancelled) setDraftLoading(false);
             }
@@ -532,8 +523,8 @@ export default function VideoLabCreateForm({
                     <LabFormSkeleton
                         label={
                             draft?.intent === 'use-result'
-                                ? 'Attaching media…'
-                                : 'Restoring settings…'
+                                ? t('attaching')
+                                : t('restoring')
                         }
                     />
                 )}
@@ -553,7 +544,7 @@ export default function VideoLabCreateForm({
                                 type="button"
                                 onClick={() => setDraftNotice(null)}
                                 className="shrink-0 text-orange-100/50 hover:text-orange-100"
-                                aria-label="Dismiss"
+                                aria-label={t('dismiss')}
                             >
                                 ×
                             </button>
@@ -561,7 +552,7 @@ export default function VideoLabCreateForm({
                     )}
                     {/* Select Model — cinematic card */}
                     <div className="space-y-2">
-                        <SectionLabel>Select Model</SectionLabel>
+                        <SectionLabel>{t('selectModel')}</SectionLabel>
                         <button
                             type="button"
                             onClick={() => setModelOpen(true)}
@@ -655,7 +646,7 @@ export default function VideoLabCreateForm({
                                     </MediaBadge>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-sm font-semibold text-white">Upload media</p>
+                                    <p className="text-sm font-semibold text-white">{t('video.uploadMedia')}</p>
                                     <p className="mt-1 text-xs text-white/40">
                                         Image, video, or audio · up to {MEDIA_LIMITS.image} images / {MEDIA_LIMITS.video} videos /{' '}
                                         {MEDIA_LIMITS.audio} audio
@@ -747,7 +738,7 @@ export default function VideoLabCreateForm({
                                             type="button"
                                             onClick={() => setSwitchNotice(null)}
                                             className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-amber-200/70 transition hover:bg-amber-500/20 hover:text-amber-50"
-                                            aria-label="Dismiss"
+                                            aria-label={t('dismiss')}
                                         >
                                             ×
                                         </button>
@@ -780,7 +771,7 @@ export default function VideoLabCreateForm({
                                                 type="button"
                                                 onClick={() => setGuidanceDismissed(true)}
                                                 className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-sky-200/70 transition hover:bg-sky-500/20 hover:text-sky-50"
-                                                aria-label="Dismiss"
+                                                aria-label={t('dismiss')}
                                             >
                                                 ×
                                             </button>
@@ -795,14 +786,14 @@ export default function VideoLabCreateForm({
                     <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
                         <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
                             <div>
-                                <p className="text-sm font-semibold text-white">Prompt</p>
-                                <p className="mt-0.5 text-[11px] text-white/35">Scene, motion, camera, and style</p>
+                                <p className="text-sm font-semibold text-white">{t('prompt')}</p>
+                                <p className="mt-0.5 text-[11px] text-white/35">{t('video.promptSub')}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setExpanded(true)}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/[0.06] hover:text-white"
-                                title="Expand editor"
+                                title={t('expandEditor')}
                             >
                                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
@@ -819,7 +810,7 @@ export default function VideoLabCreateForm({
                                 onChange={setPrompt}
                                 mentions={assetMentions}
                                 maxLength={1500}
-                                placeholder={placeholder}
+                                placeholder={resolvedPlaceholder}
                                 rows={5}
                                 className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                             />
@@ -859,7 +850,7 @@ export default function VideoLabCreateForm({
                             className="flex w-full cursor-pointer items-center justify-between px-3.5 py-3"
                         >
                             <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-white">Settings</span>
+                                <span className="text-sm font-semibold text-white">{t('settings')}</span>
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/40">
                                     {durationLabel} · {resolution}
                                 </span>
@@ -889,7 +880,7 @@ export default function VideoLabCreateForm({
                                         <div className="space-y-2.5">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-[13px] font-medium text-zinc-200">Duration</p>
+                                                    <p className="text-[13px] font-medium text-zinc-200">{t('duration')}</p>
                                                     <p className="text-[10px] text-white/30">
                                                         {durationOptions.allowAuto
                                                             ? `Auto or ${durationOptions.min}–${durationOptions.max}s`
@@ -921,7 +912,7 @@ export default function VideoLabCreateForm({
                                                 />
                                             </div>
                                             <div className="flex justify-between text-[11px] text-white/30">
-                                                <span>{durationOptions.allowAuto ? 'Auto' : `${durationOptions.min}s`}</span>
+                                                <span>{durationOptions.allowAuto ? t('auto') : `${durationOptions.min}s`}</span>
                                                 <span>{durationOptions.max}s</span>
                                             </div>
                                         </div>
@@ -930,15 +921,15 @@ export default function VideoLabCreateForm({
                                         {supportsAudio && (
                                             <div className="flex items-center justify-between gap-3">
                                                 <div>
-                                                    <p className="text-[13px] font-medium text-zinc-200">Audio</p>
-                                                    <p className="text-[10px] text-white/30">{audioOn ? 'Generate soundtrack' : 'Silent video'}</p>
+                                                    <p className="text-[13px] font-medium text-zinc-200">{t('video.audio')}</p>
+                                                    <p className="text-[10px] text-white/30">{audioOn ? t('video.audioGenerate') : t('video.audioSilent')}</p>
                                                 </div>
                                                 <PremiumSegmented
                                                     groupId="video-audio"
                                                     value={audioOn ? 'on' : 'off'}
                                                     options={[
-                                                        { id: 'on', label: 'On' },
-                                                        { id: 'off', label: 'Off' },
+                                                        { id: 'on', label: t('video.audioOn') },
+                                                        { id: 'off', label: t('video.audioOff') },
                                                     ]}
                                                     onChange={(v) => setAudioOn(v === 'on')}
                                                 />
@@ -947,7 +938,7 @@ export default function VideoLabCreateForm({
 
                                         {/* Resolution */}
                                         <div>
-                                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">Resolution</p>
+                                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('resolution')}</p>
                                             <div className="grid grid-cols-4 gap-1.5">
                                                 {RESOLUTIONS.map((r) => {
                                                     const active = resolution === r.id;
@@ -974,7 +965,7 @@ export default function VideoLabCreateForm({
 
                                         {/* Aspect */}
                                         <div>
-                                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">Aspect Ratio</p>
+                                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('aspectRatio')}</p>
                                             <div className="grid grid-cols-5 gap-1.5">
                                                 {ASPECTS.map((key) => {
                                                     const meta = aspectMeta[key];
@@ -1026,7 +1017,7 @@ export default function VideoLabCreateForm({
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">{resolution}</span>
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">{durationLabel}</span>
                         {supportsAudio && audioOn && (
-                            <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">Audio</span>
+                            <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">{t('video.audio')}</span>
                         )}
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium tabular-nums text-orange-200/90">
@@ -1073,16 +1064,16 @@ export default function VideoLabCreateForm({
                     {loading ? (
                         <span className="relative flex items-center gap-2">
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                            Creating…
+                            {t('generating')}
                         </span>
                     ) : !hasEnoughTokens ? (
-                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
+                        <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
                             </svg>
-                            <span className="relative">Create</span>
+                            <span className="relative">{t('create')}</span>
                             {creditCost > 0 && (
                                 <span className="relative inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-medium tabular-nums">
                                     <CreditBoltIcon className="h-3 w-3 text-amber-100" />
@@ -1116,7 +1107,7 @@ export default function VideoLabCreateForm({
                         >
                             <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
                                 <div>
-                                    <h3 className="text-sm font-semibold text-white">Prompt editor</h3>
+                                    <h3 className="text-sm font-semibold text-white">{t('promptEditor')}</h3>
                                     <p className="text-[11px] text-white/35">Write a full cinematic brief</p>
                                 </div>
                                 <button
@@ -1136,7 +1127,7 @@ export default function VideoLabCreateForm({
                                     maxLength={1500}
                                     rows={12}
                                     className="w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3.5 text-sm leading-relaxed text-white outline-none focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
-                                    placeholder={placeholder}
+                                    placeholder={resolvedPlaceholder}
                                 />
                             </div>
                         </motion.div>
@@ -1168,7 +1159,7 @@ export default function VideoLabCreateForm({
                                 type="button"
                                 onClick={() => setModelOpen(false)}
                                 className="absolute end-4 top-4 z-10 rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
-                                aria-label="Close"
+                                aria-label={t('close')}
                             >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                     <path d="M18 6 6 18" />
@@ -1176,17 +1167,17 @@ export default function VideoLabCreateForm({
                                 </svg>
                             </button>
                             <div className="relative pe-6">
-                                <h2 className="text-lg font-semibold tracking-tight text-white">Select Model</h2>
+                                <h2 className="text-lg font-semibold tracking-tight text-white">{t('selectModel')}</h2>
                                 <p className="mt-1 text-[13px] text-zinc-500">
                                     {mediaTotal(mediaCounts) > 0
                                         ? `Showing models that support your media (${modelsForPicker.length})`
-                                        : 'Choose an AI model for your generation'}
+                                        : t('selectModelSub')}
                                 </p>
                             </div>
                             <div className="relative max-h-[60vh] space-y-1.5 overflow-y-auto py-1 scrollbar-thin">
                                 {modelsForPicker.length === 0 && mediaTotal(mediaCounts) > 0 ? (
                                     <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-6 text-center">
-                                        <p className="text-sm font-medium text-rose-100">No compatible models</p>
+                                        <p className="text-sm font-medium text-rose-100">{t('video.noCompatible')}</p>
                                         <p className="mt-1 text-[12px] text-rose-100/70">
                                             Change or remove references to see available models again.
                                         </p>
@@ -1268,7 +1259,7 @@ export default function VideoLabCreateForm({
                                     onClick={() => setModelOpen(false)}
                                     className="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-white/10 px-4 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.05] hover:text-white"
                                 >
-                                    Close
+                                    {t('close')}
                                 </button>
                             </div>
                         </motion.div>

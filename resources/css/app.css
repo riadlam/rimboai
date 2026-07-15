@@ -65,6 +65,16 @@
         max-width: 100%;
     }
 
+    html[lang='ar'] body,
+    html[dir='rtl'] body {
+        font-family: 'Cairo', var(--font-sans);
+    }
+
+    html[lang='ar'] .font-\[family-name\:Outfit\,sans-serif\],
+    html[dir='rtl'] .font-\[family-name\:Outfit\,sans-serif\] {
+        font-family: 'Cairo', ui-sans-serif, system-ui, sans-serif !important;
+    }
+
     /* Show the hand cursor on interactive controls */
     button:not(:disabled),
     a[href],

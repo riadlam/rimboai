@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
     accept?: string;
@@ -10,12 +11,14 @@ type Props = {
 export default function FileUploader({
     accept = 'video/*',
     hint = 'MP4, MOV, AVI up to 500MB',
-    label = 'Upload Video',
+    label,
     onFile,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [dragging, setDragging] = useState(false);
     const [fileName, setFileName] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const uploadLabel = label ?? t('uploader.uploadVideo');
 
     const handleFile = (file?: File) => {
         if (!file) return;
@@ -32,7 +35,7 @@ export default function FileUploader({
     return (
         <div className="space-y-1.5">
             <label className="block text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">
-                {label}
+                {uploadLabel}
             </label>
             <div
                 onDragOver={(e) => {
@@ -68,7 +71,7 @@ export default function FileUploader({
                         </svg>
                     </div>
                     <p className="text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">
-                        {fileName || 'Click or drag to upload'}
+                        {fileName || t('uploader.clickOrDrag')}
                     </p>
                     <p className="text-xs text-text-tertiary dark:text-[var(--dark-text-tertiary)]">{hint}</p>
                 </div>

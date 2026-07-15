@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import {
     categoryGradient,
@@ -57,13 +58,15 @@ function categoryIcon(icon?: string | null): ReactNode {
 }
 
 export default function Innovation({ categories = [], posts = [] }: Props) {
+    const { t } = useTranslation('innovation');
+    const { t: tc } = useTranslation('common');
     const [mediaType, setMediaType] = useState<MediaType>('images');
     const [category, setCategory] = useState<string>('all');
     const [query, setQuery] = useState('');
 
     const categoryTabs = useMemo(
-        () => [{ id: 'all', slug: 'all', name: 'All', icon: 'sparkles' }, ...categories],
-        [categories],
+        () => [{ id: 'all', slug: 'all', name: tc('all'), icon: 'sparkles' }, ...categories],
+        [categories, tc],
     );
 
     const filtered = useMemo(() => {
@@ -85,7 +88,7 @@ export default function Innovation({ categories = [], posts = [] }: Props) {
 
     return (
         <AppLayout>
-            <Head title="Innovation" />
+            <Head title={t('title')} />
             <div className="-mx-4 -my-4 sm:-mx-5 lg:-mx-6 lg:-my-5 xl:-mx-8">
                 <div className="flex min-h-screen flex-col bg-[#0A0A0A] pb-20 md:pb-0">
                     <div className="sticky top-0 z-10 border-b border-white/5 bg-[#0A0A0A]/95 backdrop-blur-sm">
@@ -94,7 +97,7 @@ export default function Innovation({ categories = [], posts = [] }: Props) {
                                 <Link
                                     href="/"
                                     className="inline-flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center rounded-full bg-zinc-800/80"
-                                    aria-label="Back to home"
+                                    aria-label={t('backHome')}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 rtl:rotate-180">
                                         <path d="m12 19-7-7 7-7" />
@@ -110,7 +113,7 @@ export default function Innovation({ categories = [], posts = [] }: Props) {
                                         type="text"
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
-                                        placeholder="Search prompts..."
+                                        placeholder={t('search')}
                                         className="flex h-9 w-full rounded-full border border-white/10 bg-zinc-800/60 px-3 py-2 ps-10 text-sm text-white placeholder:text-white/40 outline-none"
                                     />
                                 </div>
@@ -120,9 +123,9 @@ export default function Innovation({ categories = [], posts = [] }: Props) {
                                 <div className="flex flex-shrink-0 items-center gap-1 rounded-full border border-white/10 bg-zinc-900/90 p-1">
                                     {(
                                         [
-                                            { id: 'images' as const, label: 'Images' },
-                                            { id: 'videos' as const, label: 'Videos' },
-                                            { id: 'music' as const, label: 'Music' },
+                                            { id: 'images' as const, label: t('tabs.images') },
+                                            { id: 'videos' as const, label: t('tabs.videos') },
+                                            { id: 'music' as const, label: t('tabs.music') },
                                         ]
                                     ).map((opt) => (
                                         <button
@@ -160,7 +163,7 @@ export default function Innovation({ categories = [], posts = [] }: Props) {
 
                     <div className="px-4 py-4 md:px-6 md:py-6">
                         {filtered.length === 0 ? (
-                            <div className="flex h-40 items-center justify-center text-sm text-white/40">No prompts found.</div>
+                            <div className="flex h-40 items-center justify-center text-sm text-white/40">{t('empty')}</div>
                         ) : (
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                                 {filtered.map((prompt) => (

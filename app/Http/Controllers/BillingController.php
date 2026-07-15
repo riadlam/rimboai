@@ -76,7 +76,7 @@ class BillingController extends Controller
     {
         if (! $sofizPay->isEnabled() || ! $sofizPay->isConfigured()) {
             return response()->json([
-                'message' => 'DZD payment is not available right now. Please try again later.',
+                'message' => __('messages.dzd_unavailable'),
             ], 503);
         }
 
@@ -93,7 +93,7 @@ class BillingController extends Controller
             ->first();
 
         if (! $package) {
-            return response()->json(['message' => 'This token pack is not available.'], 404);
+            return response()->json(['message' => __('messages.pack_unavailable')], 404);
         }
 
         // Canonical, server-owned amount — never trust a client-sent price.
@@ -101,7 +101,7 @@ class BillingController extends Controller
 
         if ($amount < $sofizPay->minAmountDzd()) {
             return response()->json([
-                'message' => 'This pack is below the minimum payment amount.',
+                'message' => __('messages.pack_below_minimum'),
             ], 422);
         }
 
@@ -177,7 +177,7 @@ class BillingController extends Controller
             ]);
 
             return response()->json([
-                'message' => $gatewayError ?: 'Could not start the payment. Please try again.',
+                'message' => $gatewayError ?: __('messages.checkout_failed'),
             ], 422);
         }
 
@@ -220,12 +220,12 @@ class BillingController extends Controller
         $payment = $paymentId ? Payment::find($paymentId) : null;
 
         if (! $payment) {
-            return $this->redirectResult('error', 'We could not find your payment session.');
+            return $this->redirectResult('error', __('messages.payment_session_missing'));
         }
 
         // Already fulfilled — safe to show success again.
         if ($payment->isPaid()) {
-            return $this->redirectResult('success', 'Payment confirmed. Your tokens have been added.', $payment->tokens);
+            return $this->redirectResult('success', __('messages.payment_confirmed'), $payment->tokens);
         }
 
         $result = $fulfillment->verifyAndFulfill($payment);

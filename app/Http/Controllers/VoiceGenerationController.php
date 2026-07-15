@@ -44,7 +44,7 @@ class VoiceGenerationController extends Controller
             ->first();
 
         if (! $model) {
-            return response()->json(['message' => 'The selected voice model is not available.'], 422);
+            return response()->json(['message' => __('messages.model_unavailable')], 422);
         }
 
         $voiceKey = trim($data['voice']);
@@ -58,7 +58,7 @@ class VoiceGenerationController extends Controller
             $enums = is_string($model->enums ?? null) ? json_decode($model->enums, true) : ($model->enums ?? null);
             $allowed = is_array($enums) && in_array($voiceKey, $enums, true);
             if (! $allowed) {
-                return response()->json(['message' => 'The selected voice is not available for this model.'], 422);
+                return response()->json(['message' => __('messages.model_unavailable')], 422);
             }
         }
 
@@ -78,7 +78,7 @@ class VoiceGenerationController extends Controller
         $billing = $pricing->resolve((string) $model->endpoint_id);
         if ($billing === null) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $model->endpoint_id,
             ], 503);
         }
@@ -92,7 +92,7 @@ class VoiceGenerationController extends Controller
 
         if ((int) $cost['credits'] <= 0) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $model->endpoint_id,
             ], 503);
         }
@@ -130,7 +130,7 @@ class VoiceGenerationController extends Controller
             );
         } catch (InsufficientTokensException $e) {
             return response()->json([
-                'message' => 'You do not have enough tokens for this creation.',
+                'message' => __('messages.not_enough_tokens'),
                 'required_tokens' => $e->required,
                 'available_tokens' => $e->available,
             ], 402);
@@ -140,7 +140,7 @@ class VoiceGenerationController extends Controller
             $submit = $fal->submit($model->endpoint_id, $falInput);
         } catch (\Throwable $e) {
             report($e);
-            $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
             $tokens->refund($request->user(), $creation, 'voice', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
@@ -199,7 +199,7 @@ class VoiceGenerationController extends Controller
         }
 
         if ($state === 'IN_PROGRESS') {
-            $creation->markInProgress(null, 'Generating…');
+            $creation->markInProgress(null, __('messages.generating'));
 
             return;
         }
@@ -226,7 +226,7 @@ class VoiceGenerationController extends Controller
 
         $audioUrl = $this->extractAudioUrl($result);
         if ($audioUrl === null) {
-            $creation->markFailed('Generation finished without audio.', 'empty_result');
+            $creation->markFailed(__('messages.no_audio'), 'empty_result');
 
             return;
         }

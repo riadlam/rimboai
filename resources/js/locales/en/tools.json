@@ -1,0 +1,52 @@
+{
+  "title": "Tools",
+  "search": "Search tools",
+  "backHome": "Back to home",
+  "filterAll": "All",
+  "filterVideo": "Video",
+  "filterImage": "Image",
+  "empty": "No tools match your search.",
+  "clearFilters": "Clear filters",
+  "useThisTool": "Use This Tool",
+  "groups": {
+    "enhance": {
+      "title": "Enhance & Upscale",
+      "desc": "Sharpen, denoise, and boost any clip to higher clarity."
+    },
+    "transform": {
+      "title": "Transform & Effects",
+      "desc": "Face swap, lip sync, anime styles, filters, and motion."
+    },
+    "edit": {
+      "title": "Edit & Extend",
+      "desc": "Cut, extend, restyle, and clean up your footage."
+    },
+    "create": {
+      "title": "Create & Animate",
+      "desc": "Bring stills to life and generate cinematic sound."
+    }
+  },
+  "detail": {
+    "subtitle": "AI-powered video tool",
+    "upload": "Upload Video",
+    "uploadHint": "Click or drag to upload",
+    "aiModel": "AI Model",
+    "modelAuto": "Auto (Recommended)",
+    "modelStandard": "Standard",
+    "modelPro": "Pro",
+    "modelUltra": "Ultra",
+    "scale": "Scale",
+    "mode": "Mode",
+    "modeGeneral": "General",
+    "modeAnimation": "Animation",
+    "modeLowLight": "Low Light",
+    "hq": "High Quality",
+    "hqDesc": "Best visual fidelity",
+    "public": "Public",
+    "publicDesc": "Visible in community gallery",
+    "copyProtection": "Copy Protection",
+    "copyProtectionDesc": "Restrict downloads",
+    "credits": "Credits",
+    "create": "Create"
+  }
+}

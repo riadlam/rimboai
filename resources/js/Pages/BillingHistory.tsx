@@ -1,6 +1,8 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
+import { intlLocale, readSavedLang } from '@/lib/i18n';
 
 type PaymentStatus = 'paid' | 'pending' | 'failed' | 'canceled' | string;
 
@@ -37,13 +39,7 @@ type Props = {
     };
 };
 
-const FILTERS = [
-    { id: 'all', label: 'All' },
-    { id: 'paid', label: 'Paid' },
-    { id: 'pending', label: 'Pending' },
-    { id: 'failed', label: 'Failed' },
-    { id: 'canceled', label: 'Canceled' },
-] as const;
+const FILTER_IDS = ['all', 'paid', 'pending', 'failed', 'canceled'] as const;
 
 const STATUS_STYLES: Record<string, string> = {
     paid: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300',
@@ -51,22 +47,6 @@ const STATUS_STYLES: Record<string, string> = {
     failed: 'border-rose-400/20 bg-rose-400/10 text-rose-300',
     canceled: 'border-zinc-400/20 bg-zinc-400/10 text-zinc-300',
 };
-
-function money(amount: number, currency: string) {
-    return new Intl.NumberFormat('en-DZ', {
-        style: 'currency',
-        currency: currency || 'DZD',
-        maximumFractionDigits: 2,
-    }).format(amount);
-}
-
-function dateTime(value: string | null) {
-    if (!value) return '—';
-    return new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    }).format(new Date(value));
-}
 
 function changeFilter(status: string) {
     router.get('/billing/history', status === 'all' ? {} : { status }, {
@@ -77,12 +57,12 @@ function changeFilter(status: string) {
     });
 }
 
-function StatusBadge({ status }: { status: PaymentStatus }) {
+function StatusBadge({ status, label }: { status: PaymentStatus; label: string }) {
     const style = STATUS_STYLES[status] ?? STATUS_STYLES.canceled;
     return (
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${style}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {status}
+            {label}
         </span>
     );
 }
@@ -109,9 +89,35 @@ function StatCard({
 }
 
 export default function BillingHistory({ payments, filters, stats }: Props) {
+    const { t, i18n } = useTranslation('billing');
+    const { t: tc } = useTranslation('common');
+    const locale = intlLocale((i18n.language as 'en' | 'fr' | 'ar') || readSavedLang());
+
+    const money = (amount: number, currency: string) =>
+        new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency: currency || 'DZD',
+            maximumFractionDigits: 2,
+        }).format(amount);
+
+    const dateTime = (value: string | null) => {
+        if (!value) return '—';
+        return new Intl.DateTimeFormat(locale, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        }).format(new Date(value));
+    };
+
+    const statusLabel = (status: PaymentStatus) => {
+        if (status === 'paid' || status === 'pending' || status === 'failed' || status === 'canceled') {
+            return t(`filters.${status}`);
+        }
+        return status;
+    };
+
     return (
         <AppLayout>
-            <Head title="Billing history" />
+            <Head title={t('title')} />
 
             <div className="mx-auto w-full max-w-6xl pb-10">
                 <motion.div
@@ -127,20 +133,20 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                                     <path d="M2 10h20" />
                                 </svg>
                             </span>
-                            Payments
+                            {t('eyebrow')}
                         </div>
                         <h1 className="font-[family-name:Outfit,sans-serif] text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                            Billing history
+                            {t('title')}
                         </h1>
                         <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/40">
-                            Review token purchases and payment status. Sensitive gateway details are never displayed.
+                            {t('subtitle')}
                         </p>
                     </div>
                     <Link
                         href="/pricing"
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-4 text-sm font-semibold text-white shadow-[0_12px_28px_-14px_rgba(255,87,51,0.9)] transition hover:brightness-110"
                     >
-                        Buy tokens
+                        {t('buyTokens')}
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-5-5 5 5-5 5" />
                         </svg>
@@ -153,13 +159,28 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                     transition={{ delay: 0.06 }}
                     className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4"
                 >
-                    <StatCard label="Purchases" value={stats.total_count.toLocaleString()} detail={`${stats.paid_count} completed`} accent="bg-sky-500/20" />
-                    <StatCard label="Tokens bought" value={stats.purchased_tokens.toLocaleString()} detail="From completed payments" accent="bg-[#FF5733]/25" />
-                    <StatCard label="Total paid" value={money(stats.paid_amount, 'DZD')} detail="Completed payments only" accent="bg-emerald-500/20" />
                     <StatCard
-                        label="Success rate"
+                        label={t('stats.purchases')}
+                        value={stats.total_count.toLocaleString(locale)}
+                        detail={t('stats.completed', { count: stats.paid_count })}
+                        accent="bg-sky-500/20"
+                    />
+                    <StatCard
+                        label={t('stats.tokensBought')}
+                        value={stats.purchased_tokens.toLocaleString(locale)}
+                        detail={t('stats.fromCompleted')}
+                        accent="bg-[#FF5733]/25"
+                    />
+                    <StatCard
+                        label={t('stats.totalPaid')}
+                        value={money(stats.paid_amount, 'DZD')}
+                        detail={t('stats.completedOnly')}
+                        accent="bg-emerald-500/20"
+                    />
+                    <StatCard
+                        label={t('stats.successRate')}
                         value={stats.total_count ? `${Math.round((stats.paid_count / stats.total_count) * 100)}%` : '—'}
-                        detail="Across all payment attempts"
+                        detail={t('stats.acrossAttempts')}
                         accent="bg-violet-500/20"
                     />
                 </motion.div>
@@ -172,22 +193,22 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                 >
                     <div className="flex flex-col gap-3 border-b border-white/[0.07] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                         <div>
-                            <h2 className="text-sm font-semibold text-white">Transactions</h2>
-                            <p className="mt-0.5 text-xs text-white/35">{payments.total.toLocaleString()} matching records</p>
+                            <h2 className="text-sm font-semibold text-white">{t('transactions')}</h2>
+                            <p className="mt-0.5 text-xs text-white/35">{t('matching', { count: payments.total.toLocaleString(locale) })}</p>
                         </div>
                         <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-black/20 p-1 scrollbar-hide">
-                            {FILTERS.map((filter) => (
+                            {FILTER_IDS.map((id) => (
                                 <button
-                                    key={filter.id}
+                                    key={id}
                                     type="button"
-                                    onClick={() => changeFilter(filter.id)}
+                                    onClick={() => changeFilter(id)}
                                     className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                                        filters.status === filter.id
+                                        filters.status === id
                                             ? 'bg-white/10 text-white shadow-sm'
                                             : 'text-white/40 hover:bg-white/5 hover:text-white/70'
                                     }`}
                                 >
-                                    {filter.label}
+                                    {t(`filters.${id}`)}
                                 </button>
                             ))}
                         </div>
@@ -201,19 +222,21 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                                     <path d="M8 15h4" />
                                 </svg>
                             </span>
-                            <h3 className="mt-4 text-sm font-semibold text-white">No payments found</h3>
+                            <h3 className="mt-4 text-sm font-semibold text-white">{t('emptyTitle')}</h3>
                             <p className="mt-1 text-xs text-white/35">
-                                {filters.status === 'all' ? 'Your token purchases will appear here.' : `You have no ${filters.status} payments.`}
+                                {filters.status === 'all'
+                                    ? t('emptyAll')
+                                    : t('emptyFiltered', { status: statusLabel(filters.status) })}
                             </p>
                         </div>
                     ) : (
                         <>
                             <div className="hidden grid-cols-[1.2fr_1fr_0.85fr_0.9fr_0.8fr] gap-4 border-b border-white/[0.06] px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-white/25 md:grid">
-                                <span>Reference</span>
-                                <span>Package</span>
-                                <span>Amount</span>
-                                <span>Date</span>
-                                <span className="text-end">Status</span>
+                                <span>{t('reference')}</span>
+                                <span>{t('package')}</span>
+                                <span>{t('amount')}</span>
+                                <span>{t('date')}</span>
+                                <span className="text-end">{t('status')}</span>
                             </div>
 
                             <div className="divide-y divide-white/[0.055]">
@@ -228,36 +251,40 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                                         <div className="hidden grid-cols-[1.2fr_1fr_0.85fr_0.9fr_0.8fr] items-center gap-4 md:grid">
                                             <div>
                                                 <p className="font-mono text-xs font-medium text-white/75">{payment.reference}</p>
-                                                <p className="mt-1 text-[11px] text-white/25">SofizPay · CIB/Edahabia</p>
+                                                <p className="mt-1 text-[11px] text-white/25">{t('gatewayNote')}</p>
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium capitalize text-white/75">{payment.package ?? 'Token pack'}</p>
-                                                <p className="mt-1 text-xs text-amber-300/70">{payment.tokens.toLocaleString()} tokens</p>
+                                                <p className="text-sm font-medium capitalize text-white/75">{payment.package ?? t('tokenPack')}</p>
+                                                <p className="mt-1 text-xs text-amber-300/70">
+                                                    {payment.tokens.toLocaleString(locale)} {tc('tokens')}
+                                                </p>
                                             </div>
                                             <p className="text-sm font-semibold tabular-nums text-white">{money(payment.amount, payment.currency)}</p>
                                             <p className="text-xs text-white/45">{dateTime(payment.paid_at ?? payment.created_at)}</p>
-                                            <div className="text-end"><StatusBadge status={payment.status} /></div>
+                                            <div className="text-end">
+                                                <StatusBadge status={payment.status} label={statusLabel(payment.status)} />
+                                            </div>
                                         </div>
 
                                         <div className="md:hidden">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
-                                                    <p className="truncate text-sm font-semibold capitalize text-white">{payment.package ?? 'Token pack'}</p>
+                                                    <p className="truncate text-sm font-semibold capitalize text-white">{payment.package ?? t('tokenPack')}</p>
                                                     <p className="mt-1 font-mono text-[11px] text-white/35">{payment.reference}</p>
                                                 </div>
-                                                <StatusBadge status={payment.status} />
+                                                <StatusBadge status={payment.status} label={statusLabel(payment.status)} />
                                             </div>
                                             <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-black/20 p-3">
                                                 <div>
-                                                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">Amount</p>
+                                                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">{t('amount')}</p>
                                                     <p className="mt-1 text-xs font-semibold text-white">{money(payment.amount, payment.currency)}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">Tokens</p>
-                                                    <p className="mt-1 text-xs font-semibold text-amber-300/80">{payment.tokens.toLocaleString()}</p>
+                                                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">{t('tokens')}</p>
+                                                    <p className="mt-1 text-xs font-semibold text-amber-300/80">{payment.tokens.toLocaleString(locale)}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">Date</p>
+                                                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25">{t('date')}</p>
                                                     <p className="mt-1 truncate text-xs text-white/55">{dateTime(payment.paid_at ?? payment.created_at)}</p>
                                                 </div>
                                             </div>
@@ -271,7 +298,7 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                     {payments.last_page > 1 && (
                         <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 sm:px-5">
                             <p className="text-xs text-white/30">
-                                {payments.from}–{payments.to} of {payments.total}
+                                {payments.from}–{payments.to} / {payments.total}
                             </p>
                             <div className="flex items-center gap-2">
                                 <Link
@@ -281,7 +308,7 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                                         payments.prev_page_url ? 'text-white/65 hover:bg-white/5 hover:text-white' : 'pointer-events-none opacity-30'
                                     }`}
                                 >
-                                    Previous
+                                    {t('previous')}
                                 </Link>
                                 <span className="text-xs tabular-nums text-white/35">{payments.current_page} / {payments.last_page}</span>
                                 <Link
@@ -291,7 +318,7 @@ export default function BillingHistory({ payments, filters, stats }: Props) {
                                         payments.next_page_url ? 'text-white/65 hover:bg-white/5 hover:text-white' : 'pointer-events-none opacity-30'
                                     }`}
                                 >
-                                    Next
+                                    {t('next')}
                                 </Link>
                             </div>
                         </div>

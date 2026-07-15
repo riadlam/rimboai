@@ -1,0 +1,53 @@
+{
+  "title": "Billing history",
+  "eyebrow": "Payments",
+  "subtitle": "Review token purchases and payment status. Sensitive gateway details are never displayed.",
+  "buyTokens": "Buy tokens",
+  "transactions": "Transactions",
+  "matching": "{{count}} matching records",
+  "emptyTitle": "No payments found",
+  "emptyAll": "Your token purchases will appear here.",
+  "emptyFiltered": "You have no {{status}} payments.",
+  "reference": "Reference",
+  "package": "Package",
+  "amount": "Amount",
+  "date": "Date",
+  "status": "Status",
+  "tokens": "Tokens",
+  "tokenPack": "Token pack",
+  "gatewayNote": "SofizPay · CIB/Edahabia",
+  "previous": "Previous",
+  "next": "Next",
+  "filters": {
+    "all": "All",
+    "paid": "Paid",
+    "pending": "Pending",
+    "failed": "Failed",
+    "canceled": "Canceled"
+  },
+  "stats": {
+    "purchases": "Purchases",
+    "completed": "{{count}} completed",
+    "tokensBought": "Tokens bought",
+    "fromCompleted": "From completed payments",
+    "totalPaid": "Total paid",
+    "completedOnly": "Completed payments only",
+    "successRate": "Success rate",
+    "acrossAttempts": "Across all payment attempts"
+  },
+  "modal": {
+    "title": "Buy tokens",
+    "subtitle": "Top up your Lab balance. Prices follow the live catalogue.",
+    "currency": "Currency",
+    "hint": "Select a pack. SofizPay processes the final payment securely in Algerian Dinar.",
+    "emptyPacks": "No token packs available right now.",
+    "popular": "Popular",
+    "bestValue": "Best value",
+    "secureNote": "Secure SofizPay checkout. Tokens are credited after server verification and never expire.",
+    "chargeDzd": "You will be charged {{amount}} DZD at checkout.",
+    "starting": "Starting secure checkout…",
+    "payCta": "Pay {{amount}} DZD · {{tokens}} tokens",
+    "selectPack": "Select a pack",
+    "close": "Close"
+  }
+}

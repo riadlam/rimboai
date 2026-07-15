@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 
 export default function AuthLayout({
@@ -11,6 +12,8 @@ export default function AuthLayout({
     title: string;
     subtitle: string;
 }) {
+    const { t } = useTranslation();
+
     return (
         <div className="relative flex min-h-screen items-center justify-center bg-[#0d0d12] px-4 py-12 font-sans text-[#f1f5f9] antialiased">
             <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -52,7 +55,7 @@ export default function AuthLayout({
                         <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
                         </svg>
-                        Back to home
+                        {t('backToHome', { ns: 'common' })}
                     </Link>
                 </div>
             </motion.div>

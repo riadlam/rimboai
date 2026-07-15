@@ -1,6 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import VideoThumb from '@/Components/VideoThumb';
 import { apiPost } from '@/lib/api';
@@ -40,8 +41,11 @@ export type TrendTemplate = {
     created_at?: string | null;
 };
 
-const PILLS = ['All', 'Featured', 'Videos', 'Images', 'Music'] as const;
-const SORTS = ['Most Popular', 'Newest', 'Credits: Low → High', 'Credits: High → Low'] as const;
+type PillId = 'all' | 'featured' | 'videos' | 'images' | 'music';
+type SortId = 'popular' | 'newest' | 'creditsAsc' | 'creditsDesc';
+
+const PILLS: PillId[] = ['all', 'featured', 'videos', 'images', 'music'];
+const SORTS: SortId[] = ['popular', 'newest', 'creditsAsc', 'creditsDesc'];
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -50,9 +54,10 @@ type Props = {
 };
 
 export default function Trends({ templates: initialTemplates = [] }: Props) {
+    const { t } = useTranslation('trends');
     return (
         <AppLayout>
-            <Head title="Trends" />
+            <Head title={t('title')} />
             <TrendsWorkspace initialTemplates={initialTemplates} />
         </AppLayout>
     );
@@ -89,12 +94,13 @@ function buildTrendLabDraft(t: TrendTemplate): LabReuseDraft {
 }
 
 function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate[] }) {
+    const { t } = useTranslation('trends');
     const { props } = usePage<PageProps>();
     const [templates, setTemplates] = useState(initialTemplates);
     const [query, setQuery] = useState('');
-    const [pill, setPill] = useState<(typeof PILLS)[number]>('All');
-    const [model, setModel] = useState('All Models');
-    const [sort, setSort] = useState<(typeof SORTS)[number]>('Most Popular');
+    const [pill, setPill] = useState<PillId>('all');
+    const [model, setModel] = useState('__all__');
+    const [sort, setSort] = useState<SortId>('popular');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [usingId, setUsingId] = useState<string | null>(null);
 
@@ -102,27 +108,34 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
         setTemplates(initialTemplates);
     }, [initialTemplates]);
 
+    const allModelsLabel = t('allModels');
+
     const modelOptions = useMemo(() => {
-        const names = Array.from(new Set(templates.map((t) => t.model).filter(Boolean))).sort();
-        return ['All Models', ...names];
-    }, [templates]);
+        const names = Array.from(new Set(templates.map((row) => row.model).filter(Boolean))).sort();
+        return [{ value: '__all__', label: allModelsLabel }, ...names.map((n) => ({ value: n, label: n }))];
+    }, [templates, allModelsLabel]);
+
+    const sortOptions = useMemo(
+        () => SORTS.map((id) => ({ value: id, label: t(`sorts.${id}`) })),
+        [t],
+    );
 
     const sortList = (list: TrendTemplate[]) =>
         [...list].sort((a, b) => {
-            if (sort === 'Credits: Low → High') return a.credits - b.credits;
-            if (sort === 'Credits: High → Low') return b.credits - a.credits;
-            if (sort === 'Newest') return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+            if (sort === 'creditsAsc') return a.credits - b.credits;
+            if (sort === 'creditsDesc') return b.credits - a.credits;
+            if (sort === 'newest') return String(b.created_at || '').localeCompare(String(a.created_at || ''));
             if (a.featured !== b.featured) return Number(b.featured) - Number(a.featured);
             return b.uses - a.uses || String(b.created_at || '').localeCompare(String(a.created_at || ''));
         });
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        const list = templates.filter((t) => {
-            if (q && !`${t.name} ${t.creator} ${t.category} ${t.model} ${t.prompt}`.toLowerCase().includes(q)) {
+        const list = templates.filter((row) => {
+            if (q && !`${row.name} ${row.creator} ${row.category} ${row.model} ${row.prompt}`.toLowerCase().includes(q)) {
                 return false;
             }
-            if (model !== 'All Models' && t.model !== model) return false;
+            if (model !== '__all__' && row.model !== model) return false;
             return true;
         });
         return sortList(list);
@@ -130,44 +143,44 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
     }, [templates, query, model, sort]);
 
     const groups = useMemo(() => {
-        const featured = filtered.filter((t) => t.featured);
+        const featured = filtered.filter((row) => row.featured);
         return {
             featured,
-            videos: filtered.filter((t) => t.type === 'video' && !t.featured),
-            images: filtered.filter((t) => t.type === 'image' && !t.featured),
-            music: filtered.filter((t) => t.type === 'music' && !t.featured),
+            videos: filtered.filter((row) => row.type === 'video' && !row.featured),
+            images: filtered.filter((row) => row.type === 'image' && !row.featured),
+            music: filtered.filter((row) => row.type === 'music' && !row.featured),
         };
     }, [filtered]);
 
-    const hasActiveFilters = pill !== 'All' || model !== 'All Models' || query.trim().length > 0;
+    const hasActiveFilters = pill !== 'all' || model !== '__all__' || query.trim().length > 0;
 
     const clearFilters = () => {
         setQuery('');
-        setPill('All');
-        setModel('All Models');
-        setSort('Most Popular');
+        setPill('all');
+        setModel('__all__');
+        setSort('popular');
     };
 
     const open = (id: string) => setSelectedId(id);
-    const selected = selectedId ? templates.find((t) => t.id === selectedId) ?? null : null;
+    const selected = selectedId ? templates.find((row) => row.id === selectedId) ?? null : null;
 
-    const useInLab = async (t: TrendTemplate) => {
+    const useInLab = async (row: TrendTemplate) => {
         if (!props.auth.user) {
             router.visit('/?login');
             return;
         }
         if (usingId) return;
-        setUsingId(t.id);
+        setUsingId(row.id);
         try {
             const res = await apiPost<{ ok: boolean; uses: number; item: TrendTemplate }>('/trends/use', {
-                type: t.type,
-                id: t.creation_id,
+                type: row.type,
+                id: row.creation_id,
             });
-            const updated = { ...(res.item ?? t), uses: res.uses };
-            setTemplates((prev) => prev.map((row) => (row.id === t.id ? updated : row)));
+            const updated = { ...(res.item ?? row), uses: res.uses };
+            setTemplates((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
             saveLabReuseDraft(buildTrendLabDraft(updated));
             setSelectedId(null);
-            router.visit(labHrefForType(t.type));
+            router.visit(labHrefForType(row.type));
         } catch {
             setUsingId(null);
         }
@@ -186,30 +199,30 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
         };
     }, [selectedId]);
 
-    const pillCount = (p: (typeof PILLS)[number]) => {
-        if (p === 'All') return filtered.length;
-        if (p === 'Featured') return groups.featured.length;
-        if (p === 'Videos') return filtered.filter((t) => t.type === 'video').length;
-        if (p === 'Images') return filtered.filter((t) => t.type === 'image').length;
-        return filtered.filter((t) => t.type === 'music').length;
+    const pillCount = (p: PillId) => {
+        if (p === 'all') return filtered.length;
+        if (p === 'featured') return groups.featured.length;
+        if (p === 'videos') return filtered.filter((row) => row.type === 'video').length;
+        if (p === 'images') return filtered.filter((row) => row.type === 'image').length;
+        return filtered.filter((row) => row.type === 'music').length;
     };
 
     // Sections rendered for the current pill.
     const sections: { key: string; title: string; sub: string; icon: 'star' | 'video' | 'image' | 'music'; items: TrendTemplate[] }[] =
-        pill === 'All'
+        pill === 'all'
             ? [
-                  { key: 'featured', title: 'Featured', sub: 'Hand-picked community creations', icon: 'star', items: groups.featured },
-                  { key: 'videos', title: 'Videos', sub: 'Motion creations from the community', icon: 'video', items: groups.videos },
-                  { key: 'images', title: 'Images', sub: 'Stills and artwork', icon: 'image', items: groups.images },
-                  { key: 'music', title: 'Music', sub: 'Tracks and soundscapes', icon: 'music', items: groups.music },
+                  { key: 'featured', title: t('sections.featuredTitle'), sub: t('sections.featuredSub'), icon: 'star', items: groups.featured },
+                  { key: 'videos', title: t('sections.videosTitle'), sub: t('sections.videosSub'), icon: 'video', items: groups.videos },
+                  { key: 'images', title: t('sections.imagesTitle'), sub: t('sections.imagesSub'), icon: 'image', items: groups.images },
+                  { key: 'music', title: t('sections.musicTitle'), sub: t('sections.musicSub'), icon: 'music', items: groups.music },
               ].filter((s) => s.items.length > 0)
-            : pill === 'Featured'
-              ? [{ key: 'featured', title: 'Featured', sub: 'Hand-picked community creations', icon: 'star', items: groups.featured }]
-              : pill === 'Videos'
-                ? [{ key: 'videos', title: 'Videos', sub: 'Motion creations from the community', icon: 'video', items: filtered.filter((t) => t.type === 'video') }]
-                : pill === 'Images'
-                  ? [{ key: 'images', title: 'Images', sub: 'Stills and artwork', icon: 'image', items: filtered.filter((t) => t.type === 'image') }]
-                  : [{ key: 'music', title: 'Music', sub: 'Tracks and soundscapes', icon: 'music', items: filtered.filter((t) => t.type === 'music') }];
+            : pill === 'featured'
+              ? [{ key: 'featured', title: t('sections.featuredTitle'), sub: t('sections.featuredSub'), icon: 'star', items: groups.featured }]
+              : pill === 'videos'
+                ? [{ key: 'videos', title: t('sections.videosTitle'), sub: t('sections.videosSub'), icon: 'video', items: filtered.filter((row) => row.type === 'video') }]
+                : pill === 'images'
+                  ? [{ key: 'images', title: t('sections.imagesTitle'), sub: t('sections.imagesSub'), icon: 'image', items: filtered.filter((row) => row.type === 'image') }]
+                  : [{ key: 'music', title: t('sections.musicTitle'), sub: t('sections.musicSub'), icon: 'music', items: filtered.filter((row) => row.type === 'music') }];
 
     const totalVisible = sections.reduce((acc, s) => acc + s.items.length, 0);
 
@@ -236,7 +249,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search by prompt, creator, or model..."
+                            placeholder={t('search')}
                             className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#0c0c10] pe-10 ps-10 text-[14px] text-white outline-none placeholder:text-white/30 transition focus:border-[#FF5733]/40 focus:bg-[#101014] focus:ring-2 focus:ring-[#FF5733]/15"
                         />
                         {query && (
@@ -244,7 +257,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
                                 type="button"
                                 onClick={() => setQuery('')}
                                 className="absolute end-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/[0.06] hover:text-white"
-                                aria-label="Clear search"
+                                aria-label={t('clearSearch')}
                             >
                                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path d="M18 6 6 18M6 6l12 12" />
@@ -255,7 +268,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
 
                     <div className="flex flex-wrap gap-2 md:flex-nowrap">
                         <FilterSelect value={model} options={modelOptions} onChange={setModel} className="min-w-[140px] flex-1 md:w-[160px] md:flex-none" />
-                        <FilterSelect value={sort} options={[...SORTS]} onChange={setSort} className="min-w-[150px] flex-1 md:w-[180px] md:flex-none" />
+                        <FilterSelect value={sort} options={sortOptions} onChange={(v) => setSort(v as SortId)} className="min-w-[150px] flex-1 md:w-[180px] md:flex-none" />
                     </div>
                 </div>
 
@@ -274,7 +287,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
                                             : 'bg-white/[0.04] text-white/50 ring-1 ring-white/[0.06] hover:bg-white/[0.07] hover:text-white/80'
                                     }`}
                                 >
-                                    {p}
+                                    {t(`pills.${p}`)}
                                     <span
                                         className={`rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums ${
                                             active ? 'bg-white/20 text-white' : 'bg-white/[0.06] text-white/35'
@@ -289,7 +302,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
 
                     <div className="flex items-center gap-2 text-[12px] text-white/35">
                         <span>
-                            <span className="font-semibold text-white/70">{totalVisible}</span> creation{totalVisible === 1 ? '' : 's'}
+                            {t('creationsCount', { count: totalVisible })}
                         </span>
                         {hasActiveFilters && (
                             <button
@@ -297,7 +310,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
                                 onClick={clearFilters}
                                 className="rounded-lg px-2 py-1 font-medium text-[#FF5733] transition hover:bg-[#FF5733]/10"
                             >
-                                Reset
+                                {t('reset')}
                             </button>
                         )}
                     </div>
@@ -306,11 +319,11 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
 
             {templates.length === 0 ? (
                 <EmptyState
-                    title="No public creations yet"
-                    sub="Publish a completed image, video, or music creation from History to show it here."
+                    title={t('emptyPublicTitle')}
+                    sub={t('emptyPublicSub')}
                 />
             ) : totalVisible === 0 ? (
-                <EmptyState title="No creations match your filters" action={<button type="button" onClick={clearFilters} className="mt-3 rounded-full bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white/70 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white">Clear filters</button>} />
+                <EmptyState title={t('emptyFiltered')} action={<button type="button" onClick={clearFilters} className="mt-3 rounded-full bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white/70 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white">{t('clearFilters')}</button>} />
             ) : (
                 <div className="space-y-10">
                     {sections.map((section) => (
@@ -387,14 +400,15 @@ function Section({
     );
 }
 
-function TemplateCard({ template: t, index, onOpen }: { template: TrendTemplate; index: number; onOpen: () => void }) {
-    const showVideo = t.coverType === 'video' && Boolean(t.video_url || t.cover);
-    const showImage = !showVideo && (t.coverType === 'image' || (t.coverType === 'audio' && !isAudioUrl(t.cover)));
-    const videoSrc = t.video_url || t.cover;
+function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTemplate; index: number; onOpen: () => void }) {
+    const { t } = useTranslation('trends');
+    const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
+    const showImage = !showVideo && (tmpl.coverType === 'image' || (tmpl.coverType === 'audio' && !isAudioUrl(tmpl.cover)));
+    const videoSrc = tmpl.video_url || tmpl.cover;
     const videoPoster =
-        t.thumbnail_url ||
-        t.samples.find((s) => s && s !== videoSrc && !/\.(mp4|webm|mov)(\?|$)/i.test(s)) ||
-        (t.cover && t.cover !== videoSrc && !/\.(mp4|webm|mov)(\?|$)/i.test(t.cover) ? t.cover : undefined);
+        tmpl.thumbnail_url ||
+        tmpl.samples.find((s) => s && s !== videoSrc && !/\.(mp4|webm|mov)(\?|$)/i.test(s)) ||
+        (tmpl.cover && tmpl.cover !== videoSrc && !/\.(mp4|webm|mov)(\?|$)/i.test(tmpl.cover) ? tmpl.cover : undefined);
 
     return (
         <motion.div
@@ -412,7 +426,7 @@ function TemplateCard({ template: t, index, onOpen }: { template: TrendTemplate;
                 {/* gradient glow ring on hover */}
                 <span className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 shadow-[0_24px_60px_-24px_rgba(255,87,51,0.55)] transition-opacity duration-300 group-hover:opacity-100" />
 
-                <motion.div layoutId={`trend-media-${t.id}`} className="relative aspect-[4/5] overflow-hidden bg-zinc-900">
+                <motion.div layoutId={`trend-media-${tmpl.id}`} className="relative aspect-[4/5] overflow-hidden bg-zinc-900">
                     {showVideo ? (
                         <VideoThumb
                             src={videoSrc}
@@ -422,13 +436,13 @@ function TemplateCard({ template: t, index, onOpen }: { template: TrendTemplate;
                         />
                     ) : showImage ? (
                         <img
-                            src={t.cover}
-                            alt={t.name}
+                            src={tmpl.cover}
+                            alt={tmpl.name}
                             className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                             loading={index < 8 ? 'eager' : 'lazy'}
                         />
                     ) : (
-                        <MusicArt name={t.name} />
+                        <MusicArt name={tmpl.name} />
                     )}
 
                     {/* readability gradient */}
@@ -437,39 +451,39 @@ function TemplateCard({ template: t, index, onOpen }: { template: TrendTemplate;
                     {/* top badges */}
                     <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
                         <div className="flex flex-wrap gap-1.5">
-                            {t.featured && (
+                            {tmpl.featured && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black shadow-lg">
                                     <IconSparkles className="h-3 w-3" />
-                                    Featured
+                                    {t('pills.featured')}
                                 </span>
                             )}
-                            {t.hot && !t.featured && (
+                            {tmpl.hot && !tmpl.featured && (
                                 <span className="inline-flex items-center rounded-full bg-[#fc0a35] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg">
-                                    Hot
+                                    {t('hot')}
                                 </span>
                             )}
                         </div>
                         <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/85 backdrop-blur-md ring-1 ring-white/10">
-                            <TypeIcon type={t.type} />
-                            {t.type}
+                            <TypeIcon type={tmpl.type} />
+                            {tmpl.type}
                         </span>
                     </div>
 
                     {/* bottom overlay content */}
                     <div className="absolute inset-x-0 bottom-0 p-3.5">
-                        <h3 className="line-clamp-1 text-[15px] font-semibold text-white drop-shadow">{t.name}</h3>
+                        <h3 className="line-clamp-1 text-[15px] font-semibold text-white drop-shadow">{tmpl.name}</h3>
                         <div className="mt-2 flex items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
                                 <img
                                     className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/20"
-                                    alt={t.creator}
-                                    src={t.avatar}
+                                    alt={tmpl.creator}
+                                    src={tmpl.avatar}
                                 />
-                                <span className="truncate text-[12px] font-medium text-white/70">{t.creator}</span>
+                                <span className="truncate text-[12px] font-medium text-white/70">{tmpl.creator}</span>
                             </div>
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/80 backdrop-blur-md">
                                 <IconUsers className="h-3 w-3" />
-                                {t.uses} uses
+                                {tmpl.uses} {t('stats.uses')}
                             </span>
                         </div>
                     </div>
@@ -478,7 +492,7 @@ function TemplateCard({ template: t, index, onOpen }: { template: TrendTemplate;
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-[13px] font-semibold text-white shadow-xl backdrop-blur-md ring-1 ring-white/25">
                             <IconWand className="h-4 w-4" />
-                            View & Remix
+                            {t('tryThis')}
                         </span>
                     </div>
                 </motion.div>
@@ -488,7 +502,7 @@ function TemplateCard({ template: t, index, onOpen }: { template: TrendTemplate;
 }
 
 function TemplateDetailModal({
-    template: t,
+    template: tmpl,
     onClose,
     onUse,
     using,
@@ -498,13 +512,14 @@ function TemplateDetailModal({
     onUse: () => void;
     using: boolean;
 }) {
+    const { t } = useTranslation('trends');
     const [activeSample, setActiveSample] = useState(0);
     const [isMobile, setIsMobile] = useState(() =>
         typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : true,
     );
-    const samples = t.samples.length ? t.samples : [t.cover];
-    const activeSrc = samples[Math.min(activeSample, samples.length - 1)] || t.cover;
-    const showVideo = t.coverType === 'video' && Boolean(t.video_url || t.cover);
+    const samples = tmpl.samples.length ? tmpl.samples : [tmpl.cover];
+    const activeSrc = samples[Math.min(activeSample, samples.length - 1)] || tmpl.cover;
+    const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
 
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 767px)');
@@ -523,7 +538,7 @@ function TemplateDetailModal({
         <>
             {showVideo ? (
                 <video
-                    src={t.video_url || t.cover}
+                    src={tmpl.video_url || tmpl.cover}
                     className={`size-full ${isMobile ? 'object-contain' : 'object-cover'}`}
                     autoPlay
                     muted
@@ -531,11 +546,11 @@ function TemplateDetailModal({
                     playsInline
                     controls
                 />
-            ) : t.type === 'music' ? (
+            ) : tmpl.type === 'music' ? (
                 <div className="flex size-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#1c1226] via-[#12121a] to-[#0b1a17] p-6">
-                    {t.cover && !isAudioUrl(t.cover) ? (
+                    {tmpl.cover && !isAudioUrl(tmpl.cover) ? (
                         <img
-                            src={t.cover}
+                            src={tmpl.cover}
                             alt=""
                             className={`rounded-3xl object-cover shadow-2xl ring-1 ring-white/10 ${isMobile ? 'h-44 w-44' : 'h-52 w-52'}`}
                         />
@@ -548,10 +563,10 @@ function TemplateDetailModal({
                             <IconMusic className="h-16 w-16 text-white/40" />
                         </span>
                     )}
-                    {t.audio_url && <audio src={t.audio_url} controls autoPlay className="w-full max-w-md" />}
+                    {tmpl.audio_url && <audio src={tmpl.audio_url} controls autoPlay className="w-full max-w-md" />}
                 </div>
             ) : (
-                <img src={activeSrc} alt={t.name} className={`size-full ${isMobile ? 'object-contain' : 'object-cover'}`} />
+                <img src={activeSrc} alt={tmpl.name} className={`size-full ${isMobile ? 'object-contain' : 'object-cover'}`} />
             )}
         </>
     );
@@ -576,14 +591,14 @@ function TemplateDetailModal({
                     className="relative flex h-full w-full flex-col bg-black"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <motion.div layoutId={`trend-media-${t.id}`} className="relative min-h-0 flex-1 overflow-hidden">
+                    <motion.div layoutId={`trend-media-${tmpl.id}`} className="relative min-h-0 flex-1 overflow-hidden">
                         {mediaEl}
                     </motion.div>
 
                     <button
                         type="button"
-                        title="Close"
-                        aria-label="Close"
+                        title={t('close')}
+                        aria-label={t('close')}
                         onClick={onClose}
                         className="absolute end-3 top-[max(0.75rem,env(safe-area-inset-top))] z-30 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75"
                     >
@@ -626,7 +641,7 @@ function TemplateDetailModal({
                             >
                                 <IconWand className="h-4 w-4" />
                             </motion.span>
-                            {using ? 'Opening lab…' : 'Use Template'}
+                            {using ? t('openingLab') : t('useTemplate')}
                         </motion.button>
                     </div>
                 </motion.div>
@@ -640,31 +655,31 @@ function TemplateDetailModal({
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="relative flex min-h-0 flex-1 flex-col bg-black md:max-w-[58%]">
-                        <motion.div layoutId={`trend-media-${t.id}`} className="relative aspect-auto min-h-0 w-full flex-1 overflow-hidden">
+                        <motion.div layoutId={`trend-media-${tmpl.id}`} className="relative aspect-auto min-h-0 w-full flex-1 overflow-hidden">
                             {mediaEl}
                             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
-                            {(t.featured || t.hot) && (
+                            {(tmpl.featured || tmpl.hot) && (
                                 <div className="absolute start-3 top-3 flex gap-1.5">
-                                    {t.hot && !t.featured && (
-                                        <span className="rounded-full bg-[#fc0a35] px-2.5 py-1 text-[11px] font-bold uppercase text-white">Hot</span>
+                                    {tmpl.hot && !tmpl.featured && (
+                                        <span className="rounded-full bg-[#fc0a35] px-2.5 py-1 text-[11px] font-bold uppercase text-white">{t('hot')}</span>
                                     )}
-                                    {t.featured && (
+                                    {tmpl.featured && (
                                         <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 px-2.5 py-1 text-[11px] font-bold uppercase text-black">
                                             <IconSparkles className="h-3 w-3" />
-                                            Featured
+                                            {t('pills.featured')}
                                         </span>
                                     )}
                                 </div>
                             )}
                         </motion.div>
 
-                        {!showVideo && t.type !== 'music' && samples.length > 1 && (
+                        {!showVideo && tmpl.type !== 'music' && samples.length > 1 && (
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1, transition: { delay: 0.2 } }}
                                 className="shrink-0 border-t border-white/[0.06] bg-[#0a0a0e] p-3"
                             >
-                                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">Outputs</p>
+                                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">{t('outputs')}</p>
                                 <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
                                     {samples.map((src, i) => (
                                         <button
@@ -694,17 +709,17 @@ function TemplateDetailModal({
                             className="flex items-start justify-between gap-3 border-b border-white/[0.07] px-4 py-4 sm:px-5"
                         >
                             <div className="min-w-0">
-                                <h2 className="truncate text-lg font-semibold tracking-tight text-white sm:text-xl">{t.name}</h2>
+                                <h2 className="truncate text-lg font-semibold tracking-tight text-white sm:text-xl">{tmpl.name}</h2>
                                 <div className="mt-2 flex items-center gap-2">
-                                    <img src={t.avatar} alt={t.creator} className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-white/10" />
-                                    <span className="truncate text-sm text-zinc-400">by {t.creator}</span>
+                                    <img src={tmpl.avatar} alt={tmpl.creator} className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-white/10" />
+                                    <span className="truncate text-sm text-zinc-400">by {tmpl.creator}</span>
                                 </div>
                             </div>
                             <button
                                 type="button"
                                 onClick={onClose}
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-                                aria-label="Close"
+                                aria-label={t('close')}
                             >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path d="M18 6 6 18M6 6l12 12" />
@@ -714,33 +729,35 @@ function TemplateDetailModal({
 
                         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 scrollbar-thin sm:px-5">
                             <motion.div custom={1} variants={contentReveal} initial="hidden" animate="show" className="grid grid-cols-3 gap-2">
-                                <Stat label="Uses" value={String(t.uses)} />
-                                <Stat label="Type" value={t.type} />
-                                <Stat label="Credits" value={t.credits > 0 ? String(t.credits) : '—'} />
+                                <Stat label={t('stats.uses')} value={String(tmpl.uses)} />
+                                <Stat label={t('stats.type')} value={tmpl.type} />
+                                <Stat label={t('stats.credits')} value={tmpl.credits > 0 ? String(tmpl.credits) : '—'} />
                             </motion.div>
 
-                            {t.description && (
+                            {tmpl.description && (
                                 <motion.div custom={2} variants={contentReveal} initial="hidden" animate="show" className="space-y-1.5">
-                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">Prompt</p>
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">{t('prompt')}</p>
                                     <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-[13px] leading-relaxed text-zinc-300">
-                                        {t.description}
+                                        {tmpl.description}
                                     </p>
                                 </motion.div>
                             )}
 
                             <motion.div custom={3} variants={contentReveal} initial="hidden" animate="show" className="flex flex-wrap gap-1.5">
-                                <Chip>{t.model}</Chip>
-                                {t.aspect && <Chip>{t.aspect}</Chip>}
-                                {t.resolution && <Chip>{t.resolution}</Chip>}
-                                {t.duration != null && t.duration !== '' && (
+                                <Chip>{tmpl.model}</Chip>
+                                {tmpl.aspect && <Chip>{tmpl.aspect}</Chip>}
+                                {tmpl.resolution && <Chip>{tmpl.resolution}</Chip>}
+                                {tmpl.duration != null && tmpl.duration !== '' && (
                                     <Chip>
-                                        {t.duration === 'auto'
-                                            ? 'Auto'
-                                            : `${t.duration}${typeof t.duration === 'number' || /^\d+$/.test(String(t.duration)) ? 's' : ''}`}
+                                        {tmpl.duration === 'auto'
+                                            ? t('auto')
+                                            : `${tmpl.duration}${typeof tmpl.duration === 'number' || /^\d+$/.test(String(tmpl.duration)) ? 's' : ''}`}
                                     </Chip>
                                 )}
-                                {t.type === 'video' && t.generate_audio != null && <Chip>{t.generate_audio ? 'Audio on' : 'Audio off'}</Chip>}
-                                {t.type === 'image' && t.quantity && t.quantity > 1 && <Chip>×{t.quantity}</Chip>}
+                                {tmpl.type === 'video' && tmpl.generate_audio != null && (
+                                    <Chip>{tmpl.generate_audio ? t('audioOn') : t('audioOff')}</Chip>
+                                )}
+                                {tmpl.type === 'image' && tmpl.quantity && tmpl.quantity > 1 && <Chip>×{tmpl.quantity}</Chip>}
                             </motion.div>
                         </div>
 
@@ -758,7 +775,7 @@ function TemplateDetailModal({
                                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#E04520] text-[14px] font-semibold text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
                             >
                                 <IconWand className="h-4 w-4" />
-                                {using ? 'Opening lab…' : 'Use Template'}
+                                {using ? t('openingLab') : t('useTemplate')}
                             </button>
                         </motion.div>
                     </div>
@@ -814,7 +831,7 @@ function FilterSelect({
     className,
 }: {
     value: string;
-    options: string[];
+    options: { value: string; label: string }[];
     onChange: (v: string) => void;
     className?: string;
 }) {
@@ -826,8 +843,8 @@ function FilterSelect({
                 className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/[0.08] bg-[#0c0c10] pe-9 ps-3.5 text-[13px] text-white/85 outline-none transition focus:border-[#FF5733]/40 focus:ring-2 focus:ring-[#FF5733]/15"
             >
                 {options.map((opt) => (
-                    <option key={opt} value={opt} className="bg-[#121217] text-zinc-100">
-                        {opt}
+                    <option key={opt.value} value={opt.value} className="bg-[#121217] text-zinc-100">
+                        {opt.label}
                     </option>
                 ))}
             </select>

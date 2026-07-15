@@ -1,0 +1,64 @@
+{
+  "title": "History",
+  "tabs": {
+    "image": "Image",
+    "video": "Video",
+    "audio": "Audio",
+    "music": "Music",
+    "archived": "Archived"
+  },
+  "search": {
+    "image": "Search image by prompt and similarity",
+    "video": "Search video by prompt",
+    "audio": "Search audio by title or script",
+    "music": "Search music by style or title",
+    "archived": "Search archived items"
+  },
+  "select": {
+    "image": "Select Image",
+    "video": "Select Video",
+    "audio": "Select Audio",
+    "music": "Select Track",
+    "generic": "Select",
+    "done": "Done"
+  },
+  "filters": "Filters",
+  "time": {
+    "all": "All time",
+    "1d": "Past 1 day",
+    "3d": "Past 3 days",
+    "7d": "Past 7 days"
+  },
+  "layout": "Layout",
+  "favorites": "Favorites",
+  "searchBtn": "Search",
+  "deleteN": "Delete ({{count}})",
+  "empty": {
+    "imageTitle": "No images yet",
+    "imageSub": "Generate images in the lab to see them here",
+    "videoTitle": "No videos yet",
+    "videoSub": "Create a video to populate your history",
+    "audioTitle": "No voiceovers yet",
+    "audioSub": "Generate speech in Voice to see it here",
+    "musicTitle": "No music yet",
+    "musicSub": "Create a track in Music Studio to see it here",
+    "archivedTitle": "No archived items",
+    "archivedSub": "Archived generations will appear here"
+  },
+  "actions": {
+    "play": "Play",
+    "pause": "Pause",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite",
+    "publish": "Publish to Trends",
+    "publicOnTrends": "Public on Trends",
+    "feature": "Feature",
+    "featured": "Featured",
+    "delete": "Delete",
+    "reuse": "Reuse in Lab",
+    "download": "Download"
+  },
+  "untitledTrack": "Untitled Track",
+  "voiceFallback": "Voice",
+  "loading": "Loading history…"
+}

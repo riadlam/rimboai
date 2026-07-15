@@ -1,0 +1,51 @@
+{
+  "title": "Tendances",
+  "search": "Rechercher par prompt, créateur ou modèle...",
+  "clearSearch": "Effacer la recherche",
+  "pills": {
+    "all": "Tout",
+    "featured": "Sélection",
+    "videos": "Vidéos",
+    "images": "Images",
+    "music": "Musique"
+  },
+  "allModels": "Tous les modèles",
+  "sorts": {
+    "popular": "Les plus populaires",
+    "newest": "Les plus récents",
+    "creditsAsc": "Crédits : bas → haut",
+    "creditsDesc": "Crédits : haut → bas"
+  },
+  "creationsCount": "{{count}} créations",
+  "reset": "Réinitialiser",
+  "clearFilters": "Effacer les filtres",
+  "sections": {
+    "featuredTitle": "Sélection",
+    "featuredSub": "Créations communautaires sélectionnées",
+    "videosTitle": "Vidéos",
+    "videosSub": "Créations en mouvement de la communauté",
+    "imagesTitle": "Images",
+    "imagesSub": "Images fixes et œuvres",
+    "musicTitle": "Musique",
+    "musicSub": "Titres et ambiances sonores"
+  },
+  "emptyPublicTitle": "Aucune création publique pour l'instant",
+  "emptyPublicSub": "Publiez une image, une vidéo ou une musique terminée depuis l'Historique pour l'afficher ici.",
+  "emptyFiltered": "Aucune création ne correspond à vos filtres",
+  "useTemplate": "Utiliser le modèle",
+  "openingLab": "Ouverture du Lab…",
+  "hot": "Tendance",
+  "outputs": "Sorties",
+  "prompt": "Prompt",
+  "stats": {
+    "uses": "Utilisations",
+    "type": "Type",
+    "credits": "Crédits"
+  },
+  "audioOn": "Audio activé",
+  "audioOff": "Audio désactivé",
+  "auto": "Auto",
+  "close": "Fermer",
+  "credits": "{{count}} crédits",
+  "tryThis": "Essayer ceci"
+}

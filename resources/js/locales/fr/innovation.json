@@ -1,0 +1,38 @@
+{
+  "title": "Innovation",
+  "search": "Rechercher des prompts...",
+  "backHome": "Retour à l'accueil",
+  "tabs": {
+    "images": "Images",
+    "videos": "Vidéos",
+    "music": "Musique"
+  },
+  "empty": "Aucun prompt trouvé.",
+  "postNotFoundTitle": "Publication introuvable",
+  "postNotFound": "Cette publication est introuvable.",
+  "prompt": "Prompt",
+  "copy": "Copier",
+  "copied": "Copié",
+  "labOptions": "Options du Lab",
+  "useIn": "Utiliser dans {{lab}}",
+  "opening": "Ouverture…",
+  "browseMore": "Voir plus",
+  "labs": {
+    "image": "Lab Image",
+    "video": "Lab Vidéo",
+    "music": "Lab Musique"
+  },
+  "chips": {
+    "autoDuration": "Durée auto",
+    "audioOn": "Audio activé",
+    "audioOff": "Audio désactivé",
+    "variations": "Variations",
+    "styleSet": "Style défini"
+  },
+  "readMore": "Lire la suite",
+  "tryPrompt": "Essayer dans le Lab",
+  "back": "Retour",
+  "related": "Similaires",
+  "categories": "Catégories",
+  "published": "Publié"
+}

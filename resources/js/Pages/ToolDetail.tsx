@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import FileUploader from '@/Components/FileUploader';
 import Toggle from '@/Components/Toggle';
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export default function ToolDetail({ tool }: Props) {
+    const { t } = useTranslation('tools');
     const [model, setModel] = useState('auto');
     const [mode, setMode] = useState('general');
     const [scale, setScale] = useState('2x');
@@ -54,29 +56,29 @@ export default function ToolDetail({ tool }: Props) {
                 <div className="w-full min-w-0 shrink-0 space-y-5 overflow-y-auto scrollbar-thin lg:w-[320px] xl:w-[400px]">
                     <div>
                         <h1 className="text-2xl font-bold text-text-primary dark:text-[var(--dark-text-primary)]">{tool.name}</h1>
-                        <p className="mt-1 text-sm text-text-tertiary dark:text-[var(--dark-text-tertiary)]">AI-powered video tool</p>
+                        <p className="mt-1 text-sm text-text-tertiary dark:text-[var(--dark-text-tertiary)]">{t('detail.subtitle')}</p>
                     </div>
 
                     <div className="space-y-5">
-                        <FileUploader />
+                        <FileUploader label={t('detail.upload')} />
 
                         <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">AI Model</label>
+                            <label className="block text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">{t('detail.aiModel')}</label>
                             <select
                                 value={model}
                                 onChange={(e) => setModel(e.target.value)}
                                 className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-text-primary transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-[var(--dark-border)] dark:bg-[var(--dark-surface-secondary)] dark:text-[var(--dark-text-primary)]"
                             >
-                                <option value="auto">Auto (Recommended)</option>
-                                <option value="standard">Standard</option>
-                                <option value="pro">Pro</option>
-                                <option value="ultra">Ultra</option>
+                                <option value="auto">{t('detail.modelAuto')}</option>
+                                <option value="standard">{t('detail.modelStandard')}</option>
+                                <option value="pro">{t('detail.modelPro')}</option>
+                                <option value="ultra">{t('detail.modelUltra')}</option>
                             </select>
                         </div>
 
                         {showScale && (
                             <div className="space-y-3">
-                                <label className="text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">Scale</label>
+                                <label className="text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">{t('detail.scale')}</label>
                                 <div className="flex gap-2">
                                     {['2x', '4x', '8x'].map((option) => (
                                         <button
@@ -98,12 +100,12 @@ export default function ToolDetail({ tool }: Props) {
 
                         {showMode && (
                             <div className="space-y-3">
-                                <label className="text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">Mode</label>
+                                <label className="text-sm font-medium text-text-primary dark:text-[var(--dark-text-primary)]">{t('detail.mode')}</label>
                                 <div className="flex gap-2">
                                     {[
-                                        { label: 'General', value: 'general' },
-                                        { label: 'Animation', value: 'animation' },
-                                        { label: 'Low Light', value: 'low light' },
+                                        { label: t('detail.modeGeneral'), value: 'general' },
+                                        { label: t('detail.modeAnimation'), value: 'animation' },
+                                        { label: t('detail.modeLowLight'), value: 'low light' },
                                     ].map((option) => (
                                         <button
                                             key={option.value}
@@ -122,12 +124,12 @@ export default function ToolDetail({ tool }: Props) {
                             </div>
                         )}
 
-                        <Toggle checked={quality} onChange={setQuality} label="High Quality" description="Best visual fidelity" />
-                        <Toggle checked={publicVisible} onChange={setPublicVisible} label="Public" description="Visible in community gallery" />
-                        <Toggle checked={copyProtection} onChange={setCopyProtection} label="Copy Protection" description="Restrict downloads" />
+                        <Toggle checked={quality} onChange={setQuality} label={t('detail.hq')} description={t('detail.hqDesc')} />
+                        <Toggle checked={publicVisible} onChange={setPublicVisible} label={t('detail.public')} description={t('detail.publicDesc')} />
+                        <Toggle checked={copyProtection} onChange={setCopyProtection} label={t('detail.copyProtection')} description={t('detail.copyProtectionDesc')} />
 
                         <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3 dark:border-[var(--dark-border)]">
-                            <span className="text-sm text-text-secondary dark:text-[var(--dark-text-secondary)]">Credits</span>
+                            <span className="text-sm text-text-secondary dark:text-[var(--dark-text-secondary)]">{t('detail.credits')}</span>
                             <span className="text-sm font-semibold text-text-primary dark:text-[var(--dark-text-primary)]">12</span>
                         </div>
 
@@ -141,7 +143,7 @@ export default function ToolDetail({ tool }: Props) {
                                     setProgress(0);
                                 }}
                             >
-                                Create
+                                {t('detail.create')}
                             </Button>
                             {loading && (
                                 <div className="absolute bottom-0 left-0 h-1 w-full overflow-hidden rounded-b-xl">

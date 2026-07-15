@@ -17,7 +17,7 @@ class GoogleAuthController extends Controller
         if (! $this->configured()) {
             return redirect()
                 ->to('/?login')
-                ->withErrors(['email' => 'Google sign-in is not configured yet.']);
+                ->withErrors(['email' => __('messages.google_not_configured')]);
         }
 
         return Socialite::driver('google')->redirect();
@@ -28,7 +28,7 @@ class GoogleAuthController extends Controller
         if (! $this->configured()) {
             return redirect()
                 ->to('/?login')
-                ->withErrors(['email' => 'Google sign-in is not configured yet.']);
+                ->withErrors(['email' => __('messages.google_not_configured')]);
         }
 
         try {
@@ -38,7 +38,7 @@ class GoogleAuthController extends Controller
 
             return redirect()
                 ->to('/?login')
-                ->withErrors(['email' => 'Could not sign in with Google. Please try again.']);
+                ->withErrors(['email' => __('messages.google_failed')]);
         }
 
         $email = $googleUser->getEmail();
@@ -46,7 +46,7 @@ class GoogleAuthController extends Controller
         if (! $email) {
             return redirect()
                 ->to('/?login')
-                ->withErrors(['email' => 'Your Google account did not share an email address.']);
+                ->withErrors(['email' => __('messages.google_no_email')]);
         }
 
         $user = User::where('google_id', $googleUser->getId())

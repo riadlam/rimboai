@@ -1,0 +1,34 @@
+{
+  "headline": "Qu'allez-vous créer",
+  "headlineEnd": " ?",
+  "rotating": {
+    "today": "aujourd'hui",
+    "rightNow": "tout de suite",
+    "thatGoesViral": "qui cartonne",
+    "inSeconds": "en quelques secondes"
+  },
+  "subtitle": "Vidéo, image, voix et musique — un seul studio, résultats instantanés.",
+  "promptPlaceholder": "Décrivez n'importe quoi — « un renard néon courant dans Tokyo la nuit »…",
+  "generate": "Générer",
+  "createTypes": {
+    "video": {
+      "label": "Vidéo",
+      "desc": "Des clips cinématographiques à partir d'un seul prompt."
+    },
+    "image": {
+      "label": "Image",
+      "desc": "Des images de qualité studio, dans tous les styles."
+    },
+    "voice": {
+      "label": "Voix",
+      "desc": "Une voix naturelle pour chaque scène."
+    },
+    "music": {
+      "label": "Musique",
+      "desc": "Titres et ambiances sonores à la demande."
+    }
+  },
+  "openLab": "Ouvrir le Lab",
+  "toolsTitle": "Outils",
+  "signInClose": "Fermer la connexion"
+}

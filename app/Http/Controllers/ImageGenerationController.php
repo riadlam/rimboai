@@ -56,7 +56,7 @@ class ImageGenerationController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return response()->json(['message' => 'Could not upload reference images. Please try again.'], 502);
+            return response()->json(['message' => __('messages.upload_failed')], 502);
         }
 
         $referenceUrls = array_values(array_filter(array_map(
@@ -86,7 +86,7 @@ class ImageGenerationController extends Controller
         }
 
         if (! $model) {
-            return response()->json(['message' => 'No image model is available.'], 422);
+            return response()->json(['message' => __('messages.model_unavailable')], 422);
         }
 
         $mode = $data['mode'] ?? 'create';
@@ -133,7 +133,7 @@ class ImageGenerationController extends Controller
         $billing = $pricing->resolve($submitEndpoint);
         if ($billing === null) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $submitEndpoint,
             ], 503);
         }
@@ -150,7 +150,7 @@ class ImageGenerationController extends Controller
 
         if ((int) $cost['credits'] <= 0) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $submitEndpoint,
             ], 503);
         }
@@ -190,7 +190,7 @@ class ImageGenerationController extends Controller
             );
         } catch (InsufficientTokensException $e) {
             return response()->json([
-                'message' => 'You do not have enough tokens for this creation.',
+                'message' => __('messages.not_enough_tokens'),
                 'required_tokens' => $e->required,
                 'available_tokens' => $e->available,
             ], 402);
@@ -200,7 +200,7 @@ class ImageGenerationController extends Controller
             $submit = $fal->submit($submitEndpoint, $falInput);
         } catch (\Throwable $e) {
             report($e);
-            $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
             $tokens->refund($request->user(), $creation, 'image', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
@@ -262,7 +262,7 @@ class ImageGenerationController extends Controller
         }
 
         if ($state === 'IN_PROGRESS') {
-            $creation->markInProgress(null, 'Generating…');
+            $creation->markInProgress(null, __('messages.generating'));
 
             return;
         }
@@ -291,7 +291,7 @@ class ImageGenerationController extends Controller
         $images = $this->extractImages($result);
 
         if ($images === []) {
-            $creation->markFailed('Generation finished without an image.', 'empty_result');
+            $creation->markFailed(__('messages.no_image'), 'empty_result');
 
             return;
         }

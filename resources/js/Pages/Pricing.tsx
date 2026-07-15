@@ -1,9 +1,11 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import CreditsModal from '@/Components/CreditsModal';
-import type { PageProps, TokenPackage } from '@/types';
+import { intlLocale, readSavedLang } from '@/lib/i18n';
+import type { PageProps } from '@/types';
 
 type Currency = 'USD' | 'EUR' | 'GBP' | 'DZD';
 
@@ -40,93 +42,71 @@ const CURRENCIES: Record<Currency, { label: string; name: string; symbol: string
 /** UI chrome only — price/tokens/name always come from token_packages. */
 const PACK_META: Record<
     string,
-    Omit<Pack, 'id' | 'name' | 'dzd' | 'tokens' | 'yields'> & { yieldsFromTokens?: boolean }
+    {
+        taglineKey: string;
+        perkKeys: string[];
+        popular?: boolean;
+        best?: boolean;
+        accent: string;
+        check: string;
+        btn: string;
+    }
 > = {
     starter: {
-        tagline: 'Perfect for trying out AI generation',
+        taglineKey: 'taglines.starter',
         accent: 'border-white/10 hover:border-white/20',
         check: 'text-emerald-400',
         btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
-        perks: ['Access to all AI models', 'HD quality output', 'Email support'],
+        perkKeys: ['perks.allModels', 'perks.hd', 'perks.emailSupport'],
     },
     creator: {
-        tagline: 'Perfect for content creators',
+        taglineKey: 'taglines.creator',
         accent: 'border-sky-500/40 hover:border-sky-400/60',
         check: 'text-emerald-400',
         btn: 'bg-sky-600 text-white hover:bg-sky-500',
-        perks: ['Access to all AI models', 'HD quality output', 'Priority support', 'Fast generation queue'],
+        perkKeys: ['perks.allModels', 'perks.hd', 'perks.prioritySupport', 'perks.fastQueue'],
     },
     pro: {
         popular: true,
-        tagline: 'Perfect for professionals and studios',
+        taglineKey: 'taglines.pro',
         accent: 'border-[#FF5733]/55 ring-2 ring-[#FF5733]/20 hover:border-[#FF5733]/70',
         check: 'text-[#FF8A65]',
         btn: 'bg-gradient-to-b from-[#FF6A45] to-[#E24216] text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] hover:brightness-110',
-        perks: ['Access to all AI models', '4K quality output', 'Priority support', 'Fast generation queue', 'Bulk generation'],
+        perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     business: {
         best: true,
-        tagline: 'Perfect for teams and enterprises',
+        taglineKey: 'taglines.business',
         accent: 'border-amber-400/45 hover:border-amber-300/65',
         check: 'text-amber-400',
         btn: 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-semibold hover:brightness-105',
-        perks: ['Access to all AI models', '4K quality output', 'Dedicated support', 'Fast generation queue', 'Bulk generation', 'API access'],
+        perkKeys: ['perks.allModels', 'perks.4k', 'perks.dedicatedSupport', 'perks.fastQueue', 'perks.bulk', 'perks.api'],
     },
 };
 
 const DEFAULT_META = {
-    tagline: 'Token pack for the Lab',
+    taglineKey: 'taglines.default',
     accent: 'border-white/10 hover:border-white/20',
     check: 'text-emerald-400',
     btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
-    perks: ['Access to all AI models', 'HD quality output'],
+    perkKeys: ['perks.allModels', 'perks.hd'],
 };
 
-function yieldsFor(tokens: number): YieldItem[] {
-    return [
-        { value: Math.max(0, Math.floor(tokens / 15)).toLocaleString(), label: 'images (Nano Banana Pro)', icon: 'image' },
-        { value: Math.max(0, Math.floor(tokens / 104)).toLocaleString(), label: 'videos (Kling 2.6)', icon: 'video' },
-        { value: Math.max(0, Math.floor(tokens / 400)).toLocaleString(), label: 'videos (Veo 3.1)', icon: 'videoAlt' },
-        { value: Math.max(0, Math.floor(tokens / 42)).toLocaleString(), label: 'songs (Suno)', icon: 'music' },
-        { value: Math.max(0, Math.floor(tokens / 10)).toLocaleString(), label: 'voiceovers (ElevenLabs)', icon: 'mic' },
-    ];
-}
-
-function packsFromDb(packages: TokenPackage[]): Pack[] {
-    return packages.map((p) => {
-        const meta = PACK_META[p.slug] ?? DEFAULT_META;
-        return {
-            id: p.slug,
-            name: p.name,
-            dzd: Number(p.price_dzd),
-            tokens: Number(p.tokens),
-            tagline: meta.tagline,
-            popular: 'popular' in meta ? meta.popular : undefined,
-            best: 'best' in meta ? meta.best : undefined,
-            accent: meta.accent,
-            check: meta.check,
-            btn: meta.btn,
-            perks: meta.perks,
-            yields: yieldsFor(Number(p.tokens)),
-        };
-    });
-}
-
-const FEATURES: { name: string; packs: Record<string, boolean> }[] = [
-    { name: 'Access to all AI models', packs: { starter: true, creator: true, pro: true, business: true } },
-    { name: 'HD quality output', packs: { starter: true, creator: true, pro: true, business: true } },
-    { name: '4K quality output', packs: { starter: false, creator: false, pro: true, business: true } },
-    { name: 'Fast generation queue', packs: { starter: false, creator: true, pro: true, business: true } },
-    { name: 'Bulk generation', packs: { starter: false, creator: false, pro: true, business: true } },
-    { name: 'Priority support', packs: { starter: false, creator: true, pro: true, business: true } },
-    { name: 'Dedicated support', packs: { starter: false, creator: false, pro: false, business: true } },
-    { name: 'API access', packs: { starter: false, creator: false, pro: false, business: true } },
+const FEATURE_ROWS: { key: string; packs: Record<string, boolean> }[] = [
+    { key: 'perks.allModels', packs: { starter: true, creator: true, pro: true, business: true } },
+    { key: 'perks.hd', packs: { starter: true, creator: true, pro: true, business: true } },
+    { key: 'perks.4k', packs: { starter: false, creator: false, pro: true, business: true } },
+    { key: 'perks.fastQueue', packs: { starter: false, creator: true, pro: true, business: true } },
+    { key: 'perks.bulk', packs: { starter: false, creator: false, pro: true, business: true } },
+    { key: 'perks.prioritySupport', packs: { starter: false, creator: true, pro: true, business: true } },
+    { key: 'perks.dedicatedSupport', packs: { starter: false, creator: false, pro: false, business: true } },
+    { key: 'perks.api', packs: { starter: false, creator: false, pro: false, business: true } },
 ];
 
 const MODEL_TABS = [
     {
         id: 'image',
-        label: 'Image',
+        labelKey: 'tabImage',
         hint: 'Lab · text-to-image',
         models: [
             { name: 'Nano Banana / Gemini Flash', cost: 'from ~15 tok' },
@@ -139,7 +119,7 @@ const MODEL_TABS = [
     },
     {
         id: 'video',
-        label: 'Video',
+        labelKey: 'tabVideo',
         hint: 'Lab · text / image-to-video',
         models: [
             { name: 'Kling 2.6', cost: 'from ~103 tok' },
@@ -152,7 +132,7 @@ const MODEL_TABS = [
     },
     {
         id: 'audio',
-        label: 'Audio',
+        labelKey: 'tabAudio',
         hint: 'Voiceover & music',
         models: [
             { name: 'ElevenLabs TTS', cost: 'from ~15 tok' },
@@ -163,7 +143,7 @@ const MODEL_TABS = [
     },
     {
         id: 'tools',
-        label: 'Tools',
+        labelKey: 'tabTools',
         hint: 'Upscale & utilities',
         models: [
             { name: 'Video Upscaler', cost: 'per run' },
@@ -174,32 +154,7 @@ const MODEL_TABS = [
     },
 ] as const;
 
-const FAQS = [
-    {
-        q: 'How do RIMBOAI tokens work?',
-        a: 'Tokens are the fuel for every generation in the Lab — images, video, voice, and music. Each model deducts a small amount based on its live fal.ai rate. Unused tokens stay on your account.',
-    },
-    {
-        q: 'Do packs expire?',
-        a: 'No. Token packs are balance top-ups, not subscriptions. Buy once and create whenever you are ready.',
-    },
-    {
-        q: 'Are all Lab models included?',
-        a: 'Yes. Every active pack unlocks the same model catalogue. Higher packs simply give you more runway and better queue priority.',
-    },
-    {
-        q: 'Can I top up again later?',
-        a: 'Anytime. Open Buy Tokens from the header or return to this page and pick another pack — balances stack.',
-    },
-    {
-        q: 'What currencies can I view?',
-        a: 'Prices are shown in USD, EUR, GBP, or DZD for convenience. Checkout currency depends on the payment method available in your region.',
-    },
-    {
-        q: 'What if I only want to try the platform?',
-        a: 'Create a free account and claim starter tokens — enough to explore the Lab, Trends, and Innovation without a card.',
-    },
-];
+const FAQ_IDS = [1, 2, 3, 4, 5, 6] as const;
 
 const fadeUp = {
     hidden: { opacity: 0, y: 24 },
@@ -211,8 +166,11 @@ const fadeUp = {
 };
 
 export default function Pricing() {
+    const { t, i18n } = useTranslation('pricing');
+    const { t: tc } = useTranslation('common');
     const { props } = usePage<PageProps>();
     const user = props.auth.user;
+    const locale = intlLocale((i18n.language as 'en' | 'fr' | 'ar') || readSavedLang());
     const [currency, setCurrency] = useState<Currency>('DZD');
     const [modelTab, setModelTab] = useState<(typeof MODEL_TABS)[number]['id']>('image');
     const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -220,7 +178,33 @@ export default function Pricing() {
     const [busyPack, setBusyPack] = useState<PackId | null>(null);
     const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-    const PACKS = useMemo(() => packsFromDb(props.tokenPackages ?? []), [props.tokenPackages]);
+    const PACKS = useMemo(() => {
+        const packages = props.tokenPackages ?? [];
+        return packages.map((p) => {
+            const meta = PACK_META[p.slug] ?? DEFAULT_META;
+            const tokens = Number(p.tokens);
+            return {
+                id: p.slug,
+                name: p.name,
+                dzd: Number(p.price_dzd),
+                tokens,
+                tagline: t(meta.taglineKey),
+                popular: 'popular' in meta ? meta.popular : undefined,
+                best: 'best' in meta ? meta.best : undefined,
+                accent: meta.accent,
+                check: meta.check,
+                btn: meta.btn,
+                perks: meta.perkKeys.map((key) => t(key)),
+                yields: [
+                    { value: Math.max(0, Math.floor(tokens / 15)).toLocaleString(locale), label: t('yields.imagesNano'), icon: 'image' as const },
+                    { value: Math.max(0, Math.floor(tokens / 104)).toLocaleString(locale), label: t('yields.videosKling'), icon: 'video' as const },
+                    { value: Math.max(0, Math.floor(tokens / 400)).toLocaleString(locale), label: t('yields.videosVeo'), icon: 'videoAlt' as const },
+                    { value: Math.max(0, Math.floor(tokens / 42)).toLocaleString(locale), label: t('yields.songsSuno'), icon: 'music' as const },
+                    { value: Math.max(0, Math.floor(tokens / 10)).toLocaleString(locale), label: t('yields.voiceovers'), icon: 'mic' as const },
+                ],
+            } satisfies Pack;
+        });
+    }, [props.tokenPackages, t, locale]);
 
     // Show the SofizPay return result, then strip the query so a refresh won't repeat it.
     useEffect(() => {
@@ -232,12 +216,12 @@ export default function Pricing() {
         const tokens = params.get('tokens');
 
         if (result === 'success') {
-            setNotice({
-                type: 'success',
-                text: message || `Payment confirmed.${tokens ? ` ${Number(tokens).toLocaleString()} tokens added.` : ''}`,
-            });
+            const fallback = tokens
+                ? `${t('notices.paymentOk')} ${t('notices.tokensAdded', { count: Number(tokens).toLocaleString(locale) })}`
+                : t('notices.paymentOk');
+            setNotice({ type: 'success', text: message || fallback });
         } else if (result === 'failed' || result === 'error') {
-            setNotice({ type: 'error', text: message || 'Payment was not completed.' });
+            setNotice({ type: 'error', text: message || t('notices.paymentFailed') });
         }
 
         params.delete('payment');
@@ -245,7 +229,7 @@ export default function Pricing() {
         params.delete('tokens');
         const clean = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
         window.history.replaceState({}, '', clean);
-    }, []);
+    }, [t, locale]);
 
     async function startCheckout(pack: Pack) {
         if (!user) {
@@ -256,10 +240,7 @@ export default function Pricing() {
         // SofizPay settles in Algerian Dinar only.
         if (currency !== 'DZD') {
             setCurrency('DZD');
-            setNotice({
-                type: 'info',
-                text: 'Payments are processed in Algerian Dinar (DZD) via SofizPay. Prices switched to DZD — tap Get Started again to continue.',
-            });
+            setNotice({ type: 'info', text: t('notices.switchDzd') });
             return;
         }
 
@@ -286,22 +267,22 @@ export default function Pricing() {
                 return;
             }
 
-            setNotice({ type: 'error', text: data.message || 'Could not start the payment. Please try again.' });
+            setNotice({ type: 'error', text: data.message || t('notices.checkoutError') });
         } catch {
-            setNotice({ type: 'error', text: 'Network error. Please try again.' });
+            setNotice({ type: 'error', text: t('notices.networkError') });
         } finally {
             setBusyPack(null);
         }
     }
 
     const cur = CURRENCIES[currency];
-    const activeModels = MODEL_TABS.find((t) => t.id === modelTab) ?? MODEL_TABS[0];
+    const activeModels = MODEL_TABS.find((tab) => tab.id === modelTab) ?? MODEL_TABS[0];
     const proPack = PACKS.find((p) => p.id === 'pro') ?? PACKS[Math.min(2, Math.max(0, PACKS.length - 1))] ?? null;
 
     const formatPrice = (dzd: number) => {
         const value = dzd * cur.rateFromDzd;
         if (currency === 'DZD') {
-            return { amount: Math.round(value).toLocaleString(), suffix: 'DZD' };
+            return { amount: Math.round(value).toLocaleString(locale), suffix: 'DZD' };
         }
         const rounded = value % 1 < 0.05 || value % 1 > 0.95 ? Math.round(value).toString() : value.toFixed(2);
         return { amount: `${cur.symbol}${rounded}`, suffix: '' };
@@ -312,7 +293,7 @@ export default function Pricing() {
 
     return (
         <AppLayout>
-            <Head title="Pricing" />
+            <Head title={t('title')} />
             <div className="relative -mx-4 -my-4 overflow-hidden sm:-mx-5 lg:-mx-6 lg:-my-5 xl:-mx-8">
                 {/* Atmosphere */}
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] overflow-hidden">
@@ -327,17 +308,16 @@ export default function Pricing() {
                         <motion.div initial="hidden" animate="show" variants={fadeUp} custom={0}>
                             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#FF5733]/30 bg-[#FF5733]/10 px-3.5 py-1.5 text-[12px] font-semibold tracking-wide text-[#FF8A65]">
                                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5733]" />
-                                Token packs · no subscription lock-in
+                                {t('badge')}
                             </p>
                             <h1 className="font-[family-name:Outfit,sans-serif] text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
-                                Fuel the Lab.
+                                {t('heroTitle')}
                                 <span className="mt-1 block bg-gradient-to-r from-[#FF8A65] via-[#FF5733] to-amber-300 bg-clip-text text-transparent">
-                                    Create without ceilings.
+                                    {t('heroTitleAccent')}
                                 </span>
                             </h1>
                             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/50 sm:text-base">
-                                RIMBOAI runs on tokens — one balance for images, video, voice, and music.
-                                Pick a pack that matches your pace. Top up anytime.
+                                {t('heroSub')}
                             </p>
                         </motion.div>
 
@@ -351,21 +331,21 @@ export default function Pricing() {
                             <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] p-6 shadow-[0_30px_80px_-40px_rgba(255,87,51,0.55)] backdrop-blur-xl">
                                 <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#FF5733]/25 blur-3xl" />
                                 <div className="relative">
-                                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">Most loved pack</p>
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">{t('mostLoved')}</p>
                                     <div className="mt-3 flex items-center gap-2">
                                         <span className="rounded-full bg-gradient-to-r from-[#FF6A45] to-[#E24216] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                                             {proPack?.name ?? 'Pro'}
                                         </span>
                                         <span className="text-sm text-white/55">
                                             {proPack
-                                                ? `${proPack.tokens.toLocaleString()} tokens · everything unlocked`
-                                                : 'everything unlocked'}
+                                                ? `${t('tokens', { count: proPack.tokens.toLocaleString(locale) })} · ${t('everythingUnlocked')}`
+                                                : t('everythingUnlocked')}
                                         </span>
                                     </div>
                                     <div className="mt-6 flex items-end justify-between gap-4 border-t border-white/[0.06] pt-5">
                                         <div>
-                                            <p className="text-[12px] text-white/40">Starts from</p>
-                                            <p className="mt-1 font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white">Pro pack</p>
+                                            <p className="text-[12px] text-white/40">{t('startsFrom')}</p>
+                                            <p className="mt-1 font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white">{t('proPack')}</p>
                                         </div>
                                         <p className="font-[family-name:Outfit,sans-serif] text-3xl font-bold tabular-nums text-[#FF8A65]">
                                             {proPrice.amount}
@@ -392,12 +372,12 @@ export default function Pricing() {
                             <div className="flex items-center gap-5">
                                 <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10">
                                     <span className="font-[family-name:Outfit,sans-serif] text-2xl font-black text-white">50</span>
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">tokens</span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">{tc('tokens')}</span>
                                 </div>
                                 <div>
-                                    <p className="font-[family-name:Outfit,sans-serif] text-lg font-semibold text-white">Start free on RIMBOAI</p>
+                                    <p className="font-[family-name:Outfit,sans-serif] text-lg font-semibold text-white">{t('freeRibbonTitle')}</p>
                                     <p className="mt-1 max-w-md text-sm text-white/50">
-                                        Sign up, claim starter tokens, and open the Lab — no card required.
+                                        {t('freeRibbonSub')}
                                     </p>
                                 </div>
                             </div>
@@ -405,7 +385,7 @@ export default function Pricing() {
                                 href={user ? '/lab' : '/register'}
                                 className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] transition hover:brightness-110"
                             >
-                                {user ? 'Open the Lab' : 'Claim free tokens'}
+                                {user ? t('openLab') : t('claimFree')}
                                 <ArrowIcon />
                             </Link>
                         </div>
@@ -415,13 +395,13 @@ export default function Pricing() {
                     <section className="mt-14">
                         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                             <div>
-                                <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">Choose your pack</h2>
-                                <p className="mt-1 text-sm text-white/45">Estimates show what you can create — exact usage depends on model and settings.</p>
+                                <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">{t('choosePack')}</h2>
+                                <p className="mt-1 text-sm text-white/45">{t('choosePackSub')}</p>
                             </div>
 
                             {/* Currency selector — compact segmented control */}
                             <div className="flex flex-col items-start gap-1.5 lg:items-end">
-                                <span className="text-[11px] font-medium uppercase tracking-wider text-white/35">Show prices in</span>
+                                <span className="text-[11px] font-medium uppercase tracking-wider text-white/35">{t('showPricesIn')}</span>
                                 <div className="relative flex gap-1 rounded-full border border-white/10 bg-black/30 p-1">
                                     {(Object.keys(CURRENCIES) as Currency[]).map((code) => {
                                         const info = CURRENCIES[code];
@@ -486,6 +466,7 @@ export default function Pricing() {
                                     user={!!user}
                                     busy={busyPack === pack.id}
                                     onBuy={() => startCheckout(pack)}
+                                    locale={locale}
                                 />
                             ))}
                         </div>
@@ -494,8 +475,8 @@ export default function Pricing() {
                     {/* Compare — interactive chips, not Virali table clone */}
                     <section className="mt-16">
                         <div className="mb-6 text-center sm:text-start">
-                            <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">What each pack unlocks</h2>
-                            <p className="mt-1 text-sm text-white/45">Same models everywhere — the difference is runway, queue, and support.</p>
+                            <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">{t('compareTitle')}</h2>
+                            <p className="mt-1 text-sm text-white/45">{t('compareSub')}</p>
                         </div>
 
                         <div className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02]">
@@ -503,16 +484,16 @@ export default function Pricing() {
                                 className="grid gap-0 border-b border-white/[0.06] bg-white/[0.03] px-3 py-3 text-[11px] font-semibold uppercase tracking-wider text-white/40 sm:px-5 sm:text-xs"
                                 style={{ gridTemplateColumns: `1.4fr repeat(${Math.max(PACKS.length, 1)}, 0.7fr)` }}
                             >
-                                <span className="ps-1">Feature</span>
+                                <span className="ps-1">{t('feature')}</span>
                                 {PACKS.map((pack) => (
                                     <span key={pack.id} className="text-center text-white/70">
                                         {pack.name}
                                     </span>
                                 ))}
                             </div>
-                            {FEATURES.map((row, i) => (
+                            {FEATURE_ROWS.map((row, i) => (
                                 <motion.div
-                                    key={row.name}
+                                    key={row.key}
                                     initial={{ opacity: 0, x: -8 }}
                                     whileInView={{ opacity: 1, x: 0 }}
                                     viewport={{ once: true }}
@@ -522,7 +503,7 @@ export default function Pricing() {
                                     }`}
                                     style={{ gridTemplateColumns: `1.4fr repeat(${Math.max(PACKS.length, 1)}, 0.7fr)` }}
                                 >
-                                    <span className="pe-2 text-[13px] text-white/75">{row.name}</span>
+                                    <span className="pe-2 text-[13px] text-white/75">{t(row.key)}</span>
                                     {PACKS.map((pack) => (
                                         <span key={pack.id} className="flex justify-center">
                                             {row.packs[pack.id] ? (
@@ -543,8 +524,8 @@ export default function Pricing() {
                     <section className="mt-16">
                         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div>
-                                <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">Model runway guide</h2>
-                                <p className="mt-1 text-sm text-white/45">Approximate token costs for popular RIMBOAI Lab models.</p>
+                                <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">{t('modelGuideTitle')}</h2>
+                                <p className="mt-1 text-sm text-white/45">{t('modelGuideSub')}</p>
                             </div>
                             <div className="flex flex-wrap gap-1.5 rounded-full border border-white/10 bg-black/30 p-1">
                                 {MODEL_TABS.map((tab) => (
@@ -558,7 +539,7 @@ export default function Pricing() {
                                                 : 'text-white/55 hover:text-white'
                                         }`}
                                     >
-                                        {tab.label}
+                                        {t(tab.labelKey)}
                                     </button>
                                 ))}
                             </div>
@@ -592,15 +573,17 @@ export default function Pricing() {
                     {/* FAQ — two columns */}
                     <section className="mt-16">
                         <div className="mb-6">
-                            <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">Questions, answered</h2>
-                            <p className="mt-1 text-sm text-white/45">Straight answers about tokens, packs, and the Lab.</p>
+                            <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">{t('faqTitle')}</h2>
+                            <p className="mt-1 text-sm text-white/45">{t('faqSub')}</p>
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
-                            {FAQS.map((item, i) => {
+                            {FAQ_IDS.map((id, i) => {
                                 const open = openFaq === i;
+                                const q = t(`faqs.q${id}`);
+                                const a = t(`faqs.a${id}`);
                                 return (
                                     <motion.div
-                                        key={item.q}
+                                        key={id}
                                         layout
                                         className={`overflow-hidden rounded-2xl border transition ${
                                             open ? 'border-[#FF5733]/35 bg-[#FF5733]/[0.06]' : 'border-white/10 bg-white/[0.02]'
@@ -611,7 +594,7 @@ export default function Pricing() {
                                             onClick={() => setOpenFaq(open ? null : i)}
                                             className="flex w-full items-center justify-between gap-3 px-4 py-4 text-start"
                                         >
-                                            <span className="text-sm font-semibold text-white">{item.q}</span>
+                                            <span className="text-sm font-semibold text-white">{q}</span>
                                             <span className={`shrink-0 text-white/40 transition ${open ? 'rotate-45' : ''}`}>+</span>
                                         </button>
                                         <AnimatePresence initial={false}>
@@ -623,7 +606,7 @@ export default function Pricing() {
                                                     transition={{ duration: 0.22 }}
                                                     className="overflow-hidden"
                                                 >
-                                                    <p className="px-4 pb-4 text-[13px] leading-relaxed text-white/50">{item.a}</p>
+                                                    <p className="px-4 pb-4 text-[13px] leading-relaxed text-white/50">{a}</p>
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
@@ -645,31 +628,31 @@ export default function Pricing() {
                         <div className="relative px-6 py-12 text-center sm:px-10 sm:py-14">
                             <p className="font-[family-name:Outfit,sans-serif] text-[12px] font-semibold tracking-[0.24em] text-[#FF8A65]">RIMBOAI</p>
                             <h2 className="mt-2 font-[family-name:Outfit,sans-serif] text-3xl font-bold text-white sm:text-4xl">
-                                Ready when you are.
+                                {t('ctaTitle')}
                             </h2>
                             <p className="mx-auto mt-3 max-w-lg text-sm text-white/50">
-                                Jump into the Lab, remix Trends, and ship from Innovation — with tokens that move at your speed.
+                                {t('ctaSub')}
                             </p>
                             <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                                 <Link
                                     href={ctaHref}
                                     className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-7 text-sm font-semibold text-white shadow-[0_14px_36px_-14px_rgba(255,87,51,0.95)] transition hover:brightness-110"
                                 >
-                                    {user ? 'Back to the Lab' : 'Create free account'}
+                                    {user ? t('backToLab') : t('createAccount')}
                                     <ArrowIcon />
                                 </Link>
                                 <Link
                                     href="/lab"
                                     className="inline-flex h-11 items-center rounded-xl border border-white/15 bg-white/[0.04] px-7 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
                                 >
-                                    Browse models
+                                    {t('browseModels')}
                                 </Link>
                             </div>
                         </div>
                     </motion.section>
 
                     <p className="mt-10 text-center text-[12px] text-white/30">
-                        © {new Date().getFullYear()} RIMBOAI · Token estimates are guides, not guarantees.
+                        © {new Date().getFullYear()} RIMBOAI · {t('footerNote')}
                     </p>
                 </div>
             </div>
@@ -686,6 +669,7 @@ function PackCard({
     user,
     busy,
     onBuy,
+    locale,
 }: {
     pack: Pack;
     price: { amount: string; suffix: string };
@@ -693,7 +677,10 @@ function PackCard({
     user: boolean;
     busy: boolean;
     onBuy: () => void;
+    locale: string;
 }) {
+    const { t } = useTranslation('pricing');
+
     return (
         <motion.article
             initial={{ opacity: 0, y: 22 }}
@@ -705,12 +692,12 @@ function PackCard({
         >
             {pack.popular && (
                 <span className="absolute -top-3 start-1/2 z-10 inline-flex -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#FF6A45] to-[#E24216] px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-[#FF5733]/40">
-                    Most Popular
+                    {t('mostPopular')}
                 </span>
             )}
             {pack.best && (
                 <span className="absolute -top-3 start-1/2 z-10 inline-flex -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black shadow-lg shadow-amber-500/30">
-                    Best Value
+                    {t('bestValue')}
                 </span>
             )}
 
@@ -722,13 +709,13 @@ function PackCard({
                     </span>
                     {price.suffix ? <span className="text-sm text-white/45">{price.suffix}</span> : null}
                 </div>
-                <p className="mt-1.5 text-base font-medium text-[#FF8A65]">{pack.tokens.toLocaleString()} tokens</p>
+                <p className="mt-1.5 text-base font-medium text-[#FF8A65]">{t('tokens', { count: pack.tokens.toLocaleString(locale) })}</p>
             </div>
 
             <div className="my-5 h-px w-full bg-white/[0.08]" />
 
             <div className="flex-1">
-                <p className="mb-3 text-start text-[12px] font-medium text-white/45">What You Can Create:</p>
+                <p className="mb-3 text-start text-[12px] font-medium text-white/45">{t('whatYouCanCreate')}</p>
                 <div className="space-y-2.5">
                     {pack.yields.map((y) => (
                         <div key={y.label} className="flex items-center gap-2.5">
@@ -807,6 +794,7 @@ function YieldIcon({ type }: { type: YieldItem['icon'] }) {
 }
 
 function PackCta({ user, busy, onBuy, className }: { user: boolean; busy: boolean; onBuy: () => void; className: string }) {
+    const { t } = useTranslation('pricing');
     const base =
         'mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -816,11 +804,11 @@ function PackCta({ user, busy, onBuy, className }: { user: boolean; busy: boolea
                 {busy ? (
                     <>
                         <Spinner />
-                        Starting…
+                        {t('starting')}
                     </>
                 ) : (
                     <>
-                        Get Started
+                        {t('getStarted')}
                         <ArrowIcon />
                     </>
                 )}
@@ -830,7 +818,7 @@ function PackCta({ user, busy, onBuy, className }: { user: boolean; busy: boolea
 
     return (
         <Link href="/register" className={`${base} ${className}`}>
-            Get Started
+            {t('getStarted')}
             <ArrowIcon />
         </Link>
     );

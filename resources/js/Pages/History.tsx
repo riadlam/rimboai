@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
 import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
@@ -88,31 +89,23 @@ type ApiVoiceItem = {
     gradient?: string | null;
 };
 
-const TABS: { id: TabId; label: string; icon?: ReactNode }[] = [
-    { id: 'image', label: 'Image' },
-    { id: 'video', label: 'Video' },
-    { id: 'audio', label: 'Audio' },
-    { id: 'music', label: 'Music' },
-    {
-        id: 'archived',
-        label: 'Archived',
-        icon: (
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <rect width="20" height="5" x="2" y="3" rx="1" />
-                <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-                <path d="M10 12h4" />
-            </svg>
-        ),
-    },
-];
+const TAB_IDS: TabId[] = ['image', 'video', 'audio', 'music', 'archived'];
+
+const ARCHIVED_TAB_ICON = (
+    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <rect width="20" height="5" x="2" y="3" rx="1" />
+        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+        <path d="M10 12h4" />
+    </svg>
+);
 
 const DAY = 24 * 60 * 60 * 1000;
 
 const TIME_FILTERS = [
-    { id: 'all', label: 'All time', days: null as number | null },
-    { id: '1d', label: 'Past 1 day', days: 1 },
-    { id: '3d', label: 'Past 3 days', days: 3 },
-    { id: '7d', label: 'Past 7 days', days: 7 },
+    { id: 'all', days: null as number | null },
+    { id: '1d', days: 1 },
+    { id: '3d', days: 3 },
+    { id: '7d', days: 7 },
 ] as const;
 
 function mapInputAssets(assets: ApiImageItem['input_assets']): LabReuseMediaItem[] {
@@ -224,15 +217,17 @@ function toReuseSource(item: HistoryItem) {
 }
 
 export default function History() {
+    const { t } = useTranslation('history');
     return (
         <AppLayout>
-            <Head title="History" />
+            <Head title={t('title')} />
             <HistoryWorkspace />
         </AppLayout>
     );
 }
 
 function HistoryWorkspace() {
+    const { t } = useTranslation('history');
     const [tab, setTab] = useState<TabId>('image');
     const [items, setItems] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -281,7 +276,7 @@ function HistoryWorkspace() {
                         creationId: track.creation_id ?? null,
                         tab: 'music',
                         kind: 'music',
-                        title: track.title || 'Untitled Track',
+                        title: track.title || t('untitledTrack'),
                         prompt: track.style || '',
                         src: track.cover,
                         favorite: track.favorite,
@@ -296,7 +291,7 @@ function HistoryWorkspace() {
                         id: voice.id,
                         tab: 'audio',
                         kind: 'audio',
-                        title: voice.title || 'Voice',
+                        title: voice.title || t('voiceFallback'),
                         prompt: voice.text || voice.voice || '',
                         src: '',
                         favorite: voice.favorite,
@@ -317,7 +312,7 @@ function HistoryWorkspace() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [t]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -454,47 +449,27 @@ function HistoryWorkspace() {
         }
     }, [filtered.length, previewIndex]);
 
-    const searchPlaceholder =
-        tab === 'image'
-            ? 'Search image by prompt and similarity'
-            : tab === 'video'
-              ? 'Search video by prompt'
-              : tab === 'audio'
-                ? 'Search audio by title or script'
-                : tab === 'music'
-                  ? 'Search music by style or title'
-                  : 'Search archived items';
+    const searchPlaceholder = t(`search.${tab}`);
 
     const selectLabel =
-        tab === 'image'
-            ? 'Select Image'
-            : tab === 'video'
-              ? 'Select Video'
-              : tab === 'audio'
-                ? 'Select Audio'
-                : tab === 'music'
-                  ? 'Select Track'
-                  : 'Select';
+        tab === 'archived' ? t('select.generic') : t(`select.${tab}` as 'select.image');
 
     const emptyCopy = {
-        image: { title: 'No images yet', sub: 'Generate images in the lab to see them here' },
-        video: { title: 'No videos yet', sub: 'Create a video to populate your history' },
-        audio: { title: 'No voiceovers yet', sub: 'Generate speech in Voice to see it here' },
-        music: { title: 'No music yet', sub: 'Create a track in Music Studio to see it here' },
-        archived: { title: 'No archived items', sub: 'Archived generations will appear here' },
-    }[tab];
+        title: t(`empty.${tab}Title` as 'empty.imageTitle'),
+        sub: t(`empty.${tab}Sub` as 'empty.imageSub'),
+    };
 
     return (
         <div className="relative flex h-[calc(100dvh-2.5rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-black [&_a]:cursor-pointer [&_button]:cursor-pointer [&_input[type=range]]:cursor-pointer [&_label]:cursor-pointer">
             <div className="shrink-0 border-b border-white/[0.07]">
                 <div className="flex items-center justify-start overflow-x-auto px-2 scrollbar-thin md:px-4">
-                    {TABS.map((t) => {
-                        const active = tab === t.id;
+                    {TAB_IDS.map((tabId) => {
+                        const active = tab === tabId;
                         return (
                             <button
-                                key={t.id}
+                                key={tabId}
                                 type="button"
-                                onClick={() => setTab(t.id)}
+                                onClick={() => setTab(tabId)}
                                 className={`shrink-0 cursor-pointer border-b-2 px-4 py-3 text-sm font-medium transition md:px-6 ${
                                     active
                                         ? 'border-[#FF5733] text-white'
@@ -502,8 +477,8 @@ function HistoryWorkspace() {
                                 }`}
                             >
                                 <span className="flex items-center gap-1.5">
-                                    {t.icon}
-                                    {t.label}
+                                    {tabId === 'archived' ? ARCHIVED_TAB_ICON : null}
+                                    {t(`tabs.${tabId}`)}
                                 </span>
                             </button>
                         );
@@ -513,10 +488,10 @@ function HistoryWorkspace() {
 
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.07] px-3 py-2 md:hidden">
                 <div className="flex items-center gap-1.5">
-                    <IconBtn title="Layout" active={layoutGrid} onClick={() => setLayoutGrid((v) => !v)}>
+                    <IconBtn title={t('layout')} active={layoutGrid} onClick={() => setLayoutGrid((v) => !v)}>
                         <IconGrid />
                     </IconBtn>
-                    <IconBtn title="Favorites" active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
+                    <IconBtn title={t('favorites')} active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
                         <IconStar filled={favoritesOnly} />
                     </IconBtn>
                     <button
@@ -531,11 +506,11 @@ function HistoryWorkspace() {
                                 : 'border-white/10 text-zinc-400'
                         }`}
                     >
-                        {selectMode ? 'Done' : 'Select'}
+                        {selectMode ? t('select.done') : t('select.generic')}
                     </button>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <IconBtn title="Search" active={mobileSearchOpen} onClick={() => setMobileSearchOpen((v) => !v)}>
+                    <IconBtn title={t('searchBtn')} active={mobileSearchOpen} onClick={() => setMobileSearchOpen((v) => !v)}>
                         <IconSearch />
                     </IconBtn>
                     <div className="flex w-20 items-center gap-1">
@@ -563,7 +538,7 @@ function HistoryWorkspace() {
                             className="h-9 w-full rounded-md border border-white/10 bg-white/[0.04] pe-3 ps-9 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-orange-400/40"
                         />
                     </div>
-                    <IconBtn title="Filters" onClick={() => setFiltersOpen((v) => !v)}>
+                    <IconBtn title={t('filters')} onClick={() => setFiltersOpen((v) => !v)}>
                         <IconSliders />
                     </IconBtn>
                 </div>
@@ -592,7 +567,7 @@ function HistoryWorkspace() {
                             }`}
                         >
                             <IconSliders />
-                            Filters
+                            {t('filters')}
                         </button>
                         <AnimatePresence>
                             {filtersOpen && (
@@ -615,7 +590,7 @@ function HistoryWorkspace() {
                                                         : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200'
                                                 }`}
                                             >
-                                                {f.label}
+                                                {t(`time.${f.id}`)}
                                             </button>
                                         ))}
                                     </div>
@@ -632,13 +607,13 @@ function HistoryWorkspace() {
                             onClick={deleteSelected}
                             className="inline-flex h-9 cursor-pointer items-center rounded-md border border-red-500/30 bg-red-500/10 px-3 text-xs font-medium text-red-300"
                         >
-                            Delete ({selected.length})
+                            {t('deleteN', { count: selected.length })}
                         </button>
                     )}
-                    <IconBtn title="Layout" active={layoutGrid} onClick={() => setLayoutGrid((v) => !v)}>
+                    <IconBtn title={t('layout')} active={layoutGrid} onClick={() => setLayoutGrid((v) => !v)}>
                         <IconGrid />
                     </IconBtn>
-                    <IconBtn title="Favorites" active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
+                    <IconBtn title={t('favorites')} active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
                         <IconStar filled={favoritesOnly} />
                     </IconBtn>
                     <button
@@ -653,7 +628,7 @@ function HistoryWorkspace() {
                                 : 'border-white/10 text-zinc-400 hover:text-zinc-200'
                         }`}
                     >
-                        {selectMode ? 'Done' : selectLabel}
+                        {selectMode ? t('select.done') : selectLabel}
                     </button>
                     <div className="ms-2 flex items-center gap-1">
                         <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -852,14 +827,14 @@ function HistoryWorkspace() {
                                         onClick={() => setPlayingId(playingId === preview.id ? null : preview.id)}
                                         className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-[13px] font-semibold text-white"
                                     >
-                                        {playingId === preview.id ? 'Pause' : 'Play'}
+                                        {playingId === preview.id ? t('actions.pause') : t('actions.play')}
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => toggleFavorite(preview.id)}
                                         className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 px-3 text-zinc-300 hover:bg-white/[0.05]"
                                     >
-                                        {preview.favorite ? 'Unfavorite' : 'Favorite'}
+                                        {preview.favorite ? t('actions.unfavorite') : t('actions.favorite')}
                                     </button>
                                     {preview.creationId && preview.kind !== 'audio' && (
                                         <>
@@ -872,7 +847,7 @@ function HistoryWorkspace() {
                                                         : 'border-white/10 text-zinc-300 hover:bg-white/[0.05]'
                                                 }`}
                                             >
-                                                {preview.isPublic ? 'Public on Trends' : 'Publish to Trends'}
+                                                {preview.isPublic ? t('actions.publicOnTrends') : t('actions.publish')}
                                             </button>
                                             <button
                                                 type="button"
@@ -883,7 +858,7 @@ function HistoryWorkspace() {
                                                         : 'border-white/10 text-zinc-300 hover:bg-white/[0.05]'
                                                 }`}
                                             >
-                                                {preview.isFeatured ? 'Featured' : 'Feature'}
+                                                {preview.isFeatured ? t('actions.featured') : t('actions.feature')}
                                             </button>
                                         </>
                                     )}
@@ -892,7 +867,7 @@ function HistoryWorkspace() {
                                         onClick={() => deleteItems([preview.id])}
                                         className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-red-500/30 px-3 text-red-300 hover:bg-red-500/10"
                                     >
-                                        Delete
+                                        {t('actions.delete')}
                                     </button>
                                 </div>
                             </div>

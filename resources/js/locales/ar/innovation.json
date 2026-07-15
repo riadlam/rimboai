@@ -1,0 +1,38 @@
+{
+  "title": "الابتكار",
+  "search": "البحث في الأوصاف...",
+  "backHome": "العودة للرئيسية",
+  "tabs": {
+    "images": "صور",
+    "videos": "فيديوهات",
+    "music": "موسيقى"
+  },
+  "empty": "لم يُعثر على أوصاف.",
+  "postNotFoundTitle": "المنشور غير موجود",
+  "postNotFound": "تعذر العثور على هذا المنشور.",
+  "prompt": "الوصف",
+  "copy": "نسخ",
+  "copied": "تم النسخ",
+  "labOptions": "خيارات Lab",
+  "useIn": "استخدم في {{lab}}",
+  "opening": "جاري الفتح…",
+  "browseMore": "تصفح المزيد",
+  "labs": {
+    "image": "مختبر الصور",
+    "video": "مختبر الفيديو",
+    "music": "مختبر الموسيقى"
+  },
+  "chips": {
+    "autoDuration": "مدة تلقائية",
+    "audioOn": "الصوت مفعّل",
+    "audioOff": "الصوت متوقف",
+    "variations": "تنويعات",
+    "styleSet": "مجموعة أسلوب"
+  },
+  "readMore": "اقرأ المزيد",
+  "tryPrompt": "جرّب في Lab",
+  "back": "رجوع",
+  "related": "ذات صلة",
+  "categories": "التصنيفات",
+  "published": "منشور"
+}

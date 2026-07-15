@@ -1,0 +1,64 @@
+{
+  "title": "Historique",
+  "tabs": {
+    "image": "Image",
+    "video": "Vidéo",
+    "audio": "Audio",
+    "music": "Musique",
+    "archived": "Archivés"
+  },
+  "search": {
+    "image": "Rechercher une image par prompt et similarité",
+    "video": "Rechercher une vidéo par prompt",
+    "audio": "Rechercher un audio par titre ou script",
+    "music": "Rechercher une musique par style ou titre",
+    "archived": "Rechercher des éléments archivés"
+  },
+  "select": {
+    "image": "Sélectionner une image",
+    "video": "Sélectionner une vidéo",
+    "audio": "Sélectionner un audio",
+    "music": "Sélectionner un titre",
+    "generic": "Sélectionner",
+    "done": "Terminé"
+  },
+  "filters": "Filtres",
+  "time": {
+    "all": "Tout le temps",
+    "1d": "Dernier jour",
+    "3d": "3 derniers jours",
+    "7d": "7 derniers jours"
+  },
+  "layout": "Disposition",
+  "favorites": "Favoris",
+  "searchBtn": "Rechercher",
+  "deleteN": "Supprimer ({{count}})",
+  "empty": {
+    "imageTitle": "Aucune image pour l'instant",
+    "imageSub": "Générez des images dans le Lab pour les voir ici",
+    "videoTitle": "Aucune vidéo pour l'instant",
+    "videoSub": "Créez une vidéo pour remplir votre historique",
+    "audioTitle": "Aucune voix off pour l'instant",
+    "audioSub": "Générez de la parole dans Voix pour la voir ici",
+    "musicTitle": "Aucune musique pour l'instant",
+    "musicSub": "Créez un titre dans Music Studio pour le voir ici",
+    "archivedTitle": "Aucun élément archivé",
+    "archivedSub": "Les générations archivées apparaîtront ici"
+  },
+  "actions": {
+    "play": "Lecture",
+    "pause": "Pause",
+    "favorite": "Favori",
+    "unfavorite": "Retirer des favoris",
+    "publish": "Publier dans Tendances",
+    "publicOnTrends": "Public dans Tendances",
+    "feature": "Mettre en avant",
+    "featured": "Mis en avant",
+    "delete": "Supprimer",
+    "reuse": "Réutiliser dans le Lab",
+    "download": "Télécharger"
+  },
+  "untitledTrack": "Titre sans nom",
+  "voiceFallback": "Voix",
+  "loading": "Chargement de l'historique…"
+}

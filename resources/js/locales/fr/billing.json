@@ -1,0 +1,53 @@
+{
+  "title": "Historique de facturation",
+  "eyebrow": "Paiements",
+  "subtitle": "Consultez vos achats de jetons et le statut des paiements. Les détails sensibles de la passerelle ne sont jamais affichés.",
+  "buyTokens": "Acheter des jetons",
+  "transactions": "Transactions",
+  "matching": "{{count}} enregistrements correspondants",
+  "emptyTitle": "Aucun paiement trouvé",
+  "emptyAll": "Vos achats de jetons apparaîtront ici.",
+  "emptyFiltered": "Vous n'avez aucun paiement {{status}}.",
+  "reference": "Référence",
+  "package": "Pack",
+  "amount": "Montant",
+  "date": "Date",
+  "status": "Statut",
+  "tokens": "Jetons",
+  "tokenPack": "Pack de jetons",
+  "gatewayNote": "SofizPay · CIB/Edahabia",
+  "previous": "Précédent",
+  "next": "Suivant",
+  "filters": {
+    "all": "Tous",
+    "paid": "Payé",
+    "pending": "En attente",
+    "failed": "Échoué",
+    "canceled": "Annulé"
+  },
+  "stats": {
+    "purchases": "Achats",
+    "completed": "{{count}} terminés",
+    "tokensBought": "Jetons achetés",
+    "fromCompleted": "Issus des paiements terminés",
+    "totalPaid": "Total payé",
+    "completedOnly": "Paiements terminés uniquement",
+    "successRate": "Taux de réussite",
+    "acrossAttempts": "Sur toutes les tentatives de paiement"
+  },
+  "modal": {
+    "title": "Acheter des jetons",
+    "subtitle": "Rechargez le solde de votre Lab. Les prix suivent le catalogue en direct.",
+    "currency": "Devise",
+    "hint": "Sélectionnez un pack. SofizPay traite le paiement final en toute sécurité en dinar algérien.",
+    "emptyPacks": "Aucun pack de jetons disponible pour le moment.",
+    "popular": "Populaire",
+    "bestValue": "Meilleur rapport",
+    "secureNote": "Paiement sécurisé SofizPay. Les jetons sont crédités après vérification serveur et n'expirent jamais.",
+    "chargeDzd": "Vous serez débité de {{amount}} DZD au paiement.",
+    "starting": "Démarrage du paiement sécurisé…",
+    "payCta": "Payer {{amount}} DZD · {{tokens}} jetons",
+    "selectPack": "Sélectionner un pack",
+    "close": "Fermer"
+  }
+}

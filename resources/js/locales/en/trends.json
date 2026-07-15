@@ -1,0 +1,51 @@
+{
+  "title": "Trends",
+  "search": "Search by prompt, creator, or model...",
+  "clearSearch": "Clear search",
+  "pills": {
+    "all": "All",
+    "featured": "Featured",
+    "videos": "Videos",
+    "images": "Images",
+    "music": "Music"
+  },
+  "allModels": "All Models",
+  "sorts": {
+    "popular": "Most Popular",
+    "newest": "Newest",
+    "creditsAsc": "Credits: Low → High",
+    "creditsDesc": "Credits: High → Low"
+  },
+  "creationsCount": "{{count}} creations",
+  "reset": "Reset",
+  "clearFilters": "Clear filters",
+  "sections": {
+    "featuredTitle": "Featured",
+    "featuredSub": "Hand-picked community creations",
+    "videosTitle": "Videos",
+    "videosSub": "Motion creations from the community",
+    "imagesTitle": "Images",
+    "imagesSub": "Stills and artwork",
+    "musicTitle": "Music",
+    "musicSub": "Tracks and soundscapes"
+  },
+  "emptyPublicTitle": "No public creations yet",
+  "emptyPublicSub": "Publish a completed image, video, or music creation from History to show it here.",
+  "emptyFiltered": "No creations match your filters",
+  "useTemplate": "Use Template",
+  "openingLab": "Opening lab…",
+  "hot": "Hot",
+  "outputs": "Outputs",
+  "prompt": "Prompt",
+  "stats": {
+    "uses": "Uses",
+    "type": "Type",
+    "credits": "Credits"
+  },
+  "audioOn": "Audio on",
+  "audioOff": "Audio off",
+  "auto": "Auto",
+  "close": "Close",
+  "credits": "{{count}} credits",
+  "tryThis": "Try this"
+}

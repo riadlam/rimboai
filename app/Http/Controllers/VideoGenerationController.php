@@ -67,7 +67,7 @@ class VideoGenerationController extends Controller
         }
 
         if (! $model) {
-            return response()->json(['message' => 'No video model is available.'], 422);
+            return response()->json(['message' => __('messages.model_unavailable')], 422);
         }
 
         $imageFiles = $this->normalizeFiles($request->file('images'));
@@ -113,7 +113,7 @@ class VideoGenerationController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return response()->json(['message' => 'Could not upload reference media. Please try again.'], 502);
+            return response()->json(['message' => __('messages.upload_failed')], 502);
         }
 
         $imageUrls = [];
@@ -168,7 +168,7 @@ class VideoGenerationController extends Controller
         $billing = $pricing->resolve($submitEndpoint);
         if ($billing === null) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $submitEndpoint,
             ], 503);
         }
@@ -185,7 +185,7 @@ class VideoGenerationController extends Controller
 
         if ((int) $cost['credits'] <= 0) {
             return response()->json([
-                'message' => 'This model is out of service. Please try another one.',
+                'message' => __('messages.model_unavailable'),
                 'endpoint_id' => $submitEndpoint,
             ], 503);
         }
@@ -232,7 +232,7 @@ class VideoGenerationController extends Controller
             );
         } catch (InsufficientTokensException $e) {
             return response()->json([
-                'message' => 'You do not have enough tokens for this creation.',
+                'message' => __('messages.not_enough_tokens'),
                 'required_tokens' => $e->required,
                 'available_tokens' => $e->available,
             ], 402);
@@ -242,7 +242,7 @@ class VideoGenerationController extends Controller
             $submit = $fal->submit($submitEndpoint, $falInput);
         } catch (\Throwable $e) {
             report($e);
-            $creation->markFailed('Could not start generation. Please try again.', 'submit_error');
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
             $tokens->refund($request->user(), $creation, 'video', 'fal_submit_failed');
 
             return response()->json($this->present($creation), 502);
@@ -318,7 +318,7 @@ class VideoGenerationController extends Controller
         }
 
         if ($state === 'IN_PROGRESS') {
-            $creation->markInProgress(null, 'Generating…');
+            $creation->markInProgress(null, __('messages.generating'));
 
             return;
         }
@@ -346,7 +346,7 @@ class VideoGenerationController extends Controller
         $video = $this->extractVideo($result);
 
         if ($video === null) {
-            $creation->markFailed('Generation finished without a video.', 'empty_result');
+            $creation->markFailed(__('messages.no_video'), 'empty_result');
 
             return;
         }

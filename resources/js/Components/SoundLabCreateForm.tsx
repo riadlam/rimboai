@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Brand, BrandMusicExample } from '@/types';
 import { LabModelPickerModal, LabModelPickerTrigger, type LabPickerModel } from '@/Components/LabModelPicker';
 import type { CreditsConfig } from '@/lib/imageCredits';
@@ -88,6 +89,7 @@ export default function SoundLabCreateForm({
     tokenBalance = 0,
     draft = null,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [style, setStyle] = useState('');
     const [title, setTitle] = useState('');
     const [lyrics, setLyrics] = useState('');
@@ -373,7 +375,7 @@ export default function SoundLabCreateForm({
             {/* Header — same model switch as voice lab */}
             <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.07] px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
-                    <h1 className="text-base font-semibold tracking-tight text-white">Music</h1>
+                    <h1 className="text-base font-semibold tracking-tight text-white">{t('music.title')}</h1>
                 </div>
                 <LabModelPickerTrigger
                     modelName={selectedModelRecord?.name || selectedModel}
@@ -390,7 +392,7 @@ export default function SoundLabCreateForm({
                         type="button"
                         onClick={() => setDraftNotice(null)}
                         className="shrink-0 text-white/45 hover:text-white"
-                        aria-label="Dismiss"
+                        aria-label={t('dismiss')}
                     >
                         ×
                     </button>
@@ -410,7 +412,7 @@ export default function SoundLabCreateForm({
                                 </span>
                             </div>
                             <p className="text-[12px] leading-relaxed text-white/45">
-                                Upload a track, then choose Remix (new style) or Lyrics edit (keep beat, rewrite vocals).
+                                {t('music.uploadTrackHint')}
                             </p>
 
                             <input
@@ -475,12 +477,12 @@ export default function SoundLabCreateForm({
                                     </div>
                                     <span className="min-w-0 flex-1 pe-6">
                                         <span className="block truncate text-[13px] font-semibold tracking-tight text-white">
-                                            {sourceAudio ? `@audio1 · ${sourceAudio.name}` : 'Choose audio file'}
+                                            {sourceAudio ? `@audio1 · ${sourceAudio.name}` : t('music.chooseAudio')}
                                         </span>
                                         <span className="mt-0.5 block text-[11px] text-white/45">
                                             {sourceAudio
                                                 ? `${sourceAudio.size > 1024 * 1024 ? `${(sourceAudio.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(sourceAudio.size / 1024))} KB`}${sourceDurationLabel ? ` · ${sourceDurationLabel}` : ''} · ready`
-                                                : 'Drop or browse · MP3, WAV, FLAC, OGG…'}
+                                                : t('music.dropAudio')}
                                         </span>
                                     </span>
                                     <span
@@ -490,15 +492,15 @@ export default function SoundLabCreateForm({
                                                 : 'bg-[#FF5733] text-white shadow-[0_8px_20px_rgba(255,87,51,0.35)]'
                                         }`}
                                     >
-                                        {sourceAudio ? 'Change' : 'Upload'}
+                                        {sourceAudio ? t('change') : t('upload')}
                                     </span>
                                 </div>
                             </motion.button>
                             {sourceAudio && (
                                 <button
                                     type="button"
-                                    aria-label="Remove audio"
-                                    title="Remove"
+                                    aria-label={t('remove')}
+                                    title={t('remove')}
                                     onClick={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
@@ -520,7 +522,7 @@ export default function SoundLabCreateForm({
                             )}
 
                             <div className="space-y-1.5">
-                                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">Edit mode</span>
+                                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">{t('music.editMode')}</span>
                                 <div className="relative grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black p-1">
                                     <motion.span
                                         aria-hidden
@@ -533,8 +535,8 @@ export default function SoundLabCreateForm({
                                     />
                                     {(
                                         [
-                                            { id: 'remix' as const, label: 'Remix', hint: 'Best for instrumental + new vocals' },
-                                            { id: 'lyrics' as const, label: 'Lyrics edit', hint: 'Rewrite vocals on a sung track' },
+                                            { id: 'remix' as const, label: t('music.remix'), hint: 'Best for instrumental + new vocals' },
+                                            { id: 'lyrics' as const, label: t('music.lyricsEdit'), hint: 'Rewrite vocals on a sung track' },
                                         ]
                                     ).map((mode) => {
                                         const active = editMode === mode.id;
@@ -567,12 +569,12 @@ export default function SoundLabCreateForm({
 
                             {/* Soft gender hint via style tags — ACE has no dedicated gender API field */}
                             <div className="space-y-1.5">
-                                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">Vocal gender</span>
+                                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">{t('music.vocalGender')}</span>
                                 <div className="grid grid-cols-2 gap-2">
                                     {(
                                         [
-                                            { id: 'female' as const, label: 'Female', hint: 'Softer / brighter' },
-                                            { id: 'male' as const, label: 'Male', hint: 'Deeper / warmer' },
+                                            { id: 'female' as const, label: t('music.female'), hint: 'Softer / brighter' },
+                                            { id: 'male' as const, label: t('music.male'), hint: 'Deeper / warmer' },
                                         ] as const
                                     ).map((opt) => {
                                         const active = vocalGender === opt.id;
@@ -606,7 +608,7 @@ export default function SoundLabCreateForm({
                     <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                             <label className="text-sm font-medium text-white">
-                                {needsSourceAudio ? 'Target Style' : 'Style of Music'} <span className="text-[#FF5733]">*</span>
+                                {needsSourceAudio ? t('music.targetStyle') : t('music.styleOfMusic')} <span className="text-[#FF5733]">*</span>
                             </label>
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5">
@@ -615,7 +617,7 @@ export default function SoundLabCreateForm({
                                         <path d="M20 3v4" />
                                         <path d="M22 5h-4" />
                                     </svg>
-                                    <span className="text-xs text-white/40">Auto-enhance · 1 credit</span>
+                                    <span className="text-xs text-white/40">{t('music.autoEnhance')}</span>
                                     <Toggle checked={autoEnhance} onChange={setAutoEnhance} />
                                 </div>
                                 <span className="text-xs text-white/40">
@@ -633,7 +635,7 @@ export default function SoundLabCreateForm({
                             placeholder={
                                 needsSourceAudio
                                     ? 'Short style tags work best, e.g. rai, pop, emotional, ambient, female vocals'
-                                    : 'Type the style of song you want to generate...'
+                                    : t('music.stylePlaceholder')
                             }
                             className="max-h-[220px] min-h-[140px] w-full resize-y overflow-y-auto rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 scrollbar-thin"
                         />
@@ -665,7 +667,7 @@ export default function SoundLabCreateForm({
                         <div className="min-w-0 space-y-2" key={selectedModelRecord?.endpoint_id || selectedModel}>
                             <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
-                                    <span className="text-sm font-medium text-white">Examples</span>
+                                    <span className="text-sm font-medium text-white">{t('music.examples')}</span>
                                     <p className="truncate text-[11px] text-white/40">
                                         For {selectedModelRecord?.name || selectedModel}
                                         {!canUseVocals ? ' · instrumental' : ''}
@@ -709,7 +711,7 @@ export default function SoundLabCreateForm({
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value.slice(0, 80))}
-                            placeholder="Give your track a name..."
+                            placeholder={t('music.trackName')}
                             className="flex h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                         />
                     </div>
@@ -732,7 +734,7 @@ export default function SoundLabCreateForm({
                                                 </svg>
                                             </span>
                                             <div className="min-w-0">
-                                                <p className="text-sm font-medium text-white">Track duration</p>
+                                                <p className="text-sm font-medium text-white">{t('music.trackDuration')}</p>
                                                 <p className="truncate text-[11px] text-white/40">
                                                     Supported by {selectedModelRecord?.name || selectedModel}
                                                 </p>
@@ -752,7 +754,7 @@ export default function SoundLabCreateForm({
                                         step={durationStep}
                                         value={durationSeconds}
                                         onChange={(event) => setDurationSeconds(Number(event.target.value))}
-                                        aria-label="Track duration"
+                                        aria-label={t('music.trackDuration')}
                                         className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[#FF5733]"
                                     />
 
@@ -809,10 +811,10 @@ export default function SoundLabCreateForm({
                                 <div>
                                     <label className="text-sm font-medium text-white">
                                         {!canUseVocals
-                                            ? 'Instrumental only'
+                                            ? t('music.instrumentalOnly')
                                             : instrumental
-                                              ? 'Without Vocals'
-                                              : 'With Vocals'}
+                                              ? t('music.withoutVocals')
+                                              : t('music.withVocals')}
                                     </label>
                                     <p className="text-xs text-white/45">
                                         {!canUseVocals
@@ -839,12 +841,12 @@ export default function SoundLabCreateForm({
                                     className="overflow-hidden"
                                 >
                                     <div className="space-y-2 border-t border-white/10 pt-3">
-                                        <p className="text-xs font-medium uppercase tracking-wide text-white/45">Vocal gender</p>
+                                        <p className="text-xs font-medium uppercase tracking-wide text-white/45">{t('music.vocalGender')}</p>
                                         <div className="grid grid-cols-2 gap-2">
                                             {(
                                                 [
-                                                    { id: 'female' as const, label: 'Female', hint: 'Softer / brighter' },
-                                                    { id: 'male' as const, label: 'Male', hint: 'Deeper / warmer' },
+                                                    { id: 'female' as const, label: t('music.female'), hint: 'Softer / brighter' },
+                                                    { id: 'male' as const, label: t('music.male'), hint: 'Deeper / warmer' },
                                                 ] as const
                                             ).map((opt) => {
                                                 const active = vocalGender === opt.id;
@@ -888,15 +890,15 @@ export default function SoundLabCreateForm({
                                     <path d="M12 20h9" />
                                     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                 </svg>
-                                Lyrics
+                                {t('music.lyrics')}
                                 {needsSourceAudio && (
                                     <span className="rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
-                                        {vocalGender === 'male' ? 'Male' : 'Female'}
+                                        {vocalGender === 'male' ? t('music.male') : t('music.female')}
                                     </span>
                                 )}
                                 {!needsSourceAudio && !instrumental && (
                                     <span className="rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
-                                        {vocalGender === 'male' ? 'Male' : 'Female'}
+                                        {vocalGender === 'male' ? t('music.male') : t('music.female')}
                                     </span>
                                 )}
                                 {needsSourceAudio && (
@@ -961,14 +963,14 @@ export default function SoundLabCreateForm({
                                                 onWheel={(e) => e.stopPropagation()}
                                                 rows={9}
                                                 spellCheck={false}
-                                                placeholder={`[Verse]\nWalking through the night lights…\n\n[Chorus]\nSing it loud, sing it clear…`}
+                                                placeholder={t('music.lyricsPlaceholder')}
                                                 className="max-h-[320px] min-h-[200px] w-full resize-y overflow-y-auto bg-black ps-4 pe-3.5 py-3.5 font-mono text-[13px] leading-7 text-white outline-none placeholder:text-white/25 focus:ring-0 scrollbar-thin"
                                             />
                                             <div className="flex items-center justify-between border-t border-white/10 bg-black px-3 py-2">
                                                 <span className="text-[11px] text-white/40">
                                                     {needsSourceAudio
                                                         ? `${editMode === 'remix' ? 'Remix' : 'Lyrics edit'} · paste lyrics for singing`
-                                                        : `${vocalGender === 'male' ? 'Male' : 'Female'} vocal · tags help song structure`}
+                                                        : `${vocalGender === 'male' ? t('music.male') : t('music.female')} vocal · tags help song structure`}
                                                 </span>
                                                 <span
                                                     className={`text-[11px] tabular-nums ${
@@ -1003,14 +1005,14 @@ export default function SoundLabCreateForm({
                         </span>
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
                             {needsSourceAudio
-                                ? `${editMode === 'lyrics' ? 'Lyrics edit' : 'Remix'} · ${vocalGender === 'male' ? 'Male' : 'Female'}`
+                                ? `${editMode === 'lyrics' ? t('music.lyricsEdit') : t('music.remix')} · ${vocalGender === 'male' ? t('music.male') : t('music.female')}`
                                 : instrumental || !canUseVocals
-                                  ? 'Instrumental'
-                                  : `Vocals · ${vocalGender === 'male' ? 'Male' : 'Female'}`}
+                                  ? t('music.instrumental')
+                                  : `${t('music.withVocals')} · ${vocalGender === 'male' ? t('music.male') : t('music.female')}`}
                         </span>
                         {autoEnhance && (
                             <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                                Auto-enhance
+                                {t('music.autoEnhance').split(' · ')[0]}
                             </span>
                         )}
                     </div>
@@ -1074,16 +1076,16 @@ export default function SoundLabCreateForm({
                     {loading ? (
                         <span className="relative flex items-center gap-2">
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                            Creating…
+                            {t('generating')}
                         </span>
                     ) : !hasEnoughTokens ? (
-                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
+                        <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
                             </svg>
-                            <span className="relative">Create</span>
+                            <span className="relative">{t('create')}</span>
                             {creditCost > 0 && (
                                 <span className="relative inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-medium tabular-nums">
                                     <CreditBoltIcon className="h-3 w-3 text-amber-100" />
@@ -1100,8 +1102,8 @@ export default function SoundLabCreateForm({
                 models={allModels}
                 selectedName={selectedModel}
                 onClose={() => setModelOpen(false)}
-                title="Select Model"
-                subtitle="Pick a music model — each card shows its cover art and focus."
+                title={t('selectModel')}
+                subtitle={t('selectModelSub')}
                 fallbackDescription="Music generation model"
                 onSelect={(m) => {
                     setSelectedBrand(m.brandName);
@@ -1114,7 +1116,7 @@ export default function SoundLabCreateForm({
             <AnimatePresence>
                 {samplesOpen && (
                     <ModalShell onClose={() => setSamplesOpen(false)} wide>
-                        <h2 className="text-lg font-semibold tracking-tight text-white">Examples</h2>
+                        <h2 className="text-lg font-semibold tracking-tight text-white">{t('music.examples')}</h2>
                         <p className="mt-1 text-[13px] text-white/45">
                             Styles tuned for {selectedModelRecord?.name || selectedModel}
                         </p>
@@ -1158,6 +1160,7 @@ function SampleCard({
     onClick: () => void;
     wide?: boolean;
 }) {
+    const { t } = useTranslation('lab');
     return (
         <button
             type="button"
@@ -1198,7 +1201,7 @@ function SampleCard({
                             sample.vocals ? 'bg-black/70' : 'bg-black'
                         }`}
                     >
-                        {sample.vocals ? 'With Vocals' : 'Without Vocals'}
+                        {sample.vocals ? t('music.withVocals') : t('music.withoutVocals')}
                     </span>
                     {!sample.sample_url && (
                         <span className="rounded-full bg-black px-1.5 py-0.5 text-[9px] font-medium text-white/50">

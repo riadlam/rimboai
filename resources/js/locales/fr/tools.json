@@ -1,0 +1,52 @@
+{
+  "title": "Outils",
+  "search": "Rechercher des outils",
+  "backHome": "Retour à l'accueil",
+  "filterAll": "Tous",
+  "filterVideo": "Vidéo",
+  "filterImage": "Image",
+  "empty": "Aucun outil ne correspond à votre recherche.",
+  "clearFilters": "Effacer les filtres",
+  "useThisTool": "Utiliser cet outil",
+  "groups": {
+    "enhance": {
+      "title": "Améliorer & Upscaler",
+      "desc": "Affinez, débruitez et boostez n'importe quel clip vers une clarté supérieure."
+    },
+    "transform": {
+      "title": "Transformer & Effets",
+      "desc": "Échange de visage, lip sync, styles anime, filtres et mouvement."
+    },
+    "edit": {
+      "title": "Éditer & Prolonger",
+      "desc": "Coupez, prolongez, restylez et nettoyez vos rushes."
+    },
+    "create": {
+      "title": "Créer & Animer",
+      "desc": "Donnez vie aux images fixes et générez un son cinématographique."
+    }
+  },
+  "detail": {
+    "subtitle": "Outil vidéo propulsé par l'IA",
+    "upload": "Téléverser une vidéo",
+    "uploadHint": "Cliquez ou glissez pour téléverser",
+    "aiModel": "Modèle d'IA",
+    "modelAuto": "Auto (recommandé)",
+    "modelStandard": "Standard",
+    "modelPro": "Pro",
+    "modelUltra": "Ultra",
+    "scale": "Échelle",
+    "mode": "Mode",
+    "modeGeneral": "Général",
+    "modeAnimation": "Animation",
+    "modeLowLight": "Faible luminosité",
+    "hq": "Haute qualité",
+    "hqDesc": "Meilleure fidélité visuelle",
+    "public": "Public",
+    "publicDesc": "Visible dans la galerie communautaire",
+    "copyProtection": "Protection contre la copie",
+    "copyProtectionDesc": "Restreindre les téléchargements",
+    "credits": "Crédits",
+    "create": "Créer"
+  }
+}

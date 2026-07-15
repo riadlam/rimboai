@@ -2,7 +2,9 @@ import { Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import type { PageProps } from '@/types';
+import { applyLanguage, LANGUAGES, readSavedLang, type AppLang } from '@/lib/i18n';
 
 type Props = {
     open: boolean;
@@ -54,31 +56,10 @@ function RailLink({
     );
 }
 
-type AppLang = 'en' | 'fr' | 'ar';
-
-const LANGUAGES: { code: AppLang; label: string; short: string }[] = [
-    { code: 'en', label: 'English', short: 'EN' },
-    { code: 'fr', label: 'French', short: 'FR' },
-    { code: 'ar', label: 'Arabic', short: 'AR' },
-];
-
-function readSavedLang(): AppLang {
-    if (typeof window === 'undefined') return 'en';
-    const saved = window.localStorage.getItem('app_lang');
-    if (saved === 'ar' || saved === 'fr' || saved === 'en') return saved;
-    return 'en';
-}
-
-function applyLang(next: AppLang) {
-    window.localStorage.setItem('app_lang', next);
-    document.documentElement.lang = next;
-    document.documentElement.dir = next === 'ar' ? 'rtl' : 'ltr';
-}
-
-const createItems = [
+const createItemDefs = [
     {
         href: '/lab?type=text-to-image',
-        label: 'Image',
+        labelKey: 'image' as const,
         match: (url: string) => url.startsWith('/lab') && url.includes('text-to-image'),
         icon: (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -90,7 +71,7 @@ const createItems = [
     },
     {
         href: '/lab?type=text-to-video',
-        label: 'Video',
+        labelKey: 'video' as const,
         match: (url: string) => {
             if (!url.startsWith('/lab')) return false;
             if (
@@ -113,7 +94,7 @@ const createItems = [
     },
     {
         href: '/lab?type=text-to-voice',
-        label: 'Voice',
+        labelKey: 'voice' as const,
         match: (url: string) => url.startsWith('/lab') && (url.includes('text-to-voice') || url.includes('image-to-video')),
         icon: (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -125,7 +106,7 @@ const createItems = [
     },
     {
         href: '/lab?type=text-to-music',
-        label: 'Music',
+        labelKey: 'music' as const,
         match: (url: string) => url.startsWith('/lab') && (url.includes('text-to-music') || url.includes('text-to-sound')),
         icon: (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -138,6 +119,8 @@ const createItems = [
 ];
 
 export default function Sidebar({ open, onClose }: Props) {
+    const { t } = useTranslation('nav');
+    const { t: tc } = useTranslation('common');
     const { url, props } = usePage<PageProps>();
     const user = props.auth.user;
     const [createOpen, setCreateOpen] = useState(true);
@@ -145,10 +128,11 @@ export default function Sidebar({ open, onClose }: Props) {
     const [langMenuOpen, setLangMenuOpen] = useState(false);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const langWrapRef = useRef<HTMLDivElement>(null);
+    const isRtl = lang === 'ar';
 
     const selectLanguage = (next: AppLang) => {
         setLang(next);
-        applyLang(next);
+        applyLanguage(next);
         setLangMenuOpen(false);
     };
 
@@ -158,12 +142,12 @@ export default function Sidebar({ open, onClose }: Props) {
         const rect = el.getBoundingClientRect();
         setMenuPos({
             top: rect.top + rect.height / 2,
-            left: rect.right + 4,
+            left: isRtl ? rect.left - 4 : rect.right + 4,
         });
     };
 
     useEffect(() => {
-        applyLang(lang);
+        applyLanguage(lang);
     }, [lang]);
 
     useEffect(() => {
@@ -189,18 +173,17 @@ export default function Sidebar({ open, onClose }: Props) {
             document.removeEventListener('mousedown', onPointerDown);
             window.removeEventListener('keydown', onKey);
         };
-    }, [langMenuOpen]);
+    }, [langMenuOpen, isRtl]);
 
     return (
         <aside
             data-slot="app-sidebar"
-            className={`fixed bottom-0 left-0 top-14 z-40 box-border flex w-[84px] min-w-[84px] shrink-0 flex-col overflow-visible border-e border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 md:top-16 lg:static lg:top-auto lg:z-40 lg:mr-4 lg:h-full lg:translate-x-0 ${
-                open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
+            className={`fixed bottom-0 start-0 top-14 z-40 box-border flex w-[84px] min-w-[84px] shrink-0 flex-col overflow-visible border-e border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 md:top-16 lg:static lg:top-auto lg:z-40 lg:me-4 lg:h-full lg:translate-x-0 ${
+                open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full rtl:max-lg:translate-x-full'
             }`}
         >
-            {/* Home */}
             <div className="flex-shrink-0 px-2 py-3">
-                <RailLink href="/" active={url === '/'} onClick={onClose} label="Home">
+                <RailLink href="/" active={url === '/'} onClick={onClose} label={t('home')}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                         <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
                         <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -211,7 +194,6 @@ export default function Sidebar({ open, onClose }: Props) {
             <Divider />
 
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-                {/* Create group */}
                 <div className="px-2 py-2">
                     <button
                         type="button"
@@ -232,7 +214,7 @@ export default function Sidebar({ open, onClose }: Props) {
                         >
                             <path d="m6 9 6 6 6-6" />
                         </svg>
-                        <span className="text-center text-[10px] font-medium leading-tight">Create</span>
+                        <span className="text-center text-[10px] font-medium leading-tight">{t('create')}</span>
                     </button>
 
                     <AnimatePresence initial={false}>
@@ -245,13 +227,13 @@ export default function Sidebar({ open, onClose }: Props) {
                                 className="mt-1 overflow-hidden"
                             >
                                 <nav className="flex flex-col gap-1">
-                                    {createItems.map((item) => (
+                                    {createItemDefs.map((item) => (
                                         <RailLink
                                             key={item.href}
                                             href={item.href}
                                             active={item.match(url)}
                                             onClick={onClose}
-                                            label={item.label}
+                                            label={t(item.labelKey)}
                                         >
                                             {item.icon}
                                         </RailLink>
@@ -264,9 +246,8 @@ export default function Sidebar({ open, onClose }: Props) {
 
                 <Divider />
 
-                {/* Secondary */}
                 <nav className="flex flex-col gap-1 px-2 py-3">
-                    <RailLink href="/pricing" active={url.startsWith('/pricing')} onClick={onClose} label="Pricing">
+                    <RailLink href="/pricing" active={url.startsWith('/pricing')} onClick={onClose} label={t('pricing')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                             <circle cx="8" cy="8" r="6" />
                             <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
@@ -275,20 +256,20 @@ export default function Sidebar({ open, onClose }: Props) {
                         </svg>
                     </RailLink>
                     {user && (
-                        <RailLink href="/billing/history" active={url.startsWith('/billing/history')} onClick={onClose} label="Billing">
+                        <RailLink href="/billing/history" active={url.startsWith('/billing/history')} onClick={onClose} label={t('billing')}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                                 <path d="M6 2h12a2 2 0 0 1 2 2v18l-3-2-3 2-3-2-3 2-3-2-3 2V6a4 4 0 0 1 4-4Z" />
                                 <path d="M16 8h-6M16 12h-6M13 16h-3" />
                             </svg>
                         </RailLink>
                     )}
-                    <RailLink href="/trends" active={url.startsWith('/trends') || url.startsWith('/marketplace')} onClick={onClose} label="Trends">
+                    <RailLink href="/trends" active={url.startsWith('/trends') || url.startsWith('/marketplace')} onClick={onClose} label={t('trends')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
                             <polyline points="16 7 22 7 22 13" />
                         </svg>
                     </RailLink>
-                    <RailLink href="/innovation" active={url.startsWith('/innovation') || url.startsWith('/post/')} onClick={onClose} label="Innovation">
+                    <RailLink href="/innovation" active={url.startsWith('/innovation') || url.startsWith('/post/')} onClick={onClose} label={t('innovation')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                             <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
                             <path d="M20 3v4" />
@@ -298,7 +279,7 @@ export default function Sidebar({ open, onClose }: Props) {
                         </svg>
                     </RailLink>
                     {user && (
-                        <RailLink href="/history" active={url.startsWith('/history')} onClick={onClose} label="History">
+                        <RailLink href="/history" active={url.startsWith('/history')} onClick={onClose} label={t('history')}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                                 <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
                             </svg>
@@ -307,7 +288,6 @@ export default function Sidebar({ open, onClose }: Props) {
                 </nav>
             </div>
 
-            {/* Language — pinned at bottom, same rail style as Home */}
             <Divider />
             <div className="relative flex-shrink-0 px-2 py-3" ref={langWrapRef}>
                 <RailLink
@@ -332,30 +312,39 @@ export default function Sidebar({ open, onClose }: Props) {
                         {langMenuOpen && (
                             <motion.div
                                 id="sidebar-lang-menu"
-                                initial={{ opacity: 0, x: -8, scale: 0.92 }}
+                                initial={{ opacity: 0, x: isRtl ? 8 : -8, scale: 0.92 }}
                                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                                exit={{ opacity: 0, x: -8, scale: 0.92 }}
+                                exit={{ opacity: 0, x: isRtl ? 8 : -8, scale: 0.92 }}
                                 transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                                style={{ top: menuPos.top, left: menuPos.left }}
+                                style={{
+                                    top: menuPos.top,
+                                    ...(isRtl ? { right: window.innerWidth - menuPos.left } : { left: menuPos.left }),
+                                }}
                                 className="fixed z-[200] w-[128px] -translate-y-1/2 overflow-hidden rounded-xl border border-white/10 bg-black p-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)]"
                                 role="menu"
-                                aria-label="Language"
+                                aria-label={tc('language')}
                             >
                                 {LANGUAGES.map((item) => {
                                     const active = lang === item.code;
+                                    const label =
+                                        item.code === 'en'
+                                            ? t('english')
+                                            : item.code === 'fr'
+                                              ? t('french')
+                                              : t('arabic');
                                     return (
                                         <button
                                             key={item.code}
                                             type="button"
                                             role="menuitem"
                                             onClick={() => selectLanguage(item.code)}
-                                            className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition ${
+                                            className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-start text-xs font-medium transition ${
                                                 active
                                                     ? 'bg-white/15 text-white'
                                                     : 'text-white/70 hover:bg-white/10 hover:text-white'
                                             }`}
                                         >
-                                            <span>{item.label}</span>
+                                            <span>{label}</span>
                                             <span className="text-[10px] text-white/40">{item.short}</span>
                                         </button>
                                     );

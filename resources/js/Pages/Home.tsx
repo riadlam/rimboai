@@ -1,6 +1,7 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import AppLayout from '@/Layouts/AppLayout';
 import type { Brand, PageProps, Tool } from '@/types';
@@ -19,8 +20,6 @@ const VIDEO_CARD_SRC = SAMPLE_VIDEO('ForBiggerBlazes');
 const CREATE_TYPES = [
     {
         id: 'video',
-        label: 'Video',
-        desc: 'Cinematic clips from a single prompt.',
         href: '/lab?type=text-to-video',
         media: { type: 'video' as const, src: VIDEO_CARD_SRC },
         accent: 'from-[#FF6A45] to-[#E24216]',
@@ -28,8 +27,6 @@ const CREATE_TYPES = [
     },
     {
         id: 'image',
-        label: 'Image',
-        desc: 'Studio-grade stills in any style.',
         href: '/lab?type=text-to-image',
         media: { type: 'image' as const, src: IMG('rimboai-image') },
         accent: 'from-[#a78bfa] to-[#6d28d9]',
@@ -37,8 +34,6 @@ const CREATE_TYPES = [
     },
     {
         id: 'voice',
-        label: 'Voice',
-        desc: 'Natural speech for any scene.',
         href: '/lab?type=text-to-voice',
         media: { type: 'image' as const, src: IMG('rimboai-voice') },
         accent: 'from-[#22d3ee] to-[#0e7490]',
@@ -46,16 +41,14 @@ const CREATE_TYPES = [
     },
     {
         id: 'music',
-        label: 'Music',
-        desc: 'Tracks and soundscapes on demand.',
         href: '/lab?type=text-to-music',
         media: { type: 'image' as const, src: IMG('rimboai-music') },
         accent: 'from-[#fbbf24] to-[#b45309]',
         glow: 'rgba(245,158,11,0.35)',
     },
-];
+] as const;
 
-const ROTATING = ['today', 'right now', 'that goes viral', 'in seconds'];
+const ROTATING = ['today', 'rightNow', 'thatGoesViral', 'inSeconds'] as const;
 
 /** Spring used for the hero card rotation morph (big slot <-> side stack). */
 const HERO_SPRING = { type: 'spring' as const, stiffness: 220, damping: 28, mass: 0.9 };
@@ -94,13 +87,14 @@ const INSPIRATIONS_2 = [
 ];
 
 export default function Home({ tools }: Props) {
+    const { t: ta } = useTranslation('auth');
     const { url, props } = usePage<PageProps>();
     const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
     const showLogin = !props.auth.user && new URLSearchParams(query).has('login');
 
     return (
         <AppLayout flush={showLogin}>
-            <Head title={showLogin ? 'Sign In' : 'Home'} />
+            <Head title={showLogin ? ta('signInTitle') : 'Home'} />
             {showLogin ? (
                 <InlineLogin />
             ) : (
@@ -120,6 +114,8 @@ export default function Home({ tools }: Props) {
 }
 
 function InlineLogin() {
+    const { t } = useTranslation('auth');
+    const { t: th } = useTranslation('home');
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
@@ -147,7 +143,7 @@ function InlineLogin() {
             >
                 <Link
                     href="/"
-                    aria-label="Close sign in"
+                    aria-label={th('signInClose')}
                     className="absolute end-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-white/35 transition hover:bg-white/[0.06] hover:text-white"
                 >
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -164,11 +160,11 @@ function InlineLogin() {
                     </p>
                 </div>
 
-                <GoogleAuthButton label="Continue with Google" />
+                <GoogleAuthButton label={t('continueWithGoogle')} />
 
                 <form onSubmit={submit} className="mt-4 space-y-3.5">
                     <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-white/65">Email address</span>
+                        <span className="mb-1.5 block text-xs font-medium text-white/65">{t('email')}</span>
                         <input
                             type="email"
                             value={data.email}
@@ -176,21 +172,21 @@ function InlineLogin() {
                             autoComplete="email"
                             required
                             autoFocus
-                            placeholder="you@example.com"
+                            placeholder={t('emailPlaceholder')}
                             className="h-12 w-full rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none transition placeholder:text-white/20 focus:border-[#FF5733]/60 focus:ring-4 focus:ring-[#FF5733]/10"
                         />
                         {errors.email && <span className="mt-1.5 block text-xs text-rose-400">{errors.email}</span>}
                     </label>
 
                     <label className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-white/65">Password</span>
+                        <span className="mb-1.5 block text-xs font-medium text-white/65">{t('password')}</span>
                         <input
                             type="password"
                             value={data.password}
                             onChange={(event) => setData('password', event.target.value)}
                             autoComplete="current-password"
                             required
-                            placeholder="Enter your password"
+                            placeholder={t('passwordPlaceholder')}
                             className="h-12 w-full rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none transition placeholder:text-white/20 focus:border-[#FF5733]/60 focus:ring-4 focus:ring-[#FF5733]/10"
                         />
                         {errors.password && <span className="mt-1.5 block text-xs text-rose-400">{errors.password}</span>}
@@ -203,7 +199,7 @@ function InlineLogin() {
                             onChange={(event) => setData('remember', event.target.checked)}
                             className="size-4 rounded border-white/15 bg-black/30 text-[#FF5733] focus:ring-[#FF5733]/30 focus:ring-offset-0"
                         />
-                        Keep me signed in
+                        {t('keepSignedIn')}
                     </label>
 
                     <button
@@ -215,7 +211,7 @@ function InlineLogin() {
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                         ) : (
                             <>
-                                Sign in
+                                {t('signIn')}
                                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
                                 </svg>
@@ -231,6 +227,7 @@ function InlineLogin() {
 /* ---------------- Hero ---------------- */
 
 function Hero() {
+    const { t } = useTranslation('home');
     const [word, setWord] = useState(0);
     const [active, setActive] = useState(0);
     const [paused, setPaused] = useState(false);
@@ -335,7 +332,7 @@ function Hero() {
                     className="shrink-0 text-center"
                 >
                     <h1 className="font-[family-name:Outfit,sans-serif] text-[28px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-[52px] xl:text-[56px]">
-                        What will you create{' '}
+                        {t('headline')}{' '}
                         <span className="relative inline-flex h-[1.12em] overflow-hidden align-bottom">
                             <AnimatePresence mode="popLayout">
                                 <motion.span
@@ -346,11 +343,11 @@ function Hero() {
                                     transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                                     className="bg-gradient-to-r from-[#FF8A65] via-amber-300 to-yellow-300 bg-clip-text text-transparent"
                                 >
-                                    {ROTATING[word]}
+                                    {t(`rotating.${ROTATING[word]}`)}
                                 </motion.span>
                             </AnimatePresence>
                         </span>
-                        <span className="text-white">?</span>
+                        <span className="text-white">{t('headlineEnd')}</span>
                     </h1>
                     <motion.p
                         initial={{ opacity: 0 }}
@@ -358,7 +355,7 @@ function Hero() {
                         transition={{ delay: 0.35 }}
                         className="mx-auto mt-2 max-w-xl text-[13px] text-white/45 sm:text-sm"
                     >
-                        Video, image, voice & music — one studio, instant results.
+                        {t('subtitle')}
                     </motion.p>
                 </motion.div>
 
@@ -436,7 +433,7 @@ function Hero() {
                         <button
                             key={c.id}
                             type="button"
-                            aria-label={`Show ${c.label}`}
+                            aria-label={`Show ${t(`createTypes.${c.id}.label`)}`}
                             onClick={() => setActive(i)}
                             className="group relative h-1.5 overflow-hidden rounded-full transition-all"
                             style={{ width: i === active ? 26 : 8 }}
@@ -474,10 +471,10 @@ function Hero() {
                         </svg>
                     </span>
                     <span className="relative min-w-0 flex-1 truncate text-sm text-white/50">
-                        Describe anything — “a neon fox running through Tokyo at night”…
+                        {t('promptPlaceholder')}
                     </span>
                     <span className="relative hidden shrink-0 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black transition group-hover:brightness-95 sm:inline-flex">
-                        Generate
+                        {t('generate')}
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
@@ -507,8 +504,8 @@ function Hero() {
                                 <CreateTypeIcon id={c.id} />
                             </span>
                             <span className="relative min-w-0 flex-1">
-                                <span className="block text-[13px] font-semibold text-white">{c.label}</span>
-                                <span className="mt-0.5 block truncate text-[11px] text-white/40">Open Lab</span>
+                                <span className="block text-[13px] font-semibold text-white">{t(`createTypes.${c.id}.label`)}</span>
+                                <span className="mt-0.5 block truncate text-[11px] text-white/40">{t('openLab')}</span>
                             </span>
                             <svg
                                 className="relative h-3.5 w-3.5 shrink-0 text-white/30 transition group-active:text-white/55"
@@ -615,7 +612,10 @@ function CreateCard({
     side?: boolean;
     autoPlay?: boolean;
 }) {
+    const { t } = useTranslation('home');
     const isVideo = item.media.type === 'video';
+    const label = t(`createTypes.${item.id}.label`);
+    const desc = t(`createTypes.${item.id}.desc`);
 
     return (
         <Link
@@ -660,7 +660,7 @@ function CreateCard({
                 ) : (
                     <img
                         src={item.media.src}
-                        alt={item.label}
+                        alt={label}
                         className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
                         loading="lazy"
                     />
@@ -690,12 +690,12 @@ function CreateCard({
                                     featured ? 'text-2xl lg:text-3xl' : compact ? 'text-xs sm:text-sm' : 'text-sm lg:text-base'
                                 }`}
                             >
-                                {item.label}
+                                {label}
                             </h3>
                         </div>
                         {!compact && (
                             <p className={`mt-0.5 text-white/60 ${featured ? 'max-w-md text-[13px] lg:text-sm' : 'line-clamp-1 text-[11px]'}`}>
-                                {item.desc}
+                                {desc}
                             </p>
                         )}
                     </div>

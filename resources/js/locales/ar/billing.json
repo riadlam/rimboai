@@ -1,0 +1,53 @@
+{
+  "title": "سجل الفوترة",
+  "eyebrow": "المدفوعات",
+  "subtitle": "راجع مشتريات الرموز وحالة الدفع. لا تُعرض تفاصيل بوابة الدفع الحساسة أبداً.",
+  "buyTokens": "شراء رموز",
+  "transactions": "المعاملات",
+  "matching": "{{count}} سجلات مطابقة",
+  "emptyTitle": "لا توجد مدفوعات",
+  "emptyAll": "ستظهر مشتريات الرموز هنا.",
+  "emptyFiltered": "ليس لديك مدفوعات {{status}}.",
+  "reference": "المرجع",
+  "package": "الباقة",
+  "amount": "المبلغ",
+  "date": "التاريخ",
+  "status": "الحالة",
+  "tokens": "الرموز",
+  "tokenPack": "باقة رموز",
+  "gatewayNote": "SofizPay · CIB/Edahabia",
+  "previous": "السابق",
+  "next": "التالي",
+  "filters": {
+    "all": "الكل",
+    "paid": "مدفوع",
+    "pending": "قيد الانتظار",
+    "failed": "فشل",
+    "canceled": "ملغى"
+  },
+  "stats": {
+    "purchases": "المشتريات",
+    "completed": "{{count}} مكتملة",
+    "tokensBought": "الرموز المشتراة",
+    "fromCompleted": "من المدفوعات المكتملة",
+    "totalPaid": "إجمالي المدفوع",
+    "completedOnly": "المدفوعات المكتملة فقط",
+    "successRate": "معدل النجاح",
+    "acrossAttempts": "عبر جميع محاولات الدفع"
+  },
+  "modal": {
+    "title": "شراء رموز",
+    "subtitle": "اشحن رصيد Lab. الأسعار تتبع الكتالوج المباشر.",
+    "currency": "العملة",
+    "hint": "اختر باقة. يعالج SofizPay الدفع النهائي بأمان بالدينار الجزائري.",
+    "emptyPacks": "لا توجد باقات رموز متاحة حالياً.",
+    "popular": "شائع",
+    "bestValue": "أفضل قيمة",
+    "secureNote": "دفع آمن عبر SofizPay. تُضاف الرموز بعد التحقق من الخادم ولا تنتهي صلاحيتها.",
+    "chargeDzd": "سيتم خصم {{amount}} د.ج عند الدفع.",
+    "starting": "بدء الدفع الآمن…",
+    "payCta": "ادفع {{amount}} د.ج · {{tokens}} رموز",
+    "selectPack": "اختر باقة",
+    "close": "إغلاق"
+  }
+}

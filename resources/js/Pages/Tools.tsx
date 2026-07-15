@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import type { Tool } from '@/types';
 
@@ -12,27 +13,21 @@ type Filter = 'all' | 'video' | 'image';
 
 type ToolKind = 'video' | 'image';
 
-type ToolGroup = {
-    id: string;
-    title: string;
-    description: string;
+type ToolGroupDef = {
+    id: 'enhance' | 'transform' | 'edit' | 'create';
     routes: string[];
 };
 
 /** Tools treated as image-oriented for the Image filter. */
 const IMAGE_ROUTES = new Set(['tools.animate-a-picture']);
 
-const GROUPS: ToolGroup[] = [
+const GROUPS: ToolGroupDef[] = [
     {
         id: 'enhance',
-        title: 'Enhance & Upscale',
-        description: 'Sharpen, denoise, and boost any clip to higher clarity.',
         routes: ['tools.video-upscaler', 'tools.video-enhancer', 'tools.denoise-video', 'tools.anime-video-enhancer'],
     },
     {
         id: 'transform',
-        title: 'Transform & Effects',
-        description: 'Face swap, lip sync, anime styles, filters, and motion.',
         routes: [
             'tools.lip-sync',
             'tools.face-swap-video',
@@ -44,8 +39,6 @@ const GROUPS: ToolGroup[] = [
     },
     {
         id: 'edit',
-        title: 'Edit & Extend',
-        description: 'Cut, extend, restyle, and clean up your footage.',
         routes: [
             'tools.ai-video-editor',
             'tools.ai-video-extender',
@@ -56,8 +49,6 @@ const GROUPS: ToolGroup[] = [
     },
     {
         id: 'create',
-        title: 'Create & Animate',
-        description: 'Bring stills to life and generate cinematic sound.',
         routes: ['tools.animate-a-picture', 'tools.ai-sound-effect-generator'],
     },
 ];
@@ -67,6 +58,7 @@ function toolKind(route: string): ToolKind {
 }
 
 export default function Tools({ tools }: Props) {
+    const { t } = useTranslation('tools');
     const [filter, setFilter] = useState<Filter>('all');
     const [query, setQuery] = useState('');
 
@@ -82,22 +74,27 @@ export default function Tools({ tools }: Props) {
         return GROUPS.map((group) => {
             const items = group.routes
                 .map((r) => byRoute.get(r))
-                .filter((t): t is Tool => !!t)
-                .filter((t) => {
-                    const kind = toolKind(t.route);
+                .filter((tool): tool is Tool => !!tool)
+                .filter((tool) => {
+                    const kind = toolKind(tool.route);
                     if (filter === 'video' && kind !== 'video') return false;
                     if (filter === 'image' && kind !== 'image') return false;
-                    if (q && !t.name.toLowerCase().includes(q)) return false;
+                    if (q && !tool.name.toLowerCase().includes(q)) return false;
                     return true;
                 });
 
-            return { ...group, items };
+            return {
+                id: group.id,
+                title: t(`groups.${group.id}.title`),
+                description: t(`groups.${group.id}.desc`),
+                items,
+            };
         }).filter((g) => g.items.length > 0);
-    }, [byRoute, filter, query]);
+    }, [byRoute, filter, query, t]);
 
     return (
         <AppLayout>
-            <Head title="Tools" />
+            <Head title={t('title')} />
             <div className="-mx-4 -my-4 sm:-mx-5 lg:-mx-6 lg:-my-5 xl:-mx-8">
                 {/* Sticky toolbar */}
                 <div className="sticky top-0 z-20 border-b border-white/5 bg-[#070708]/95 backdrop-blur-md">
@@ -106,7 +103,7 @@ export default function Tools({ tools }: Props) {
                             <Link
                                 href="/"
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800/80 text-white/70 transition hover:bg-zinc-700/80 hover:text-white"
-                                aria-label="Back to home"
+                                aria-label={t('backHome')}
                             >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="m12 19-7-7 7-7M19 12H5" />
@@ -114,13 +111,13 @@ export default function Tools({ tools }: Props) {
                             </Link>
 
                             <FilterPill active={filter === 'all'} onClick={() => setFilter('all')} icon={<IconGrid />}>
-                                All
+                                {t('filterAll')}
                             </FilterPill>
                             <FilterPill active={filter === 'video'} onClick={() => setFilter('video')} icon={<IconFilm />}>
-                                Video
+                                {t('filterVideo')}
                             </FilterPill>
                             <FilterPill active={filter === 'image'} onClick={() => setFilter('image')} icon={<IconImage />}>
-                                Image
+                                {t('filterImage')}
                             </FilterPill>
 
                             <div className="relative ms-auto hidden min-w-[200px] max-w-[280px] flex-1 md:block">
@@ -132,7 +129,7 @@ export default function Tools({ tools }: Props) {
                                     type="search"
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
-                                    placeholder="Search tools"
+                                    placeholder={t('search')}
                                     className="h-9 w-full rounded-full border border-white/10 bg-zinc-800/60 ps-10 pe-3 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-[#FF5733]/40 focus:ring-2 focus:ring-[#FF5733]/20"
                                 />
                             </div>
@@ -147,7 +144,7 @@ export default function Tools({ tools }: Props) {
                                 type="search"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                placeholder="Search tools"
+                                placeholder={t('search')}
                                 className="h-9 w-full rounded-full border border-white/10 bg-zinc-800/60 ps-10 pe-3 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-[#FF5733]/40 focus:ring-2 focus:ring-[#FF5733]/20"
                             />
                         </div>
@@ -158,7 +155,7 @@ export default function Tools({ tools }: Props) {
                 <div className="space-y-4 px-4 py-4 md:px-6 md:py-6">
                     {sections.length === 0 && (
                         <div className="rounded-2xl border border-white/[0.06] bg-zinc-900/40 px-6 py-16 text-center">
-                            <p className="text-sm text-white/45">No tools match your search.</p>
+                            <p className="text-sm text-white/45">{t('empty')}</p>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -167,7 +164,7 @@ export default function Tools({ tools }: Props) {
                                 }}
                                 className="mt-3 text-sm font-medium text-[#ff8f73] hover:text-[#ffb39f]"
                             >
-                                Clear filters
+                                {t('clearFilters')}
                             </button>
                         </div>
                     )}
@@ -252,11 +249,13 @@ function FilterPill({
 }
 
 function ToolMiniCard({ tool }: { tool: Tool }) {
+    const { t } = useTranslation('tools');
     const path = '/tools/' + tool.route.replace('tools.', '');
 
     return (
         <Link
             href={path}
+            aria-label={`${t('useThisTool')}: ${tool.name}`}
             className="group w-[140px] shrink-0 cursor-pointer overflow-hidden rounded-xl bg-zinc-900 sm:w-[160px]"
             onMouseEnter={(e) => {
                 const v = e.currentTarget.querySelector('video');

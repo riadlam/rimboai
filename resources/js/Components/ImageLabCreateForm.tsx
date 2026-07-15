@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Brand } from '@/types';
 import { estimateImageCredits, type CreditsConfig } from '@/lib/imageCredits';
 import LabFormSkeleton from '@/Components/LabFormSkeleton';
@@ -49,6 +50,7 @@ export default function ImageLabCreateForm({
     tokenBalance = 0,
     draft = null,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [mode, setMode] = useState<'create' | 'variations'>('create');
     const [prompt, setPrompt] = useState('');
     const [expanded, setExpanded] = useState(false);
@@ -203,30 +205,26 @@ export default function ImageLabCreateForm({
                     setRefs(next);
 
                     if (loaded.failed > 0 && loaded.files.length === 0) {
-                        setDraftNotice(
-                            'Settings restored, but reference media could not be loaded. Upload them manually if needed.',
-                        );
+                        setDraftNotice(t('settingsRestored'));
                     } else if (loaded.failed > 0) {
-                        setDraftNotice('Settings restored. Some reference files could not be loaded.');
+                        setDraftNotice(t('settingsRestored'));
                     } else {
                         setDraftNotice(
                             draft.intent === 'use-result'
-                                ? 'Result image attached — enter a new prompt to continue.'
-                                : 'Settings restored from your previous generation.',
+                                ? t('enterNewPrompt')
+                                : t('settingsRestored'),
                         );
                     }
                 } else {
                     setDraftNotice(
                         draft.intent === 'use-result'
-                            ? 'Enter a new prompt to continue.'
-                            : 'Settings restored from your previous generation.',
+                            ? t('enterNewPrompt')
+                            : t('settingsRestored'),
                     );
                 }
             } catch (err) {
                 if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
-                    setDraftNotice(
-                        'Settings restored, but media could not be loaded. Upload manually if needed.',
-                    );
+                    setDraftNotice(t('settingsRestored'));
                 }
             } finally {
                 if (!cancelled) setDraftLoading(false);
@@ -275,8 +273,8 @@ export default function ImageLabCreateForm({
                     <LabFormSkeleton
                         label={
                             draft?.intent === 'use-result'
-                                ? 'Attaching media…'
-                                : 'Restoring settings…'
+                                ? t('attaching')
+                                : t('restoring')
                         }
                     />
                 )}
@@ -294,7 +292,7 @@ export default function ImageLabCreateForm({
                             type="button"
                             onClick={() => setDraftNotice(null)}
                             className="shrink-0 text-orange-100/50 hover:text-orange-100"
-                            aria-label="Dismiss"
+                            aria-label={t('dismiss')}
                         >
                             ×
                         </button>
@@ -305,9 +303,9 @@ export default function ImageLabCreateForm({
                     <div className="flex gap-1.5 rounded-xl border border-white/[0.06] bg-black/30 p-1.5">
                         {(
                             [
-                                { id: 'create', label: 'Create Image', hint: 'From text' },
-                                { id: 'variations', label: 'Variations', hint: 'Remix refs' },
-                            ] as const
+                                { id: 'create' as const, label: t('image.modeCreate'), hint: t('image.modeCreateHint') },
+                                { id: 'variations' as const, label: t('image.modeVariations'), hint: t('image.modeVariationsHint') },
+                            ]
                         ).map((tab) => {
                             const active = mode === tab.id;
                             return (
@@ -360,7 +358,7 @@ export default function ImageLabCreateForm({
                         <div className="flex items-center gap-3">
                             <ModelAvatar name={selectedModelMeta.name} icon={'icon' in selectedModelMeta ? selectedModelMeta.icon : null} brandIcon={selectedModelMeta.brandIcon} />
                             <div className="text-left">
-                                <p className="text-[11px] text-white/40">Model</p>
+                                <p className="text-[11px] text-white/40">{t('model')}</p>
                                 <p className="text-sm font-semibold text-white">{formatModelName(selectedModel)}</p>
                             </div>
                         </div>
@@ -380,8 +378,8 @@ export default function ImageLabCreateForm({
                     {isVariations && (
                         <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
                             <div className="px-4 pb-2 pt-3.5">
-                                <p className="text-sm font-semibold text-white">Start with images</p>
-                                <p className="mt-0.5 text-[11px] text-white/35">We'll create new versions from them.</p>
+                                <p className="text-sm font-semibold text-white">{t('image.startWithImages')}</p>
+                                <p className="mt-0.5 text-[11px] text-white/35">{t('image.startWithImagesSub')}</p>
                             </div>
 
                             <div className="mx-3 mb-3">
@@ -399,8 +397,8 @@ export default function ImageLabCreateForm({
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-semibold text-white">Upload images or video</p>
-                                            <p className="mt-1 text-xs text-white/40">Up to 8 images</p>
+                                            <p className="text-sm font-semibold text-white">{t('image.uploadRefs')}</p>
+                                            <p className="mt-1 text-xs text-white/40">{t('image.upTo8')}</p>
                                         </div>
                                     </button>
                                 ) : (
@@ -436,7 +434,7 @@ export default function ImageLabCreateForm({
                                                     <button
                                                         type="button"
                                                         onClick={() => removeRef(r.id)}
-                                                        aria-label="Remove"
+                                                        aria-label={t('remove')}
                                                         className="absolute end-0.5 top-0.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/75 text-xs text-white ring-1 ring-white/20 md:end-1 md:top-1 md:h-5 md:w-5 md:text-[10px]"
                                                     >
                                                         ×
@@ -454,19 +452,19 @@ export default function ImageLabCreateForm({
                         <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
                             <div>
                                 <p className="text-sm font-semibold text-white">
-                                    {isVariations ? 'Describe your variation' : 'Describe your image'}
+                                    {isVariations ? t('image.describeVariation') : t('image.describeImage')}
                                 </p>
                                 <p className="mt-0.5 text-[11px] text-white/35">
                                     {isVariations
-                                        ? 'Tell us how to change or remix the source'
-                                        : 'Be specific about subject, light, and style'}
+                                        ? t('image.placeholderVariation')
+                                        : t('image.placeholderCreate')}
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setExpanded(true)}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/[0.06] hover:text-white"
-                                title="Expand editor"
+                                title={t('expandEditor')}
                             >
                                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
@@ -507,14 +505,14 @@ export default function ImageLabCreateForm({
                                                         <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
                                                     </svg>
                                                 </div>
-                                                <div className="min-w-0 flex-1">
+                                                    <div className="min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="text-[13px] font-semibold text-white">Add visual references</span>
+                                                        <span className="text-[13px] font-semibold text-white">{t('image.addRefs')}</span>
                                                         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
                                                             Optional
                                                         </span>
                                                     </div>
-                                                    <p className="mt-0.5 text-[11px] text-white/40">Guide look & consistency · up to 8 · then type @ in the prompt</p>
+                                                    <p className="mt-0.5 text-[11px] text-white/40">{t('image.addRefsHint')}</p>
                                                 </div>
                                                 <span className="text-[11px] text-white/30">0/8</span>
                                             </button>
@@ -534,7 +532,7 @@ export default function ImageLabCreateForm({
                                                         <button
                                                             type="button"
                                                             onClick={() => removeRef(r.id)}
-                                                            aria-label="Remove"
+                                                            aria-label={t('remove')}
                                                             className="absolute end-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/75 text-[10px] text-white ring-1 ring-white/20"
                                                         >
                                                             ×
@@ -546,7 +544,7 @@ export default function ImageLabCreateForm({
                                                         type="button"
                                                         onClick={() => fileRef.current?.click()}
                                                         className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-white/15 text-white/45 transition hover:border-orange-400/40 hover:text-orange-200"
-                                                        title="Add another reference"
+                                                        title={t('image.addRefs')}
                                                     >
                                                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                                             <path d="M12 5v14M5 12h14" />
@@ -566,7 +564,7 @@ export default function ImageLabCreateForm({
                                     maxLength={1200}
                                     placeholder={
                                         isVariations
-                                            ? 'e.g. Same subject, softer lighting, cinematic color grade…'
+                                            ? t('image.placeholderVariation')
                                             : placeholder
                                     }
                                     rows={4}
@@ -575,13 +573,7 @@ export default function ImageLabCreateForm({
 
                                 <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
                                     <span className="text-[10px] text-white/30">
-                                        {!isVariations && refs.length > 0 ? (
-                                            <>
-                                                Type <span className="font-semibold text-orange-300/80">@</span> to mention a reference
-                                            </>
-                                        ) : (
-                                            ' '
-                                        )}
+                                        {!isVariations && refs.length > 0 ? t('mentionHint') : ' '}
                                     </span>
                                     <span className={`text-[11px] ${prompt.length > 800 ? 'text-orange-300' : 'text-white/30'}`}>{prompt.length}/1200</span>
                                 </div>
@@ -590,7 +582,7 @@ export default function ImageLabCreateForm({
 
                         <div className="flex items-center justify-between gap-2 border-t border-white/[0.05] px-3 py-2.5">
                             <div className="flex items-center gap-1">
-                                <ChipButton title="Characters">
+                                <ChipButton title={t('image.characters')}>
                                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                                         <circle cx="9" cy="7" r="4" />
@@ -598,7 +590,7 @@ export default function ImageLabCreateForm({
                                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                                     </svg>
                                 </ChipButton>
-                                <ChipButton title="Style">
+                                <ChipButton title={t('image.style')}>
                                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                         <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor" />
                                         <circle cx="17.5" cy="10.5" r="0.5" fill="currentColor" />
@@ -612,7 +604,7 @@ export default function ImageLabCreateForm({
                                 onClick={() => setAutoPolish((v) => !v)}
                                 className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5"
                             >
-                                <span className="text-[11px] text-white/55">Auto Polish</span>
+                                <span className="text-[11px] text-white/55">{t('image.autoPolish')}</span>
                                 <span className={`relative h-5 w-9 rounded-full transition ${autoPolish ? 'bg-orange-500' : 'bg-white/15'}`}>
                                     <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${autoPolish ? 'left-4' : 'left-0.5'}`} />
                                 </span>
@@ -622,7 +614,7 @@ export default function ImageLabCreateForm({
 
                     {/* Aspect visual picker */}
                     <div>
-                        <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">Aspect ratio</p>
+                        <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('aspectRatio')}</p>
                         <div className="grid grid-cols-5 gap-1.5">
                             {Object.entries(aspectMeta).map(([key, meta]) => {
                                 const active = aspect === key;
@@ -650,12 +642,12 @@ export default function ImageLabCreateForm({
 
                     {/* Resolution */}
                     <div>
-                        <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">Resolution</p>
+                        <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('resolution')}</p>
                         <div className="grid grid-cols-3 gap-1.5">
                             {[
-                                { id: '1K', sub: 'Fast' },
-                                { id: '2K', sub: 'Balanced' },
-                                { id: '4K', sub: 'Max detail' },
+                                { id: '1K', sub: t('image.resFast') },
+                                { id: '2K', sub: t('image.resBalanced') },
+                                { id: '4K', sub: t('image.resMax') },
                             ].map((r) => (
                                 <button
                                     key={r.id}
@@ -676,7 +668,7 @@ export default function ImageLabCreateForm({
 
                     {/* Quantity */}
                     <div>
-                        <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">Outputs</p>
+                        <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('outputs')}</p>
                         <div className="grid grid-cols-4 gap-1.5">
                             {[1, 2, 3, 4].map((n) => (
                                 <button
@@ -759,18 +751,20 @@ export default function ImageLabCreateForm({
                     {loading ? (
                         <span className="relative flex items-center gap-2">
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                            Generating…
+                            {t('generating')}
                         </span>
                     ) : !hasEnoughTokens ? (
-                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
+                        <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
                     ) : !canGenerate && isVariations && imageRefs.length === 0 ? (
-                        <span className="relative text-white/90">Add source images to continue</span>
+                        <span className="relative text-white/90">{t('image.needSources')}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
                             </svg>
-                            <span className="relative">Generate {quantity > 1 ? `${quantity} images` : 'image'}</span>
+                            <span className="relative">
+                                {quantity > 1 ? t('image.generateN', { count: quantity }) : t('image.generateOne')}
+                            </span>
                         </>
                     )}
                 </motion.button>
@@ -794,9 +788,9 @@ export default function ImageLabCreateForm({
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="mb-3 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-white">Prompt editor</h3>
+                                <h3 className="text-sm font-semibold text-white">{t('promptEditor')}</h3>
                                 <button type="button" onClick={() => setExpanded(false)} className="text-white/50 hover:text-white">
-                                    Close
+                                    {t('close')}
                                 </button>
                             </div>
                             <AssetMentionTextarea
@@ -841,7 +835,7 @@ export default function ImageLabCreateForm({
                                 type="button"
                                 onClick={() => setModelOpen(false)}
                                 className="absolute end-4 top-4 rounded-sm text-white/50 transition hover:text-white"
-                                aria-label="Close"
+                                aria-label={t('close')}
                             >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path d="M18 6 6 18" />
@@ -851,12 +845,10 @@ export default function ImageLabCreateForm({
 
                             <div className="flex flex-col space-y-1.5 text-start pe-6">
                                 <h2 id="select-model-title" className="text-lg font-semibold leading-none tracking-tight text-white">
-                                    Select Model
+                                    {t('selectModel')}
                                 </h2>
                                 <p id="select-model-desc" className="text-sm text-white/50">
-                                    {isVariations
-                                        ? 'Models that support remixing from your source images'
-                                        : 'Choose an AI model for your generation'}
+                                    {t('selectModelSub')}
                                 </p>
                             </div>
 
@@ -954,7 +946,7 @@ export default function ImageLabCreateForm({
                                     onClick={() => setModelOpen(false)}
                                     className="inline-flex min-h-9 items-center justify-center rounded-md border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
                                 >
-                                    Close
+                                    {t('close')}
                                 </button>
                             </div>
                         </motion.div>

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Brand, BrandVoice } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateVoiceCredits } from '@/lib/voiceCredits';
@@ -163,6 +164,7 @@ export default function VoiceLabCreateForm({
     creditsConfig,
     tokenBalance = 0,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [text, setText] = useState('');
     const [modelOpen, setModelOpen] = useState(false);
     const [voiceOpen, setVoiceOpen] = useState(false);
@@ -343,7 +345,7 @@ export default function VoiceLabCreateForm({
             {/* Header */}
             <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.07] px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
-                    <h1 className="text-base font-semibold tracking-tight text-white">Voiceover</h1>
+                    <h1 className="text-base font-semibold tracking-tight text-white">{t('voice.title')}</h1>
                 </div>
                 <LabModelPickerTrigger
                     modelName={selectedModelRecord?.name || selectedModel}
@@ -359,7 +361,7 @@ export default function VoiceLabCreateForm({
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <label htmlFor="voice-text-input" className="text-sm font-medium text-zinc-200">
-                                Text to convert
+                                {t('voice.textToConvert')}
                             </label>
                             <span className="text-xs text-zinc-500">
                                 {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
@@ -369,14 +371,14 @@ export default function VoiceLabCreateForm({
                             id="voice-text-input"
                             value={text}
                             onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
-                            placeholder="Enter the text you want to convert to speech..."
+                            placeholder={t('voice.placeholder')}
                             className="min-h-[120px] w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                         />
                     </div>
 
                     {/* Quick prompts */}
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-200">Quick prompts</label>
+                        <label className="text-sm font-medium text-zinc-200">{t('voice.quickPrompts')}</label>
                         <div className="flex flex-wrap gap-1.5">
                             {QUICK_PROMPTS.map((p) => (
                                 <button
@@ -399,7 +401,7 @@ export default function VoiceLabCreateForm({
                                 <path d="M16 9a5 5 0 0 1 0 6" />
                                 <path d="M19.364 18.364a9 9 0 0 0 0-12.728" />
                             </svg>
-                            Select Voice
+                            {t('voice.selectVoice')}
                         </label>
                         <button
                             type="button"
@@ -411,7 +413,7 @@ export default function VoiceLabCreateForm({
                                 <>
                                     <span
                                         role="button"
-                                        title={selectedVoice.sample_url ? 'Play sample' : 'No sample available'}
+                                        title={selectedVoice.sample_url ? t('voice.playSample') : t('voice.noSample')}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             previewVoice(selectedVoice.id);
@@ -448,7 +450,7 @@ export default function VoiceLabCreateForm({
                                     </div>
                                 </>
                             ) : (
-                                <div className="min-w-0 flex-1 text-sm text-zinc-500">No voices for this model</div>
+                                <div className="min-w-0 flex-1 text-sm text-zinc-500">{t('voice.noVoicesModel')}</div>
                             )}
                             <svg className="h-4 w-4 shrink-0 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path d="m9 18 6-6-6-6" />
@@ -471,7 +473,7 @@ export default function VoiceLabCreateForm({
                                         <circle cx="17" cy="17" r="3" />
                                         <circle cx="7" cy="7" r="3" />
                                     </svg>
-                                    Voice Controls
+                                    {t('voice.voiceControls')}
                                 </div>
                                 <svg
                                     className={`h-4 w-4 text-zinc-500 transition ${controlsOpen ? 'rotate-180' : ''}`}
@@ -493,20 +495,20 @@ export default function VoiceLabCreateForm({
                                     >
                                         <div className="space-y-4 px-1 pb-2 pt-3">
                                             {controlCaps.stability && (
-                                                <SliderRow label="Stability" value={stability} onChange={setStability} />
+                                                <SliderRow label={t('voice.stability')} value={stability} onChange={setStability} />
                                             )}
                                             {controlCaps.clarity && (
-                                                <SliderRow label="Clarity + Similarity" value={clarity} onChange={setClarity} />
+                                                <SliderRow label={t('voice.clarity')} value={clarity} onChange={setClarity} />
                                             )}
                                             {controlCaps.style && (
                                                 <SliderRow
-                                                    label="Style Exaggeration"
+                                                    label={t('voice.styleExaggeration')}
                                                     value={styleExaggeration}
                                                     onChange={setStyleExaggeration}
                                                 />
                                             )}
                                             {controlCaps.speed && (
-                                                <SliderRow label="Speed" value={speed} onChange={setSpeed} min={50} max={150} suffix="%" />
+                                                <SliderRow label={t('voice.speed')} value={speed} onChange={setSpeed} min={50} max={150} suffix="%" />
                                             )}
                                         </div>
                                     </motion.div>
@@ -572,16 +574,16 @@ export default function VoiceLabCreateForm({
                     {loading ? (
                         <span className="relative flex items-center gap-2">
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                            Creating…
+                            {t('generating')}
                         </span>
                     ) : !hasEnoughTokens ? (
-                        <span className="relative text-white/90">Not enough tokens ({tokenBalance} available)</span>
+                        <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
                     ) : (
                         <>
                             <svg className="relative h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
                             </svg>
-                            <span className="relative">Create</span>
+                            <span className="relative">{t('create')}</span>
                             {creditCost > 0 && (
                                 <span className="relative inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-medium tabular-nums">
                                     <CreditBoltIcon className="h-3 w-3 text-amber-100" />
@@ -598,8 +600,8 @@ export default function VoiceLabCreateForm({
                 models={allModels}
                 selectedName={selectedModel}
                 onClose={() => setModelOpen(false)}
-                title="Select Model"
-                subtitle="Pick a TTS model — each card shows its cover art and focus."
+                title={t('selectModel')}
+                subtitle={t('selectModelSub')}
                 fallbackDescription="Text-to-speech model"
                 onSelect={(m) => {
                     setSelectedBrand(m.brandName);
@@ -632,7 +634,7 @@ export default function VoiceLabCreateForm({
                                 type="button"
                                 onClick={() => setVoiceOpen(false)}
                                 className="absolute end-4 top-4 z-10 rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
-                                aria-label="Close"
+                                aria-label={t('close')}
                             >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                     <path d="M18 6 6 18" />
@@ -642,7 +644,7 @@ export default function VoiceLabCreateForm({
 
                             <div className="space-y-1.5 px-6 pb-2 pt-6 text-start">
                                 <h2 id="voice-selection-title" className="text-lg font-semibold tracking-tight text-white">
-                                    Voice Selection
+                                    {t('voice.voiceSelection')}
                                 </h2>
                                 <p className="text-sm text-zinc-500">
                                     {modelVoices.length} voices for {selectedModelRecord?.name || selectedModel}
@@ -665,7 +667,7 @@ export default function VoiceLabCreateForm({
                                         type="text"
                                         value={voiceSearch}
                                         onChange={(e) => setVoiceSearch(e.target.value)}
-                                        placeholder="Search voices..."
+                                        placeholder={t('voice.searchVoices')}
                                         className="flex h-9 w-full rounded-lg border border-white/10 bg-black/30 pe-3 ps-10 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                                     />
                                 </div>
@@ -734,8 +736,8 @@ export default function VoiceLabCreateForm({
                                     {filteredVoices.length === 0 ? (
                                         <div className="px-2 py-12 text-center text-sm text-zinc-500">
                                             {modelVoices.length === 0
-                                                ? 'No voices synced for this model yet'
-                                                : 'No voices match your filters'}
+                                                ? t('voice.noVoicesSynced')
+                                                : t('voice.noVoicesFilter')}
                                         </div>
                                     ) : (
                                         filteredVoices.map((v) => {
@@ -765,7 +767,7 @@ export default function VoiceLabCreateForm({
                                                 >
                                                     <button
                                                         type="button"
-                                                        title={hasSample ? 'Play sample' : 'No sample available'}
+                                                        title={hasSample ? t('voice.playSample') : t('voice.noSample')}
                                                         disabled={!hasSample}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -808,7 +810,7 @@ export default function VoiceLabCreateForm({
                                                             toggleFavorite(v.id);
                                                         }}
                                                         className="shrink-0 cursor-pointer rounded-md p-1.5 transition hover:bg-white/[0.06]"
-                                                        aria-label={isFav ? 'Unfavorite' : 'Favorite'}
+                                                        aria-label={isFav ? t('unfavorite') : t('favorite')}
                                                     >
                                                         <svg
                                                             className={`h-4 w-4 ${isFav ? 'fill-[#FF5733] text-[#FF5733]' : 'text-zinc-500'}`}

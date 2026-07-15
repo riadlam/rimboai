@@ -37,14 +37,14 @@ class SofizPayFulfillmentService
     public function verifyAndFulfill(Payment $payment): array
     {
         if ($payment->status === 'paid') {
-            return ['status' => 'success', 'message' => 'Payment confirmed. Your tokens have been added.', 'credited' => false];
+            return ['status' => 'success', 'message' => __('messages.payment_confirmed'), 'credited' => false];
         }
 
         $cibOrderNumber = $payment->cib_order_number;
         if ($cibOrderNumber === null || $cibOrderNumber === '') {
             Log::error('SofizPay fulfil: missing cib_order_number', ['payment_id' => $payment->id]);
 
-            return ['status' => 'error', 'message' => 'Payment session is invalid. Please start again.', 'credited' => false];
+            return ['status' => 'error', 'message' => __('messages.payment_session_invalid'), 'credited' => false];
         }
 
         $check = $this->sofizPay->checkCibTransaction((string) $cibOrderNumber);
@@ -57,7 +57,7 @@ class SofizPayFulfillmentService
 
             return [
                 'status' => 'failed',
-                'message' => $hint ?? 'Payment not confirmed yet. If you already paid, wait a moment and try again.',
+                'message' => $hint ?? __('messages.payment_pending'),
                 'credited' => false,
             ];
         }
@@ -66,7 +66,7 @@ class SofizPayFulfillmentService
         $expected = round((float) $payment->amount, 2);
 
         if ($paidAmount === null) {
-            return ['status' => 'error', 'message' => 'Could not verify the payment amount. Contact support.', 'credited' => false];
+            return ['status' => 'error', 'message' => __('messages.payment_amount_unverified'), 'credited' => false];
         }
 
         if (abs($paidAmount - $expected) > 1.0) {
@@ -76,7 +76,7 @@ class SofizPayFulfillmentService
                 'expected' => $expected,
             ]);
 
-            return ['status' => 'error', 'message' => 'Paid amount does not match this checkout. Contact support with your reference.', 'credited' => false];
+            return ['status' => 'error', 'message' => __('messages.payment_amount_mismatch'), 'credited' => false];
         }
 
         $merchant = $this->sofizPay->merchantAccount();
@@ -87,7 +87,7 @@ class SofizPayFulfillmentService
                 'dest' => $dest,
             ]);
 
-            return ['status' => 'error', 'message' => 'Payment destination mismatch. Contact support.', 'credited' => false];
+            return ['status' => 'error', 'message' => __('messages.payment_destination_mismatch'), 'credited' => false];
         }
 
         $credited = false;
@@ -120,7 +120,7 @@ class SofizPayFulfillmentService
             $this->notifyPurchase($payment->fresh());
         }
 
-        return ['status' => 'success', 'message' => 'Payment confirmed. Your tokens have been added.', 'credited' => $credited];
+        return ['status' => 'success', 'message' => __('messages.payment_confirmed'), 'credited' => $credited];
     }
 
     private function notifyPurchase(?Payment $payment): void

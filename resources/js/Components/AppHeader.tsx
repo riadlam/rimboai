@@ -1,6 +1,7 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/react';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import CreditsModal from '@/Components/CreditsModal';
 import type { PageProps } from '@/types';
 
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function AppHeader({ onMenuClick }: Props) {
+    const { t } = useTranslation('common');
     const { props } = usePage<PageProps>();
     const user = props.auth.user;
     const [creditsOpen, setCreditsOpen] = useState(false);
@@ -16,7 +18,7 @@ export default function AppHeader({ onMenuClick }: Props) {
     const meterMax = Math.max(100, tokens);
     const pct = Math.min(100, Math.round((tokens / meterMax) * 100));
     const initials = user?.name?.slice(0, 2).toUpperCase() || 'U';
-    const firstName = user?.name?.split(' ')[0] || 'Guest';
+    const firstName = user?.name?.split(' ')[0] || t('guest');
 
     useEffect(() => {
         setTokens(Math.max(0, user?.tokens ?? 0));
@@ -74,7 +76,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                         <div className="flex flex-col justify-center gap-1">
                             <div className="flex items-center gap-1.5 leading-none">
                                 <span className="text-[13px] font-semibold tabular-nums text-white">{tokens}</span>
-                                <span className="text-[11px] text-zinc-500">tokens</span>
+                                <span className="text-[11px] text-zinc-500">{t('tokens')}</span>
                             </div>
                             <div className="h-1 w-24 overflow-hidden rounded-full bg-white/10">
                                 <div
@@ -98,7 +100,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                             <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
                             <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />
                         </svg>
-                        <span className="relative">Buy Tokens</span>
+                        <span className="relative">{t('buyTokens')}</span>
                     </button>
 
                     <div className="mx-0.5 hidden h-6 w-px bg-white/[0.08] md:block" />
@@ -141,7 +143,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                                             </span>
                                             <div className="min-w-0">
                                                 <p className="truncate text-[14px] font-semibold text-white">{firstName}</p>
-                                                <p className="truncate text-[12px] text-zinc-500">{user?.email || 'Not signed in'}</p>
+                                                <p className="truncate text-[12px] text-zinc-500">{user?.email || t('notSignedIn')}</p>
                                             </div>
                                         </Link>
                                     )}
@@ -150,7 +152,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                                 {/* Credit summary */}
                                 <div className="border-b border-white/[0.06] px-3.5 py-3">
                                     <div className="mb-1.5 flex items-center justify-between">
-                                        <span className="text-[12px] text-zinc-400">Tokens</span>
+                                        <span className="text-[12px] text-zinc-400">{t('tokens')}</span>
                                         <span className="text-[12px] font-medium tabular-nums text-white">
                                             {tokens}
                                         </span>
@@ -174,12 +176,12 @@ export default function AppHeader({ onMenuClick }: Props) {
                                                 }`}
                                             >
                                                 <IconSpark />
-                                                Buy tokens
+                                                {t('buyTokens')}
                                             </button>
                                         )}
                                     </MenuItem>
-                                    <AccountRowLink href="/history" icon={<IconClock />} label="History" />
-                                    <AccountRowLink href="/settings" icon={<IconGear />} label="Settings" />
+                                    <AccountRowLink href="/history" icon={<IconClock />} label={t('history')} />
+                                    <AccountRowLink href="/settings" icon={<IconGear />} label={t('settings')} />
                                 </div>
 
                                 {user && (
@@ -194,7 +196,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                                                     }`}
                                                 >
                                                     <IconSignOut />
-                                                    Sign out
+                                                    {t('signOut')}
                                                 </button>
                                             )}
                                         </MenuItem>
@@ -210,21 +212,20 @@ export default function AppHeader({ onMenuClick }: Props) {
                                 href="/pricing"
                                 className="inline-flex h-7 items-center px-2 text-[11.5px] font-semibold text-white/65 transition hover:text-white sm:px-2.5 sm:text-[12.5px]"
                             >
-                                Pricing
+                                {t('pricing')}
                             </Link>
                             <Link
                                 href="/?login"
                                 className="hidden h-7 items-center rounded-[5px] border border-white/15 bg-white/[0.04] px-2.5 text-[11.5px] font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08] sm:inline-flex sm:px-3.5 sm:text-[12.5px]"
                             >
-                                Sign in
+                                {t('signIn')}
                             </Link>
                             <Link
                                 href="/register"
                                 className="inline-flex h-7 items-center rounded-[5px] bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-2.5 text-[11.5px] font-semibold text-white shadow-[0_6px_18px_-10px_rgba(255,87,51,0.95)] transition hover:brightness-110 sm:px-3.5 sm:text-[12.5px]"
                             >
-                                Sign up
-                            </Link>
-                        </>
+                                {t('signUp')}
+                            </Link>                        </>
                     )}
                 </div>
             </header>

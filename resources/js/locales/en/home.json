@@ -1,0 +1,34 @@
+{
+  "headline": "What will you create",
+  "headlineEnd": "?",
+  "rotating": {
+    "today": "today",
+    "rightNow": "right now",
+    "thatGoesViral": "that goes viral",
+    "inSeconds": "in seconds"
+  },
+  "subtitle": "Video, image, voice & music — one studio, instant results.",
+  "promptPlaceholder": "Describe anything — “a neon fox running through Tokyo at night”…",
+  "generate": "Generate",
+  "createTypes": {
+    "video": {
+      "label": "Video",
+      "desc": "Cinematic clips from a single prompt."
+    },
+    "image": {
+      "label": "Image",
+      "desc": "Studio-grade stills in any style."
+    },
+    "voice": {
+      "label": "Voice",
+      "desc": "Natural speech for any scene."
+    },
+    "music": {
+      "label": "Music",
+      "desc": "Tracks and soundscapes on demand."
+    }
+  },
+  "openLab": "Open Lab",
+  "toolsTitle": "Tools",
+  "signInClose": "Close sign in"
+}

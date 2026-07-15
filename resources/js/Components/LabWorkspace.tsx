@@ -18,6 +18,7 @@ import Button from '@/Components/Button';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
     type?: string;
@@ -210,6 +211,7 @@ export default function LabWorkspace({
     placeholder = 'Enter your prompt…',
     creditsConfig,
 }: Props) {
+    const { t: tLab } = useTranslation('lab');
     const { props: pageProps } = usePage<PageProps>();
     const isGuest = pageProps.auth.user === null;
     const [prompt, setPrompt] = useState('');
@@ -614,7 +616,7 @@ export default function LabWorkspace({
                 method,
                 modelName: options?.modelName,
                 status: 'pending',
-                progress: 'Starting…',
+                progress: tLab('starting'),
             }));
 
             setImages((prev) => [...placeholders, ...prev]);
@@ -654,7 +656,7 @@ export default function LabWorkspace({
                 failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
             }
         },
-        [failBatch, pollImage, syncTokenBalance, syncTokenBalanceFromError],
+        [failBatch, pollImage, syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
 
     const startVideoGenerate = useCallback(
@@ -699,7 +701,7 @@ export default function LabWorkspace({
                 method: (options?.routeMode as LabImage['method']) || 'text-to-video',
                 modelName: options?.modelName,
                 status: 'pending',
-                progress: 'Starting…',
+                progress: tLab('starting'),
             };
 
             setImages((prev) => [placeholder, ...prev]);
@@ -743,7 +745,7 @@ export default function LabWorkspace({
                 failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
             }
         },
-        [failBatch, pollVideo, syncTokenBalance, syncTokenBalanceFromError],
+        [failBatch, pollVideo, syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
 
     const startGenerate = (
@@ -796,7 +798,7 @@ export default function LabWorkspace({
                 instrumental: options.instrumental ?? true,
                 model: options.model,
                 status: 'pending',
-                progress: 'Starting…',
+                progress: tLab('starting'),
             };
 
             setTracks((prev) => [placeholder, ...prev]);
@@ -849,28 +851,28 @@ export default function LabWorkspace({
                 syncTokenBalance(data.token_balance);
 
                 setTracks((prev) =>
-                    prev.map((t) =>
-                        t.id === localId
+                    prev.map((track) =>
+                        track.id === localId
                             ? {
-                                  ...t,
+                                  ...track,
                                   creationId: data.id,
                                   status: data.status,
-                                  progress: data.progress_message ?? t.progress,
-                                  model: data.model_name ?? t.model,
-                                  instrumental: data.instrumental ?? t.instrumental,
-                                  title: data.title || t.title,
-                                  lyrics: data.lyrics ?? t.lyrics,
+                                  progress: data.progress_message ?? track.progress,
+                                  model: data.model_name ?? track.model,
+                                  instrumental: data.instrumental ?? track.instrumental,
+                                  title: data.title || track.title,
+                                  lyrics: data.lyrics ?? track.lyrics,
                               }
-                            : t,
+                            : track,
                     ),
                 );
 
                 if (data.status === 'failed') {
                     setTracks((prev) =>
-                        prev.map((t) =>
-                            t.id === localId
-                                ? { ...t, status: 'failed', error: data.error || 'Generation failed.', progress: 'Failed' }
-                                : t,
+                        prev.map((track) =>
+                            track.id === localId
+                                ? { ...track, status: 'failed', error: data.error || 'Generation failed.', progress: tLab('failed') }
+                                : track,
                         ),
                     );
                     setLoading(false);
@@ -881,21 +883,21 @@ export default function LabWorkspace({
             } catch (e) {
                 syncTokenBalanceFromError(e);
                 setTracks((prev) =>
-                    prev.map((t) =>
-                        t.id === localId
+                    prev.map((track) =>
+                        track.id === localId
                             ? {
-                                  ...t,
+                                  ...track,
                                   status: 'failed',
                                   error: e instanceof Error ? e.message : 'Could not start generation.',
-                                  progress: 'Failed',
+                                  progress: tLab('failed'),
                               }
-                            : t,
+                            : track,
                     ),
                 );
                 setLoading(false);
             }
         },
-        [syncTokenBalance, syncTokenBalanceFromError],
+        [syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
 
     const pollMusic = useCallback((localId: string, creationId: number) => {
@@ -906,10 +908,10 @@ export default function LabWorkspace({
             // Music can run a long time — 15 min timeout
             if (elapsed > 15 * 60 * 1000) {
                 setTracks((prev) =>
-                    prev.map((t) =>
-                        t.id === localId || t.creationId === creationId
-                            ? { ...t, status: 'failed', error: 'Timed out waiting for music.', progress: 'Failed' }
-                            : t,
+                    prev.map((track) =>
+                        track.id === localId || track.creationId === creationId
+                            ? { ...track, status: 'failed', error: 'Timed out waiting for music.', progress: tLab('failed') }
+                            : track,
                     ),
                 );
                 setLoading(false);
@@ -935,10 +937,10 @@ export default function LabWorkspace({
                 const audioUrl = data.audio_url || data.preview_url;
                 if (!audioUrl) {
                     setTracks((prev) =>
-                        prev.map((t) =>
-                            t.id === localId || t.creationId === creationId
-                                ? { ...t, status: 'failed', error: 'Generation finished without audio.', progress: 'Failed' }
-                                : t,
+                        prev.map((track) =>
+                            track.id === localId || track.creationId === creationId
+                                ? { ...track, status: 'failed', error: 'Generation finished without audio.', progress: tLab('failed') }
+                                : track,
                         ),
                     );
                     setLoading(false);
@@ -946,39 +948,39 @@ export default function LabWorkspace({
                 }
 
                 setTracks((prev) =>
-                    prev.map((t) =>
-                        t.id === localId || t.creationId === creationId
+                    prev.map((track) =>
+                        track.id === localId || track.creationId === creationId
                             ? {
-                                  ...t,
+                                  ...track,
                                   completing: true,
-                                  progress: 'Completed',
+                                  progress: tLab('completed'),
                               }
-                            : t,
+                            : track,
                     ),
                 );
 
                 window.setTimeout(() => {
                     setTracks((prev) =>
-                        prev.map((t) =>
-                            t.id === localId || t.creationId === creationId
+                        prev.map((track) =>
+                            track.id === localId || track.creationId === creationId
                                 ? {
-                                      ...t,
+                                      ...track,
                                       id: `track-${creationId}`,
                                       creationId,
                                       status: 'completed',
                                       completing: false,
-                                      progress: 'Completed',
+                                      progress: tLab('completed'),
                                       audioUrl,
-                                      cover: data.cover_url || t.cover || '',
-                                      title: data.title || t.title,
-                                      style: data.prompt || t.style,
-                                      lyrics: data.lyrics ?? t.lyrics,
-                                      model: data.model_name ?? t.model,
-                                      instrumental: data.instrumental ?? t.instrumental,
-                                      duration: data.duration ?? t.duration,
+                                      cover: data.cover_url || track.cover || '',
+                                      title: data.title || track.title,
+                                      style: data.prompt || track.style,
+                                      lyrics: data.lyrics ?? track.lyrics,
+                                      model: data.model_name ?? track.model,
+                                      instrumental: data.instrumental ?? track.instrumental,
+                                      duration: data.duration ?? track.duration,
                                       error: undefined,
                                   }
-                                : t,
+                                : track,
                         ),
                     );
                     setLoading(false);
@@ -989,15 +991,15 @@ export default function LabWorkspace({
             if (data.status === 'failed' || data.status === 'cancelled') {
                 delete pollTimers.current[localId];
                 setTracks((prev) =>
-                    prev.map((t) =>
-                        t.id === localId || t.creationId === creationId
+                    prev.map((track) =>
+                        track.id === localId || track.creationId === creationId
                             ? {
-                                  ...t,
+                                  ...track,
                                   status: data.status,
                                   error: data.error || 'Generation failed.',
-                                  progress: 'Failed',
+                                  progress: tLab('failed'),
                               }
-                            : t,
+                            : track,
                     ),
                 );
                 setLoading(false);
@@ -1005,28 +1007,28 @@ export default function LabWorkspace({
             }
 
             setTracks((prev) =>
-                prev.map((t) =>
-                    t.id === localId || t.creationId === creationId
+                prev.map((track) =>
+                    track.id === localId || track.creationId === creationId
                         ? {
-                              ...t,
+                              ...track,
                               creationId,
                               status: data.status,
                               progress:
                                   data.progress_message ||
                                   (data.status === 'queued'
-                                      ? 'In queue'
+                                      ? tLab('inQueue')
                                       : data.status === 'in_progress'
-                                        ? 'Composing…'
-                                        : t.progress),
+                                        ? tLab('generating')
+                                        : track.progress),
                           }
-                        : t,
+                        : track,
                 ),
             );
             scheduleNext();
         };
 
         scheduleNext();
-    }, []);
+    }, [tLab]);
 
     pollMusicRef.current = pollMusic;
 
@@ -1048,7 +1050,7 @@ export default function LabWorkspace({
                 createdAt: startedAt,
                 model: options.model,
                 status: 'pending',
-                progress: 'Starting…',
+                progress: tLab('starting'),
             };
 
             setVoices((prev) => [placeholder, ...prev]);
@@ -1086,7 +1088,7 @@ export default function LabWorkspace({
                     setVoices((prev) =>
                         prev.map((v) =>
                             v.id === localId
-                                ? { ...v, status: 'failed', error: data.error || 'Generation failed.', progress: 'Failed' }
+                                ? { ...v, status: 'failed', error: data.error || 'Generation failed.', progress: tLab('failed') }
                                 : v,
                         ),
                     );
@@ -1104,7 +1106,7 @@ export default function LabWorkspace({
                                   ...v,
                                   status: 'failed',
                                   error: e instanceof Error ? e.message : 'Could not start generation.',
-                                  progress: 'Failed',
+                                  progress: tLab('failed'),
                               }
                             : v,
                     ),
@@ -1112,7 +1114,7 @@ export default function LabWorkspace({
                 setLoading(false);
             }
         },
-        [syncTokenBalance, syncTokenBalanceFromError],
+        [syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
 
     const pollVoice = useCallback((localId: string, creationId: number) => {
@@ -1124,7 +1126,7 @@ export default function LabWorkspace({
                 setVoices((prev) =>
                     prev.map((v) =>
                         v.id === localId
-                            ? { ...v, status: 'failed', error: 'Timed out waiting for audio.', progress: 'Failed' }
+                            ? { ...v, status: 'failed', error: 'Timed out waiting for audio.', progress: tLab('failed') }
                             : v,
                     ),
                 );
@@ -1152,7 +1154,7 @@ export default function LabWorkspace({
                     setVoices((prev) =>
                         prev.map((v) =>
                             v.id === localId
-                                ? { ...v, status: 'failed', error: 'Generation finished without audio.', progress: 'Failed' }
+                                ? { ...v, status: 'failed', error: 'Generation finished without audio.', progress: tLab('failed') }
                                 : v,
                         ),
                     );
@@ -1168,7 +1170,7 @@ export default function LabWorkspace({
                                   id: `voice-${creationId}`,
                                   creationId,
                                   status: 'completed',
-                                  progress: 'Completed',
+                                  progress: tLab('completed'),
                                   audioUrl,
                                   title: data.prompt.length > 42 ? `${data.prompt.slice(0, 42)}…` : data.prompt,
                                   text: data.prompt,
@@ -1192,7 +1194,7 @@ export default function LabWorkspace({
                                   ...v,
                                   status: data.status,
                                   error: data.error || 'Generation failed.',
-                                  progress: 'Failed',
+                                  progress: tLab('failed'),
                               }
                             : v,
                     ),
@@ -1211,9 +1213,9 @@ export default function LabWorkspace({
                                   data.progress_message ||
                                   (data.status === 'queued'
                                       ? data.queue_position
-                                          ? `In queue (#${data.queue_position})`
-                                          : 'In queue'
-                                      : 'Generating…'),
+                                          ? `${tLab('inQueue')} (#${data.queue_position})`
+                                          : tLab('inQueue')
+                                      : tLab('generating')),
                           }
                         : v,
                 ),
@@ -1222,7 +1224,7 @@ export default function LabWorkspace({
         };
 
         scheduleNext();
-    }, []);
+    }, [tLab]);
 
     pollVoiceRef.current = pollVoice;
 
@@ -1344,11 +1346,11 @@ export default function LabWorkspace({
                                                         <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
                                                     </svg>
                                                 </motion.span>
-                                                <span className="relative">Sign up free</span>
+                                                <span className="relative">{tLab('signUpFree')}</span>
                                             </Link>
                                         </motion.div>
                                         <p className="mt-2 text-center text-[11px] text-white/40">
-                                            50 free tokens · no card required
+                                            {tLab('guestTokens')}
                                         </p>
                                     </div>
                                 )}
@@ -1391,7 +1393,7 @@ export default function LabWorkspace({
                             animate={{ opacity: 1, x: 0 }}
                             className="flex w-full shrink-0 flex-col border-b border-white/[0.04] bg-[#0c0c0e] p-4 md:w-[300px] md:border-b-0 md:border-r xl:w-[340px]"
                         >
-                            <label className="mb-2 text-xs font-medium text-white/50">Prompt</label>
+                            <label className="mb-2 text-xs font-medium text-white/50">{tLab('prompt')}</label>
                             <textarea
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
@@ -1399,16 +1401,16 @@ export default function LabWorkspace({
                                 className="mb-4 h-40 w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-brand-500"
                             />
                             <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/50">
-                                Model: <span className="text-white/80">{model}</span>
+                                {tLab('model')}: <span className="text-white/80">{model}</span>
                             </div>
                             <Button variant="creative" className="mt-auto w-full" loading={loading} onClick={() => startGenerate()}>
-                                Generate
+                                {tLab('generate')}
                             </Button>
                         </motion.aside>
 
                         <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-4 md:p-6">
                             <div className="flex h-full max-h-[520px] w-full max-w-3xl items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] text-sm text-white/30">
-                                Preview canvas
+                                {tLab('previewCanvas')}
                             </div>
                         </div>
                     </div>
@@ -1432,6 +1434,9 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 function GuestLibraryPlaceholder({ title }: { title: string }) {
+    const { t } = useTranslation('lab');
+    const { t: tc } = useTranslation('common');
+
     return (
         <div className="relative flex h-full min-h-[50vh] w-full items-center justify-center overflow-hidden p-6">
             <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -1454,11 +1459,10 @@ function GuestLibraryPlaceholder({ title }: { title: string }) {
                 </div>
 
                 <h3 className="font-[family-name:Outfit,sans-serif] text-xl font-bold text-white">
-                    Your {title} gallery lives here
+                    {t('guestGalleryTitle', { title })}
                 </h3>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-white/45">
-                    Sign in to save every creation, revisit your history, and pick up right where you left off.
-                    New here? Create a free account and get 50 tokens to start.
+                    {t('guestGallerySub')}
                 </p>
 
                 <div className="mt-6 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
@@ -1466,7 +1470,7 @@ function GuestLibraryPlaceholder({ title }: { title: string }) {
                         href="/register"
                         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-14px_rgba(255,87,51,0.95)] transition hover:brightness-110 sm:w-auto"
                     >
-                        Sign up free
+                        {t('signUpFree')}
                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
                         </svg>
@@ -1475,7 +1479,7 @@ function GuestLibraryPlaceholder({ title }: { title: string }) {
                         href="/?login"
                         className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.04] px-6 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08] sm:w-auto"
                     >
-                        Sign in
+                        {tc('signIn')}
                     </Link>
                 </div>
             </motion.div>
