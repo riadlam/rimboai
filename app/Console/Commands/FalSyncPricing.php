@@ -6,6 +6,7 @@ use App\Services\FalVideoPricingNormalizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -50,6 +51,7 @@ class FalSyncPricing extends Command
 
         if (! $key) {
             $this->error('FAL_KEY is not set in .env');
+            Log::error('fal:sync-pricing aborted — FAL_KEY is not set');
 
             return self::FAILURE;
         }
@@ -60,6 +62,13 @@ class FalSyncPricing extends Command
         $only = $this->option('table');
 
         $tables = $only ? [$only] : self::ALL_TABLES;
+
+        $startedAt = microtime(true);
+        Log::info('fal:sync-pricing started', [
+            'tables' => $tables,
+            'dry_run' => $dryRun,
+            'skip_status' => $skipStatus,
+        ]);
 
         $priced = 0;
         $priceFailed = 0;
@@ -140,6 +149,8 @@ class FalSyncPricing extends Command
             }
         }
 
+        $durationSeconds = round(microtime(true) - $startedAt, 1);
+
         $this->newLine();
         $this->info(sprintf(
             'Done. priced=%d price_failed=%d deactivated=%d reactivated=%d%s',
@@ -149,6 +160,15 @@ class FalSyncPricing extends Command
             $reactivated,
             $dryRun ? ' (dry-run: nothing written)' : '',
         ));
+
+        Log::info('fal:sync-pricing finished — cron job is working', [
+            'priced' => $priced,
+            'price_failed' => $priceFailed,
+            'deactivated' => $deactivated,
+            'reactivated' => $reactivated,
+            'duration_seconds' => $durationSeconds,
+            'dry_run' => $dryRun,
+        ]);
 
         return self::SUCCESS;
     }
