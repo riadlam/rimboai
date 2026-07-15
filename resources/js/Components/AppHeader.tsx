@@ -36,9 +36,9 @@ export default function AppHeader({ onMenuClick }: Props) {
     }, []);
 
     return (
-        <div className="fixed inset-x-0 top-0 z-50 flex-shrink-0">
+        <div className="fixed inset-x-0 top-0 z-50 flex-shrink-0" dir="ltr">
             <header className="relative flex h-14 flex-shrink-0 items-center border-b border-white/[0.07] bg-[#0a0a0c]/95 px-3 backdrop-blur-xl md:h-16 md:px-5 [&_button]:cursor-pointer">
-                {/* Left — brand */}
+                {/* Left — brand (always physical left in every language) */}
                 <div className="flex items-center gap-2.5">
                     <button
                         type="button"
