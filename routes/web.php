@@ -22,43 +22,46 @@ Route::middleware('guest')->group(function () {
     Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 });
 
-Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+// Public browsing pages. Authentication is required only for user-owned data
+// and actions that create or mutate content.
+Route::get('/', [DashboardController::class, 'index'])->name('home');
+Route::get('/lab', [DashboardController::class, 'lab'])->name('lab');
+Route::get('/trends', [DashboardController::class, 'trends'])->name('trends');
+Route::get('/innovation', [DashboardController::class, 'innovation'])->name('innovation');
+Route::get('/post/{id}', [DashboardController::class, 'showPost'])->name('post.show');
+Route::get('/tools', [DashboardController::class, 'tools'])->name('tools');
+Route::get('/pricing', [DashboardController::class, 'pricing'])->name('pricing');
+Route::redirect('/marketplace', '/trends');
+
+// Old studio URLs remain publicly browseable.
+Route::redirect('/text-to-video', '/lab?type=text-to-video');
+Route::redirect('/image-to-video', '/lab?type=text-to-voice');
+Route::redirect('/text-to-image', '/lab?type=text-to-image');
+Route::redirect('/text-to-sound', '/lab?type=text-to-music');
+Route::redirect('/text-to-music', '/lab?type=text-to-music');
+Route::redirect('/text-to-voice', '/lab?type=text-to-voice');
+Route::redirect('/face-swap', '/lab?type=text-to-video');
+Route::redirect('/lip-sync', '/lab?type=text-to-video');
+Route::redirect('/image-to-image', '/lab?type=text-to-image');
+Route::redirect('/image-upscaler', '/lab?type=text-to-image');
+Route::redirect('/background-remover', '/lab?type=text-to-image');
+Route::redirect('/text-to-video/lab', '/lab?type=text-to-video');
+Route::redirect('/image-to-video/lab', '/lab?type=text-to-voice');
+Route::redirect('/text-to-image/lab', '/lab?type=text-to-image');
+Route::redirect('/text-to-sound/lab', '/lab?type=text-to-music');
+Route::redirect('/text-to-music/lab', '/lab?type=text-to-music');
+Route::redirect('/text-to-voice/lab', '/lab?type=text-to-voice');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('home');
-
-    Route::get('/lab', [DashboardController::class, 'lab'])->name('lab');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/history', [DashboardController::class, 'history'])->name('history');
-    Route::get('/trends', [DashboardController::class, 'trends'])->name('trends');
+    Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
     Route::post('/trends/use', [TrendsController::class, 'useTemplate'])
         ->middleware('throttle:60,1')
         ->name('trends.use');
     Route::post('/trends/visibility', [TrendsController::class, 'setVisibility'])
         ->middleware('throttle:30,1')
         ->name('trends.visibility');
-    Route::get('/innovation', [DashboardController::class, 'innovation'])->name('innovation');
-    Route::get('/post/{id}', [DashboardController::class, 'showPost'])->name('post.show');
-    Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
-    Route::redirect('/marketplace', '/trends');
-
-    // Old studio URLs all go to /lab
-    Route::redirect('/text-to-video', '/lab?type=text-to-video');
-    Route::redirect('/image-to-video', '/lab?type=text-to-voice');
-    Route::redirect('/text-to-image', '/lab?type=text-to-image');
-    Route::redirect('/text-to-sound', '/lab?type=text-to-music');
-    Route::redirect('/text-to-music', '/lab?type=text-to-music');
-    Route::redirect('/text-to-voice', '/lab?type=text-to-voice');
-    Route::redirect('/face-swap', '/lab?type=text-to-video');
-    Route::redirect('/lip-sync', '/lab?type=text-to-video');
-    Route::redirect('/image-to-image', '/lab?type=text-to-image');
-    Route::redirect('/image-upscaler', '/lab?type=text-to-image');
-    Route::redirect('/background-remover', '/lab?type=text-to-image');
-    Route::redirect('/text-to-video/lab', '/lab?type=text-to-video');
-    Route::redirect('/image-to-video/lab', '/lab?type=text-to-voice');
-    Route::redirect('/text-to-image/lab', '/lab?type=text-to-image');
-    Route::redirect('/text-to-sound/lab', '/lab?type=text-to-music');
-    Route::redirect('/text-to-music/lab', '/lab?type=text-to-music');
-    Route::redirect('/text-to-voice/lab', '/lab?type=text-to-voice');
 
     Route::get('/lab/creations', [LabCreationsController::class, 'index'])
         ->middleware('throttle:60,1')
@@ -100,17 +103,16 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:120,1')
         ->name('lab.music.status');
 
-    Route::get('/tools', [DashboardController::class, 'tools'])->name('tools');
-
-    $toolRoutes = [
-        'video-upscaler', 'video-enhancer', 'lip-sync', 'face-swap-video',
-        'video-background-remover', 'remove-subtitles-from-video', 'ai-video-extender',
-        'ai-video-editor', 'video-to-video', 'animate-a-picture', 'ai-sound-effect-generator',
-        'denoise-video', 'ai-dance-generator', 'video-to-anime-ai', 'ai-video-filters',
-        'anime-video-enhancer', 'motion-control',
-    ];
-
-    foreach ($toolRoutes as $slug) {
-        Route::get("/tools/{$slug}", [DashboardController::class, 'showTool'])->name("tools.{$slug}");
-    }
 });
+
+$toolRoutes = [
+    'video-upscaler', 'video-enhancer', 'lip-sync', 'face-swap-video',
+    'video-background-remover', 'remove-subtitles-from-video', 'ai-video-extender',
+    'ai-video-editor', 'video-to-video', 'animate-a-picture', 'ai-sound-effect-generator',
+    'denoise-video', 'ai-dance-generator', 'video-to-anime-ai', 'ai-video-filters',
+    'anime-video-enhancer', 'motion-control',
+];
+
+foreach ($toolRoutes as $slug) {
+    Route::get("/tools/{$slug}", [DashboardController::class, 'showTool'])->name("tools.{$slug}");
+}

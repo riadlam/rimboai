@@ -63,6 +63,8 @@ export default function AppHeader({ onMenuClick }: Props) {
 
                 {/* Right */}
                 <div className="flex items-center gap-2 md:gap-3">
+                    {user ? (
+                        <>
                     {/* Credits meter */}
                     <div className="hidden items-center gap-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] py-1 pe-3 ps-1 sm:flex">
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">
@@ -202,6 +204,29 @@ export default function AppHeader({ onMenuClick }: Props) {
                             </MenuItems>
                         </Transition>
                     </Menu>
+                        </>
+                    ) : (
+                        <>
+                            <Link
+                                href="/pricing"
+                                className="inline-flex h-7 items-center px-2.5 text-[12.5px] font-semibold text-white/65 transition hover:text-white"
+                            >
+                                Pricing
+                            </Link>
+                            <Link
+                                href="/?login"
+                                className="inline-flex h-7 items-center rounded-[5px] border border-white/15 bg-white/[0.04] px-3.5 text-[12.5px] font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08]"
+                            >
+                                Sign in
+                            </Link>
+                            <Link
+                                href="/register"
+                                className="inline-flex h-7 items-center rounded-[5px] bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-3.5 text-[12.5px] font-semibold text-white shadow-[0_6px_18px_-10px_rgba(255,87,51,0.95)] transition hover:brightness-110"
+                            >
+                                Sign up
+                            </Link>
+                        </>
+                    )}
                 </div>
             </header>
 

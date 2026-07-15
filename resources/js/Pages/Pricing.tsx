@@ -1,0 +1,734 @@
+import { Head, Link, usePage } from '@inertiajs/react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
+import AppLayout from '@/Layouts/AppLayout';
+import CreditsModal from '@/Components/CreditsModal';
+import type { PageProps } from '@/types';
+
+type Currency = 'USD' | 'EUR' | 'GBP' | 'DZD';
+
+type PackId = 'starter' | 'creator' | 'pro' | 'business';
+
+type YieldItem = {
+    value: string;
+    label: string;
+    icon: 'image' | 'video' | 'videoAlt' | 'music' | 'mic';
+};
+
+type Pack = {
+    id: PackId;
+    name: string;
+    dzd: number;
+    tokens: number;
+    tagline: string;
+    popular?: boolean;
+    best?: boolean;
+    accent: string;
+    check: string;
+    btn: string;
+    yields: YieldItem[];
+    perks: string[];
+};
+
+const CURRENCIES: Record<Currency, { label: string; name: string; symbol: string; flag: string; rateFromDzd: number }> = {
+    DZD: { label: 'DZD', name: 'Algerian Dinar', symbol: 'DZD', flag: '🇩🇿', rateFromDzd: 1 },
+    USD: { label: 'USD', name: 'US Dollar', symbol: '$', flag: '🇺🇸', rateFromDzd: 1 / 134 },
+    EUR: { label: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺', rateFromDzd: 0.92 / 134 },
+    GBP: { label: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧', rateFromDzd: 0.79 / 134 },
+};
+
+const PACKS: Pack[] = [
+    {
+        id: 'starter',
+        name: 'Starter',
+        dzd: 3750,
+        tokens: 5000,
+        tagline: 'Perfect for trying out AI generation',
+        accent: 'border-white/10 hover:border-white/20',
+        check: 'text-emerald-400',
+        btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
+        yields: [
+            { value: '333', label: 'images (Nano Banana Pro)', icon: 'image' },
+            { value: '48', label: 'videos (Kling 2.6)', icon: 'video' },
+            { value: '12', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
+            { value: '119', label: 'songs (Suno)', icon: 'music' },
+            { value: '500', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
+        ],
+        perks: ['Access to all AI models', 'HD quality output', 'Email support'],
+    },
+    {
+        id: 'creator',
+        name: 'Creator',
+        dzd: 10000,
+        tokens: 15000,
+        tagline: 'Perfect for content creators',
+        accent: 'border-sky-500/40 hover:border-sky-400/60',
+        check: 'text-emerald-400',
+        btn: 'bg-sky-600 text-white hover:bg-sky-500',
+        yields: [
+            { value: '1,000', label: 'images (Nano Banana Pro)', icon: 'image' },
+            { value: '145', label: 'videos (Kling 2.6)', icon: 'video' },
+            { value: '37', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
+            { value: '357', label: 'songs (Suno)', icon: 'music' },
+            { value: '1,500', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
+        ],
+        perks: ['Access to all AI models', 'HD quality output', 'Priority support', 'Fast generation queue'],
+    },
+    {
+        id: 'pro',
+        name: 'Pro',
+        dzd: 18750,
+        tokens: 30000,
+        popular: true,
+        tagline: 'Perfect for professionals and studios',
+        accent: 'border-[#FF5733]/55 ring-2 ring-[#FF5733]/20 hover:border-[#FF5733]/70',
+        check: 'text-[#FF8A65]',
+        btn: 'bg-gradient-to-b from-[#FF6A45] to-[#E24216] text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] hover:brightness-110',
+        yields: [
+            { value: '2,000', label: 'images (Nano Banana Pro)', icon: 'image' },
+            { value: '291', label: 'videos (Kling 2.6)', icon: 'video' },
+            { value: '75', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
+            { value: '714', label: 'songs (Suno)', icon: 'music' },
+            { value: '3,000', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
+        ],
+        perks: ['Access to all AI models', '4K quality output', 'Priority support', 'Fast generation queue', 'Bulk generation'],
+    },
+    {
+        id: 'business',
+        name: 'Business',
+        dzd: 55000,
+        tokens: 100000,
+        best: true,
+        tagline: 'Perfect for teams and enterprises',
+        accent: 'border-amber-400/45 hover:border-amber-300/65',
+        check: 'text-amber-400',
+        btn: 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-semibold hover:brightness-105',
+        yields: [
+            { value: '6,666', label: 'images (Nano Banana Pro)', icon: 'image' },
+            { value: '970', label: 'videos (Kling 2.6)', icon: 'video' },
+            { value: '250', label: 'videos (Veo 3.1)', icon: 'videoAlt' },
+            { value: '2,380', label: 'songs (Suno)', icon: 'music' },
+            { value: '10,000', label: 'voiceovers (ElevenLabs)', icon: 'mic' },
+        ],
+        perks: ['Access to all AI models', '4K quality output', 'Dedicated support', 'Fast generation queue', 'Bulk generation', 'API access'],
+    },
+];
+
+const FEATURES: { name: string; packs: Record<PackId, boolean> }[] = [
+    { name: 'Access to all AI models', packs: { starter: true, creator: true, pro: true, business: true } },
+    { name: 'HD quality output', packs: { starter: true, creator: true, pro: true, business: true } },
+    { name: '4K quality output', packs: { starter: false, creator: false, pro: true, business: true } },
+    { name: 'Fast generation queue', packs: { starter: false, creator: true, pro: true, business: true } },
+    { name: 'Bulk generation', packs: { starter: false, creator: false, pro: true, business: true } },
+    { name: 'Priority support', packs: { starter: false, creator: true, pro: true, business: true } },
+    { name: 'Dedicated support', packs: { starter: false, creator: false, pro: false, business: true } },
+    { name: 'API access', packs: { starter: false, creator: false, pro: false, business: true } },
+];
+
+const MODEL_TABS = [
+    {
+        id: 'image',
+        label: 'Image',
+        hint: 'Lab · text-to-image',
+        models: [
+            { name: 'Nano Banana / Gemini Flash', cost: 'from ~15 tok' },
+            { name: 'Nano Banana Pro', cost: 'from ~34 tok' },
+            { name: 'Seedream 4', cost: 'from ~10 tok' },
+            { name: 'Flux family', cost: 'from ~15 tok' },
+            { name: 'GPT Image', cost: 'from ~40 tok' },
+            { name: 'Grok Imagine', cost: 'from ~35 tok' },
+        ],
+    },
+    {
+        id: 'video',
+        label: 'Video',
+        hint: 'Lab · text / image-to-video',
+        models: [
+            { name: 'Kling 2.6', cost: 'from ~103 tok' },
+            { name: 'Kling 2.5 Turbo', cost: 'from ~125 tok' },
+            { name: 'Wan 2.6', cost: 'from ~100 tok' },
+            { name: 'Seedance Pro', cost: 'from ~100 tok' },
+            { name: 'Veo 3.1', cost: 'from ~400 tok' },
+            { name: 'Kling 3.0', cost: 'from ~475 tok' },
+        ],
+    },
+    {
+        id: 'audio',
+        label: 'Audio',
+        hint: 'Voiceover & music',
+        models: [
+            { name: 'ElevenLabs TTS', cost: 'from ~15 tok' },
+            { name: 'Minimax Speech', cost: 'from ~35 tok' },
+            { name: 'Suno V4', cost: 'from ~100 tok' },
+            { name: 'Suno V5', cost: 'from ~150 tok' },
+        ],
+    },
+    {
+        id: 'tools',
+        label: 'Tools',
+        hint: 'Upscale & utilities',
+        models: [
+            { name: 'Video Upscaler', cost: 'per run' },
+            { name: 'Video Enhancer', cost: 'per run' },
+            { name: 'Background Remover', cost: 'from ~5 tok' },
+            { name: 'Image Upscaler', cost: 'from ~5 tok' },
+        ],
+    },
+] as const;
+
+const FAQS = [
+    {
+        q: 'How do RIMBOAI tokens work?',
+        a: 'Tokens are the fuel for every generation in the Lab — images, video, voice, and music. Each model deducts a small amount based on its live fal.ai rate. Unused tokens stay on your account.',
+    },
+    {
+        q: 'Do packs expire?',
+        a: 'No. Token packs are balance top-ups, not subscriptions. Buy once and create whenever you are ready.',
+    },
+    {
+        q: 'Are all Lab models included?',
+        a: 'Yes. Every active pack unlocks the same model catalogue. Higher packs simply give you more runway and better queue priority.',
+    },
+    {
+        q: 'Can I top up again later?',
+        a: 'Anytime. Open Buy Tokens from the header or return to this page and pick another pack — balances stack.',
+    },
+    {
+        q: 'What currencies can I view?',
+        a: 'Prices are shown in USD, EUR, GBP, or DZD for convenience. Checkout currency depends on the payment method available in your region.',
+    },
+    {
+        q: 'What if I only want to try the platform?',
+        a: 'Create a free account and claim starter tokens — enough to explore the Lab, Trends, and Innovation without a card.',
+    },
+];
+
+const fadeUp = {
+    hidden: { opacity: 0, y: 24 },
+    show: (i: number) => ({
+        opacity: 1,
+        y: 0,
+        transition: { delay: 0.06 * i, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    }),
+};
+
+export default function Pricing() {
+    const { props } = usePage<PageProps>();
+    const user = props.auth.user;
+    const [currency, setCurrency] = useState<Currency>('DZD');
+    const [modelTab, setModelTab] = useState<(typeof MODEL_TABS)[number]['id']>('image');
+    const [openFaq, setOpenFaq] = useState<number | null>(0);
+    const [creditsOpen, setCreditsOpen] = useState(false);
+
+    const cur = CURRENCIES[currency];
+    const activeModels = MODEL_TABS.find((t) => t.id === modelTab) ?? MODEL_TABS[0];
+    const proPack = PACKS.find((p) => p.id === 'pro')!;
+
+    const formatPrice = (dzd: number) => {
+        const value = dzd * cur.rateFromDzd;
+        if (currency === 'DZD') {
+            return { amount: Math.round(value).toLocaleString(), suffix: 'DZD' };
+        }
+        const rounded = value % 1 < 0.05 || value % 1 > 0.95 ? Math.round(value).toString() : value.toFixed(2);
+        return { amount: `${cur.symbol}${rounded}`, suffix: '' };
+    };
+
+    const proPrice = formatPrice(proPack.dzd);
+    const ctaHref = user ? '/lab' : '/register';
+
+    return (
+        <AppLayout>
+            <Head title="Pricing" />
+            <div className="relative -mx-4 -my-4 overflow-hidden sm:-mx-5 lg:-mx-6 lg:-my-5 xl:-mx-8">
+                {/* Atmosphere */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] overflow-hidden">
+                    <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#FF5733]/20 blur-[110px]" />
+                    <div className="absolute right-0 top-24 h-80 w-80 rounded-full bg-amber-500/10 blur-[120px]" />
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,87,51,0.12),transparent_55%)]" />
+                </div>
+
+                <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-12">
+                    {/* Hero — asymmetric */}
+                    <div className="grid items-end gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+                        <motion.div initial="hidden" animate="show" variants={fadeUp} custom={0}>
+                            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#FF5733]/30 bg-[#FF5733]/10 px-3.5 py-1.5 text-[12px] font-semibold tracking-wide text-[#FF8A65]">
+                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5733]" />
+                                Token packs · no subscription lock-in
+                            </p>
+                            <h1 className="font-[family-name:Outfit,sans-serif] text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
+                                Fuel the Lab.
+                                <span className="mt-1 block bg-gradient-to-r from-[#FF8A65] via-[#FF5733] to-amber-300 bg-clip-text text-transparent">
+                                    Create without ceilings.
+                                </span>
+                            </h1>
+                            <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/50 sm:text-base">
+                                RIMBOAI runs on tokens — one balance for images, video, voice, and music.
+                                Pick a pack that matches your pace. Top up anytime.
+                            </p>
+                        </motion.div>
+
+                        <motion.div
+                            initial="hidden"
+                            animate="show"
+                            variants={fadeUp}
+                            custom={1}
+                            className="relative"
+                        >
+                            <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] p-6 shadow-[0_30px_80px_-40px_rgba(255,87,51,0.55)] backdrop-blur-xl">
+                                <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#FF5733]/25 blur-3xl" />
+                                <div className="relative">
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">Most loved pack</p>
+                                    <div className="mt-3 flex items-center gap-2">
+                                        <span className="rounded-full bg-gradient-to-r from-[#FF6A45] to-[#E24216] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                                            Pro
+                                        </span>
+                                        <span className="text-sm text-white/55">30,000 tokens · everything unlocked</span>
+                                    </div>
+                                    <div className="mt-6 flex items-end justify-between gap-4 border-t border-white/[0.06] pt-5">
+                                        <div>
+                                            <p className="text-[12px] text-white/40">Starts from</p>
+                                            <p className="mt-1 font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white">Pro pack</p>
+                                        </div>
+                                        <p className="font-[family-name:Outfit,sans-serif] text-3xl font-bold tabular-nums text-[#FF8A65]">
+                                            {proPrice.amount}
+                                            {proPrice.suffix ? <span className="ms-1 text-base font-semibold text-white/45">{proPrice.suffix}</span> : null}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+
+                    {/* Free runway — horizontal ribbon (not a green card clone) */}
+                    <motion.section
+                        initial="hidden"
+                        whileInView="show"
+                        viewport={{ once: true, margin: '-40px' }}
+                        variants={fadeUp}
+                        custom={0}
+                        className="relative mt-12 overflow-hidden rounded-[24px] border border-emerald-400/20 bg-[#0b120e]"
+                    >
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_50%,rgba(16,185,129,0.22),transparent_45%)]" />
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_100%_50%,rgba(255,87,51,0.12),transparent_40%)]" />
+                        <div className="relative flex flex-col items-start justify-between gap-6 p-6 sm:flex-row sm:items-center sm:p-8">
+                            <div className="flex items-center gap-5">
+                                <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10">
+                                    <span className="font-[family-name:Outfit,sans-serif] text-2xl font-black text-white">50</span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">tokens</span>
+                                </div>
+                                <div>
+                                    <p className="font-[family-name:Outfit,sans-serif] text-lg font-semibold text-white">Start free on RIMBOAI</p>
+                                    <p className="mt-1 max-w-md text-sm text-white/50">
+                                        Sign up, claim starter tokens, and open the Lab — no card required.
+                                    </p>
+                                </div>
+                            </div>
+                            <Link
+                                href={user ? '/lab' : '/register'}
+                                className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] transition hover:brightness-110"
+                            >
+                                {user ? 'Open the Lab' : 'Claim free tokens'}
+                                <ArrowIcon />
+                            </Link>
+                        </div>
+                    </motion.section>
+
+                    {/* Packs — standard equal rectangles */}
+                    <section className="mt-14">
+                        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                            <div>
+                                <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">Choose your pack</h2>
+                                <p className="mt-1 text-sm text-white/45">Estimates show what you can create — exact usage depends on model and settings.</p>
+                            </div>
+
+                            {/* Currency selector — compact segmented control */}
+                            <div className="flex flex-col items-start gap-1.5 lg:items-end">
+                                <span className="text-[11px] font-medium uppercase tracking-wider text-white/35">Show prices in</span>
+                                <div className="relative flex gap-1 rounded-full border border-white/10 bg-black/30 p-1">
+                                    {(Object.keys(CURRENCIES) as Currency[]).map((code) => {
+                                        const info = CURRENCIES[code];
+                                        const active = currency === code;
+                                        return (
+                                            <button
+                                                key={code}
+                                                type="button"
+                                                onClick={() => setCurrency(code)}
+                                                className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition"
+                                            >
+                                                {active && (
+                                                    <motion.span
+                                                        layoutId="currency-pill"
+                                                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                                                        className="absolute inset-0 rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] shadow-[0_8px_20px_-10px_rgba(255,87,51,0.9)]"
+                                                    />
+                                                )}
+                                                <span className={`relative text-sm leading-none ${active ? '' : 'grayscale'}`}>{info.flag}</span>
+                                                <span className={`relative ${active ? 'text-white' : 'text-white/55 hover:text-white'}`}>
+                                                    {info.label}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-5 pt-3 md:grid-cols-2 xl:grid-cols-4">
+                            {PACKS.map((pack, i) => (
+                                <PackCard
+                                    key={pack.id}
+                                    pack={pack}
+                                    price={formatPrice(pack.dzd)}
+                                    index={i}
+                                    user={!!user}
+                                    onBuy={() => setCreditsOpen(true)}
+                                />
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Compare — interactive chips, not Virali table clone */}
+                    <section className="mt-16">
+                        <div className="mb-6 text-center sm:text-start">
+                            <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">What each pack unlocks</h2>
+                            <p className="mt-1 text-sm text-white/45">Same models everywhere — the difference is runway, queue, and support.</p>
+                        </div>
+
+                        <div className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02]">
+                            <div className="grid grid-cols-[1.4fr_repeat(4,0.7fr)] gap-0 border-b border-white/[0.06] bg-white/[0.03] px-3 py-3 text-[11px] font-semibold uppercase tracking-wider text-white/40 sm:px-5 sm:text-xs">
+                                <span className="ps-1">Feature</span>
+                                {(['Starter', 'Creator', 'Pro', 'Business'] as const).map((name) => (
+                                    <span key={name} className="text-center text-white/70">
+                                        {name}
+                                    </span>
+                                ))}
+                            </div>
+                            {FEATURES.map((row, i) => (
+                                <motion.div
+                                    key={row.name}
+                                    initial={{ opacity: 0, x: -8 }}
+                                    whileInView={{ opacity: 1, x: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: i * 0.04 }}
+                                    className={`grid grid-cols-[1.4fr_repeat(4,0.7fr)] items-center gap-0 px-3 py-3.5 sm:px-5 ${
+                                        i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.015]'
+                                    }`}
+                                >
+                                    <span className="pe-2 text-[13px] text-white/75">{row.name}</span>
+                                    {(['starter', 'creator', 'pro', 'business'] as PackId[]).map((id) => (
+                                        <span key={id} className="flex justify-center">
+                                            {row.packs[id] ? (
+                                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF5733]/15 text-[#FF8A65]">
+                                                    <CheckIcon />
+                                                </span>
+                                            ) : (
+                                                <span className="h-1.5 w-1.5 rounded-full bg-white/15" />
+                                            )}
+                                        </span>
+                                    ))}
+                                </motion.div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Models — tabs */}
+                    <section className="mt-16">
+                        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">Model runway guide</h2>
+                                <p className="mt-1 text-sm text-white/45">Approximate token costs for popular RIMBOAI Lab models.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 rounded-full border border-white/10 bg-black/30 p-1">
+                                {MODEL_TABS.map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setModelTab(tab.id)}
+                                        className={`rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition ${
+                                            modelTab === tab.id
+                                                ? 'bg-white text-black'
+                                                : 'text-white/55 hover:text-white'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeModels.id}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.28 }}
+                                className="rounded-[22px] border border-white/10 bg-gradient-to-br from-white/[0.05] to-transparent p-5 sm:p-6"
+                            >
+                                <p className="mb-4 text-[12px] font-medium uppercase tracking-[0.18em] text-white/35">{activeModels.hint}</p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {activeModels.models.map((m) => (
+                                        <div
+                                            key={m.name}
+                                            className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/25 px-3.5 py-3 transition hover:border-[#FF5733]/35 hover:bg-[#FF5733]/5"
+                                        >
+                                            <span className="text-sm text-white/85">{m.name}</span>
+                                            <span className="shrink-0 text-[12px] tabular-nums text-white/40">{m.cost}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </AnimatePresence>
+                    </section>
+
+                    {/* FAQ — two columns */}
+                    <section className="mt-16">
+                        <div className="mb-6">
+                            <h2 className="font-[family-name:Outfit,sans-serif] text-2xl font-bold text-white sm:text-3xl">Questions, answered</h2>
+                            <p className="mt-1 text-sm text-white/45">Straight answers about tokens, packs, and the Lab.</p>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {FAQS.map((item, i) => {
+                                const open = openFaq === i;
+                                return (
+                                    <motion.div
+                                        key={item.q}
+                                        layout
+                                        className={`overflow-hidden rounded-2xl border transition ${
+                                            open ? 'border-[#FF5733]/35 bg-[#FF5733]/[0.06]' : 'border-white/10 bg-white/[0.02]'
+                                        }`}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpenFaq(open ? null : i)}
+                                            className="flex w-full items-center justify-between gap-3 px-4 py-4 text-start"
+                                        >
+                                            <span className="text-sm font-semibold text-white">{item.q}</span>
+                                            <span className={`shrink-0 text-white/40 transition ${open ? 'rotate-45' : ''}`}>+</span>
+                                        </button>
+                                        <AnimatePresence initial={false}>
+                                            {open && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.22 }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <p className="px-4 pb-4 text-[13px] leading-relaxed text-white/50">{item.a}</p>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    {/* CTA */}
+                    <motion.section
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        className="relative mt-16 overflow-hidden rounded-[28px] border border-[#FF5733]/25"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#FF5733]/25 via-[#1a0c08] to-[#0a0a0c]" />
+                        <div className="absolute -right-20 top-0 h-64 w-64 rounded-full bg-amber-400/20 blur-[100px]" />
+                        <div className="relative px-6 py-12 text-center sm:px-10 sm:py-14">
+                            <p className="font-[family-name:Outfit,sans-serif] text-[12px] font-semibold tracking-[0.24em] text-[#FF8A65]">RIMBOAI</p>
+                            <h2 className="mt-2 font-[family-name:Outfit,sans-serif] text-3xl font-bold text-white sm:text-4xl">
+                                Ready when you are.
+                            </h2>
+                            <p className="mx-auto mt-3 max-w-lg text-sm text-white/50">
+                                Jump into the Lab, remix Trends, and ship from Innovation — with tokens that move at your speed.
+                            </p>
+                            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                                <Link
+                                    href={ctaHref}
+                                    className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-7 text-sm font-semibold text-white shadow-[0_14px_36px_-14px_rgba(255,87,51,0.95)] transition hover:brightness-110"
+                                >
+                                    {user ? 'Back to the Lab' : 'Create free account'}
+                                    <ArrowIcon />
+                                </Link>
+                                <Link
+                                    href="/lab"
+                                    className="inline-flex h-11 items-center rounded-xl border border-white/15 bg-white/[0.04] px-7 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                                >
+                                    Browse models
+                                </Link>
+                            </div>
+                        </div>
+                    </motion.section>
+
+                    <p className="mt-10 text-center text-[12px] text-white/30">
+                        © {new Date().getFullYear()} RIMBOAI · Token estimates are guides, not guarantees.
+                    </p>
+                </div>
+            </div>
+
+            <CreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
+        </AppLayout>
+    );
+}
+
+function PackCard({
+    pack,
+    price,
+    index,
+    user,
+    onBuy,
+}: {
+    pack: Pack;
+    price: { amount: string; suffix: string };
+    index: number;
+    user: boolean;
+    onBuy: () => void;
+}) {
+    return (
+        <motion.article
+            initial={{ opacity: 0, y: 22 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.07 * index, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className={`relative flex h-full flex-col rounded-2xl border bg-[#101014]/90 p-6 backdrop-blur-sm transition ${pack.accent}`}
+        >
+            {pack.popular && (
+                <span className="absolute -top-3 start-1/2 z-10 inline-flex -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-[#FF6A45] to-[#E24216] px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-[#FF5733]/40">
+                    Most Popular
+                </span>
+            )}
+            {pack.best && (
+                <span className="absolute -top-3 start-1/2 z-10 inline-flex -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black shadow-lg shadow-amber-500/30">
+                    Best Value
+                </span>
+            )}
+
+            <div className="pt-2 text-center">
+                <h3 className="font-[family-name:Outfit,sans-serif] text-xl font-semibold text-white">{pack.name}</h3>
+                <div className="mt-4 flex items-baseline justify-center gap-1.5">
+                    <span className="font-[family-name:Outfit,sans-serif] text-4xl font-bold tabular-nums text-white md:text-[2.6rem]">
+                        {price.amount}
+                    </span>
+                    {price.suffix ? <span className="text-sm text-white/45">{price.suffix}</span> : null}
+                </div>
+                <p className="mt-1.5 text-base font-medium text-[#FF8A65]">{pack.tokens.toLocaleString()} tokens</p>
+            </div>
+
+            <div className="my-5 h-px w-full bg-white/[0.08]" />
+
+            <div className="flex-1">
+                <p className="mb-3 text-start text-[12px] font-medium text-white/45">What You Can Create:</p>
+                <div className="space-y-2.5">
+                    {pack.yields.map((y) => (
+                        <div key={y.label} className="flex items-center gap-2.5">
+                            <YieldIcon type={y.icon} />
+                            <span className="text-start text-[13px] text-white/80">
+                                <strong className="font-semibold text-white">{y.value}</strong> {y.label}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+
+                <p className="mt-4 text-start text-[13px] italic text-white/40">{pack.tagline}</p>
+
+                <div className="my-5 h-px w-full bg-white/[0.08]" />
+
+                <ul className="space-y-2">
+                    {pack.perks.map((perk) => (
+                        <li key={perk} className={`flex items-center gap-2 text-[13px] text-white/60`}>
+                            <span className={pack.check}>
+                                <CheckIcon />
+                            </span>
+                            {perk}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <PackCta user={user} onBuy={onBuy} className={pack.btn} />
+        </motion.article>
+    );
+}
+
+function YieldIcon({ type }: { type: YieldItem['icon'] }) {
+    const wrap =
+        type === 'image'
+            ? 'bg-[#FF5733]/15 text-[#FF8A65]'
+            : type === 'video'
+              ? 'bg-sky-500/15 text-sky-400'
+              : type === 'videoAlt'
+                ? 'bg-violet-500/15 text-violet-400'
+                : type === 'music'
+                  ? 'bg-rose-500/15 text-rose-400'
+                  : 'bg-cyan-500/15 text-cyan-400';
+
+    return (
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${wrap}`}>
+            {type === 'image' && (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect width="18" height="18" x="3" y="3" rx="2" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                </svg>
+            )}
+            {(type === 'video' || type === 'videoAlt') && (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+                    <rect x="2" y="6" width="14" height="12" rx="2" />
+                </svg>
+            )}
+            {type === 'music' && (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                </svg>
+            )}
+            {type === 'mic' && (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" x2="12" y1="19" y2="22" />
+                </svg>
+            )}
+        </span>
+    );
+}
+
+function PackCta({ user, onBuy, className }: { user: boolean; onBuy: () => void; className: string }) {
+    const base =
+        'mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition';
+
+    if (user) {
+        return (
+            <button type="button" onClick={onBuy} className={`${base} ${className}`}>
+                Get Started
+                <ArrowIcon />
+            </button>
+        );
+    }
+
+    return (
+        <Link href="/register" className={`${base} ${className}`}>
+            Get Started
+            <ArrowIcon />
+        </Link>
+    );
+}
+
+function CheckIcon() {
+    return (
+        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 6 9 17l-5-5" />
+        </svg>
+    );
+}
+
+function ArrowIcon() {
+    return (
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
+        </svg>
+    );
+}

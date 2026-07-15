@@ -138,7 +138,8 @@ const createItems = [
 ];
 
 export default function Sidebar({ open, onClose }: Props) {
-    const { url } = usePage<PageProps>();
+    const { url, props } = usePage<PageProps>();
+    const user = props.auth.user;
     const [createOpen, setCreateOpen] = useState(true);
     const [lang, setLang] = useState<AppLang>(readSavedLang);
     const [langMenuOpen, setLangMenuOpen] = useState(false);
@@ -265,6 +266,14 @@ export default function Sidebar({ open, onClose }: Props) {
 
                 {/* Secondary */}
                 <nav className="flex flex-col gap-1 px-2 py-3">
+                    <RailLink href="/pricing" active={url.startsWith('/pricing')} onClick={onClose} label="Pricing">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                            <circle cx="8" cy="8" r="6" />
+                            <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+                            <path d="M7 6h1v4" />
+                            <path d="m16.71 13.88.7.71-2.82 2.82" />
+                        </svg>
+                    </RailLink>
                     <RailLink href="/trends" active={url.startsWith('/trends') || url.startsWith('/marketplace')} onClick={onClose} label="Trends">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
@@ -280,11 +289,13 @@ export default function Sidebar({ open, onClose }: Props) {
                             <path d="M5 18H3" />
                         </svg>
                     </RailLink>
-                    <RailLink href="/history" active={url.startsWith('/history')} onClick={onClose} label="History">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                            <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
-                        </svg>
-                    </RailLink>
+                    {user && (
+                        <RailLink href="/history" active={url.startsWith('/history')} onClick={onClose} label="History">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                                <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+                            </svg>
+                        </RailLink>
+                    )}
                 </nav>
             </div>
 

@@ -1,4 +1,4 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import AuthLayout from '@/Layouts/AuthLayout';
 import Input from '@/Components/Input';
 import Button from '@/Components/Button';
@@ -63,12 +63,6 @@ export default function Login() {
                     </svg>
                 </Button>
             </form>
-            <p className="mt-6 text-center text-sm text-[#475569]">
-                Don&apos;t have an account?{' '}
-                <Link href="/register" className="font-medium text-[#3b82f6] transition-colors hover:text-[#2563eb]">
-                    Create one
-                </Link>
-            </p>
         </AuthLayout>
     );
 }

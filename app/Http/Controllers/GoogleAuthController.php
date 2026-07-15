@@ -16,7 +16,7 @@ class GoogleAuthController extends Controller
     {
         if (! $this->configured()) {
             return redirect()
-                ->route('login')
+                ->to('/?login')
                 ->withErrors(['email' => 'Google sign-in is not configured yet.']);
         }
 
@@ -27,7 +27,7 @@ class GoogleAuthController extends Controller
     {
         if (! $this->configured()) {
             return redirect()
-                ->route('login')
+                ->to('/?login')
                 ->withErrors(['email' => 'Google sign-in is not configured yet.']);
         }
 
@@ -37,7 +37,7 @@ class GoogleAuthController extends Controller
             Log::warning('Google OAuth callback failed.', ['error' => $e->getMessage()]);
 
             return redirect()
-                ->route('login')
+                ->to('/?login')
                 ->withErrors(['email' => 'Could not sign in with Google. Please try again.']);
         }
 
@@ -45,7 +45,7 @@ class GoogleAuthController extends Controller
 
         if (! $email) {
             return redirect()
-                ->route('login')
+                ->to('/?login')
                 ->withErrors(['email' => 'Your Google account did not share an email address.']);
         }
 

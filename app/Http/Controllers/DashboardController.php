@@ -124,6 +124,11 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function pricing(): Response
+    {
+        return Inertia::render('Pricing');
+    }
+
     public function showTool(Request $request): Response
     {
         $routeName = $request->route()->getName();

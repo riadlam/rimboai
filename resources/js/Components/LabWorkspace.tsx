@@ -15,7 +15,7 @@ import {
 } from '@/lib/labReuse';
 import type { Brand, PageProps } from '@/types';
 import Button from '@/Components/Button';
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -211,6 +211,7 @@ export default function LabWorkspace({
     creditsConfig,
 }: Props) {
     const { props: pageProps } = usePage<PageProps>();
+    const isGuest = pageProps.auth.user === null;
     const [prompt, setPrompt] = useState('');
     const [tokenBalance, setTokenBalance] = useState(() => Math.max(0, pageProps.auth.user?.tokens ?? 0));
     const [loading, setLoading] = useState(false);
@@ -522,7 +523,7 @@ export default function LabWorkspace({
     pollVideoRef.current = pollVideo;
 
     useEffect(() => {
-        if (!usesStudioLab) return;
+        if (!usesStudioLab || isGuest) return;
 
         let cancelled = false;
         const labType = isMusicLab ? (type === 'text-to-sound' ? 'text-to-sound' : 'text-to-music') : type;
@@ -578,7 +579,7 @@ export default function LabWorkspace({
         return () => {
             cancelled = true;
         };
-    }, [type, usesStudioLab, isImageLab, isVideoLab, isMusicLab, isVoiceLab]);
+    }, [type, usesStudioLab, isGuest, isImageLab, isVideoLab, isMusicLab, isVoiceLab]);
 
     const startImageGenerate = useCallback(
         async (nextPrompt?: string, options?: ImageGenerateOptions) => {
@@ -1302,11 +1303,47 @@ export default function LabWorkspace({
                             animate={{ opacity: 1, x: 0 }}
                             className="flex w-full shrink-0 flex-col border-b border-white/[0.06] md:h-full md:min-h-0 md:w-[380px] md:overflow-hidden md:border-b-0 md:border-r xl:w-[420px]"
                         >
-                            {renderCreateForm()}
+                            <div className="relative flex min-h-0 flex-1 flex-col">
+                                {renderCreateForm()}
+                                {isGuest && (
+                                    <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f] to-transparent px-4 pb-4 pt-10">
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.1, duration: 0.4 }}
+                                            whileHover={{ scale: 1.03 }}
+                                            whileTap={{ scale: 0.97 }}
+                                        >
+                                            <Link
+                                                href="/register"
+                                                className="group relative inline-flex h-10 items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-9 text-[13px] font-semibold text-white shadow-[0_10px_26px_-10px_rgba(255,87,51,0.95)]"
+                                            >
+                                                <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-full" />
+                                                <motion.span
+                                                    aria-hidden
+                                                    className="relative flex h-4 w-4 items-center justify-center"
+                                                    animate={{ rotate: [0, 15, -10, 0], scale: [1, 1.15, 1] }}
+                                                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                                                >
+                                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                                                    </svg>
+                                                </motion.span>
+                                                <span className="relative">Sign up free</span>
+                                            </Link>
+                                        </motion.div>
+                                        <p className="mt-2 text-center text-[11px] text-white/40">
+                                            50 free tokens · no card required
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </motion.aside>
 
                         <div className="flex min-h-[50vh] min-w-0 w-full flex-col md:min-h-0 md:flex-1 md:overflow-hidden">
-                            {isMusicLab ? (
+                            {isGuest ? (
+                                <GuestLibraryPlaceholder title={title} />
+                            ) : isMusicLab ? (
                                 <SoundLabLibrary
                                     tracks={tracks}
                                     generating={loading || musicGenerating}
@@ -1362,6 +1399,58 @@ export default function LabWorkspace({
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+function GuestLibraryPlaceholder({ title }: { title: string }) {
+    return (
+        <div className="relative flex h-full min-h-[50vh] w-full items-center justify-center overflow-hidden p-6">
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+                <div className="absolute left-1/2 top-1/3 h-72 w-72 -translate-x-1/2 rounded-full bg-[#FF5733]/12 blur-[120px]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.035),transparent_55%)]" />
+            </div>
+
+            <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="relative w-full max-w-md text-center"
+            >
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_20px_50px_-24px_rgba(255,87,51,0.7)]">
+                    <svg className="h-7 w-7 text-[#FF8A65]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                        <rect x="3" y="3" width="18" height="18" rx="4" />
+                        <circle cx="8.5" cy="9" r="1.6" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m21 15-4.5-4.5L7 20" />
+                    </svg>
+                </div>
+
+                <h3 className="font-[family-name:Outfit,sans-serif] text-xl font-bold text-white">
+                    Your {title} gallery lives here
+                </h3>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-white/45">
+                    Sign in to save every creation, revisit your history, and pick up right where you left off.
+                    New here? Create a free account and get 50 tokens to start.
+                </p>
+
+                <div className="mt-6 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
+                    <Link
+                        href="/register"
+                        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-14px_rgba(255,87,51,0.95)] transition hover:brightness-110 sm:w-auto"
+                    >
+                        Sign up free
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
+                        </svg>
+                    </Link>
+                    <Link
+                        href="/?login"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.04] px-6 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08] sm:w-auto"
+                    >
+                        Sign in
+                    </Link>
+                </div>
+            </motion.div>
         </div>
     );
 }

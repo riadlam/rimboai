@@ -1,10 +1,11 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 import VideoThumb from '@/Components/VideoThumb';
 import { apiPost } from '@/lib/api';
 import { saveLabReuseDraft, type LabReuseDraft } from '@/lib/labReuse';
+import type { PageProps } from '@/types';
 
 export type TrendTemplate = {
     id: string;
@@ -88,6 +89,7 @@ function buildTrendLabDraft(t: TrendTemplate): LabReuseDraft {
 }
 
 function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate[] }) {
+    const { props } = usePage<PageProps>();
     const [templates, setTemplates] = useState(initialTemplates);
     const [query, setQuery] = useState('');
     const [pill, setPill] = useState<(typeof PILLS)[number]>('All');
@@ -150,6 +152,10 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
     const selected = selectedId ? templates.find((t) => t.id === selectedId) ?? null : null;
 
     const useInLab = async (t: TrendTemplate) => {
+        if (!props.auth.user) {
+            router.visit('/?login');
+            return;
+        }
         if (usingId) return;
         setUsingId(t.id);
         try {

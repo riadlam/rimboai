@@ -3,17 +3,16 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class AuthController extends Controller
 {
-    public function showLoginForm(): Response
+    public function showLoginForm(): RedirectResponse
     {
-        return Inertia::render('Auth/Login');
+        return redirect('/?login');
     }
 
     public function login(Request $request)
@@ -33,9 +32,9 @@ class AuthController extends Controller
         ])->onlyInput('email');
     }
 
-    public function showRegisterForm(): Response
+    public function showRegisterForm(): RedirectResponse
     {
-        return Inertia::render('Auth/Register');
+        return redirect('/?login');
     }
 
     public function register(Request $request)
@@ -63,6 +62,6 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect(route('login'));
+        return redirect('/');
     }
 }
