@@ -53,7 +53,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                         <img
                             src="/storage/ai_icons/logo_with_icon_text.png"
                             alt="RIMBOAI"
-                            className="h-11 w-auto object-contain md:h-20"
+                            className="h-16 w-auto object-contain md:h-[84px]"
                         />
                     </Link>
                 </div>
