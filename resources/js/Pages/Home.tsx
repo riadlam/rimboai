@@ -104,8 +104,8 @@ export default function Home({ tools }: Props) {
                     <div className="space-y-8 px-4 pb-16 pt-8 sm:px-5 sm:pt-0 lg:px-8">
                         <ToolRail tools={tools} />
                         <TrendRail />
-                        <InspirationRail title="Best of Social Media" items={INSPIRATIONS} />
-                        <InspirationRail title="Best of Profile & Avatar" items={INSPIRATIONS_2} />
+                        <InspirationRail titleKey="bestSocial" items={INSPIRATIONS} />
+                        <InspirationRail titleKey="bestAvatar" items={INSPIRATIONS_2} />
                     </div>
                 </div>
             )}
@@ -723,6 +723,7 @@ function CreateCard({
 /* ---------------- Rails ---------------- */
 
 function RailHeader({ title, sub, href }: { title: string; sub?: string; href: string }) {
+    const { t } = useTranslation('home');
     return (
         <div className="mb-4 flex items-end justify-between gap-4">
             <div>
@@ -733,8 +734,8 @@ function RailHeader({ title, sub, href }: { title: string; sub?: string; href: s
                 href={href}
                 className="group flex shrink-0 items-center gap-1 text-sm text-white/50 transition-colors hover:text-white"
             >
-                View all
-                <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                {t('seeAll')}
+                <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
                 </svg>
             </Link>
@@ -743,7 +744,14 @@ function RailHeader({ title, sub, href }: { title: string; sub?: string; href: s
 }
 
 function ToolRail({ tools }: { tools: Tool[] }) {
+    const { t } = useTranslation('home');
     const list = tools.slice(0, 12);
+    const tags = [
+        t('tags.upscale'),
+        t('tags.enhance'),
+        t('tags.lipSync'),
+        t('tags.motion'),
+    ];
 
     return (
         <motion.section
@@ -771,14 +779,14 @@ function ToolRail({ tools }: { tools: Tool[] }) {
                             className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50"
                         >
                             <span className="h-1.5 w-1.5 rounded-full bg-[#FF5733]" />
-                            {list.length}+ tools ready
+                            {t('toolsReady', { count: list.length })}
                         </motion.span>
 
                         <h2 className="font-[family-name:Outfit,sans-serif] text-[28px] font-extrabold leading-[1.05] tracking-tight text-white lg:text-[34px]">
-                            WHAT WILL YOU
+                            {t('whatWillYou')}
                             <br />
                             <span className="relative inline-block bg-gradient-to-r from-[#FF8A65] via-[#FF5733] to-amber-300 bg-clip-text text-transparent">
-                                CREATE TODAY?
+                                {t('createToday')}
                                 <motion.span
                                     aria-hidden
                                     className="absolute -bottom-1 start-0 h-[3px] w-full rounded-full bg-gradient-to-r from-[#FF5733] to-transparent"
@@ -792,11 +800,11 @@ function ToolRail({ tools }: { tools: Tool[] }) {
                         </h2>
 
                         <p className="mt-3.5 max-w-xs text-[13px] leading-relaxed text-white/45 lg:text-sm">
-                            One-click tools for upscaling, enhancement, lip sync, and more — built for real creative workflows.
+                            {t('toolsDesc')}
                         </p>
 
                         <div className="mt-4 flex flex-wrap gap-2">
-                            {['Upscale', 'Enhance', 'Lip Sync', 'Motion'].map((tag) => (
+                            {tags.map((tag) => (
                                 <span
                                     key={tag}
                                     className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/55"
@@ -811,8 +819,8 @@ function ToolRail({ tools }: { tools: Tool[] }) {
                         href="/tools"
                         className="group mt-5 hidden w-fit items-center gap-2 rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_32px_-12px_rgba(255,87,51,0.95)] transition hover:brightness-110 active:scale-[0.98] lg:inline-flex"
                     >
-                        Explore all tools
-                        <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                        {t('exploreAllTools')}
+                        <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
                     </Link>
@@ -844,7 +852,7 @@ function ToolRail({ tools }: { tools: Tool[] }) {
                     href="/tools"
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#FF5733]/35 bg-[#FF5733]/10 py-3 text-sm font-semibold text-[#ffb39f] transition hover:bg-[#FF5733]/15"
                 >
-                    Explore all tools
+                    {t('exploreAllTools')}
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8Z" />
                     </svg>
@@ -865,8 +873,10 @@ function ToolChip({
     badge?: string;
     index: number;
 }) {
+    const { t } = useTranslation('home');
     const path = '/tools/' + tool.route.replace('tools.', '');
-    const label = badge || (hot ? 'Hot' : null);
+    const label = badge === 'New' ? t('new') : badge || (hot ? t('hot') : null);
+    const isNew = badge === 'New' || label === t('new');
 
     return (
         <motion.div
@@ -894,7 +904,7 @@ function ToolChip({
                     {label && (
                         <span
                             className={`absolute start-2 top-2 z-10 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow ${
-                                label === 'New' ? 'bg-emerald-500/90' : 'bg-[#FF5733]/95'
+                                isNew ? 'bg-emerald-500/90' : 'bg-[#FF5733]/95'
                             }`}
                         >
                             {label}
@@ -915,8 +925,8 @@ function ToolChip({
 
                     <div className="absolute inset-x-0 bottom-0 translate-y-2 p-2.5 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                         <span className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-black">
-                            Use tool
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            {t('useTool')}
+                            <svg className="h-3 w-3 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                             </svg>
                         </span>
@@ -943,6 +953,7 @@ function ToolChip({
 }
 
 function TrendRail() {
+    const { t } = useTranslation('home');
     return (
         <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -950,12 +961,12 @@ function TrendRail() {
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.5 }}
         >
-            <RailHeader title="Creators Trends" sub="Trending templates from the community" href="/trends" />
+            <RailHeader title={t('creatorsTrends')} sub={t('creatorsTrendsSub')} href="/trends" />
             <div className="scrollbar-hide -mx-1 overflow-x-auto px-1 pb-2">
                 <div className="flex gap-4">
-                    {TRENDS.map((t) => (
+                    {TRENDS.map((item) => (
                         <Link
-                            key={t.id}
+                            key={item.id}
                             href="/trends"
                             className="group relative w-[200px] shrink-0 cursor-pointer overflow-hidden rounded-2xl sm:w-[220px]"
                             onMouseEnter={(e) => {
@@ -971,9 +982,9 @@ function TrendRail() {
                             }}
                         >
                             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014]">
-                                {t.coverType === 'video' ? (
+                                {item.coverType === 'video' ? (
                                     <video
-                                        src={t.cover}
+                                        src={item.cover}
                                         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                                         muted
                                         loop
@@ -981,23 +992,23 @@ function TrendRail() {
                                         preload="none"
                                     />
                                 ) : (
-                                    <img src={t.cover} alt={t.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                                    <img src={item.cover} alt={item.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
-                                {t.featured && (
+                                {item.featured && (
                                     <div className="absolute start-3 top-3 inline-flex items-center rounded-md bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
                                         <svg className="me-1 h-3 w-3 fill-current" viewBox="0 0 24 24">
                                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                                         </svg>
-                                        Featured
+                                        {t('featured')}
                                     </div>
                                 )}
                                 <div className="absolute end-3 top-3 rounded-md border border-white/20 bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-                                    {t.credits} Credits
+                                    {t('creditsLabel', { count: item.credits })}
                                 </div>
                                 <div className="absolute inset-x-0 bottom-0 p-4">
-                                    <h3 className="mb-1 line-clamp-1 text-sm font-semibold text-white">{t.name}</h3>
-                                    <p className="line-clamp-2 text-xs text-white/60">{t.desc}</p>
+                                    <h3 className="mb-1 line-clamp-1 text-sm font-semibold text-white">{item.name}</h3>
+                                    <p className="line-clamp-2 text-xs text-white/60">{item.desc}</p>
                                 </div>
                             </div>
                         </Link>
@@ -1008,7 +1019,8 @@ function TrendRail() {
     );
 }
 
-function InspirationRail({ title, items }: { title: string; items: { t: string; img: string }[] }) {
+function InspirationRail({ titleKey, items }: { titleKey: 'bestSocial' | 'bestAvatar'; items: { t: string; img: string }[] }) {
+    const { t } = useTranslation('home');
     return (
         <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -1016,7 +1028,7 @@ function InspirationRail({ title, items }: { title: string; items: { t: string; 
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.5 }}
         >
-            <RailHeader title={title} href="/trends" />
+            <RailHeader title={t(titleKey)} href="/trends" />
             <div className="scrollbar-hide -mx-1 overflow-x-auto px-1 pb-2">
                 <div className="flex gap-4">
                     {items.map((it, i) => (

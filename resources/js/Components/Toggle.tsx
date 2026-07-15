@@ -24,9 +24,11 @@ export default function Toggle({ checked, onChange, label, description }: Props)
                     )}
                 </div>
             )}
+            {/* Force LTR so the knob never mirrors oddly in Arabic RTL */}
             <button
                 type="button"
                 role="switch"
+                dir="ltr"
                 aria-checked={checked}
                 onClick={() => onChange(!checked)}
                 className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${
@@ -34,9 +36,9 @@ export default function Toggle({ checked, onChange, label, description }: Props)
                 }`}
             >
                 <motion.span
-                    layout
-                    className="inline-block size-5 rounded-full bg-white shadow"
-                    animate={{ x: checked ? 22 : 2 }}
+                    layout={false}
+                    className="absolute top-0.5 left-0.5 inline-block size-5 rounded-full bg-white shadow"
+                    animate={{ x: checked ? 20 : 0 }}
                     transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
             </button>

@@ -122,6 +122,9 @@
     "trackDuration": "مدة المقطوعة",
     "withVocals": "مع غناء",
     "withoutVocals": "بدون غناء",
+    "includeVocalsHint": "تضمين الغناء",
+    "musicOnlyHint": "موسيقى فقط بدون غناء",
+    "noVocalsSupport": "هذا النموذج لا يدعم الغناء",
     "instrumental": "آلي",
     "instrumentalOnly": "آلي فقط",
     "examples": "أمثلة",
@@ -133,5 +136,9 @@
   "uploader": {
     "uploadVideo": "رفع فيديو",
     "clickOrDrag": "انقر أو اسحب للرفع"
-  }
+  },
+  "searchByPrompt": "البحث حسب الوصف…",
+  "searchGenerations": "البحث في التوليدات…",
+  "searchTracks": "البحث في المقطوعات…",
+  "searchVoiceovers": "البحث في التعليق الصوتي…"
 }

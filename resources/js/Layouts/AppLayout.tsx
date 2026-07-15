@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppHeader from '@/Components/AppHeader';
 import Sidebar from '@/Components/Sidebar';
 import ModalHost from '@/Components/ModalHost';
@@ -13,6 +14,8 @@ type Props = {
 
 export default function AppLayout({ children, flush = false }: Props) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { i18n } = useTranslation();
+    const contentDir = i18n.language === 'ar' ? 'rtl' : 'ltr';
 
     return (
         <div className="flex h-dvh max-h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden">
@@ -20,7 +23,8 @@ export default function AppLayout({ children, flush = false }: Props) {
             {/* Spacer for fixed header height */}
             <div aria-hidden className="h-14 shrink-0 md:h-16" />
 
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-hidden">
+            {/* Keep chrome LTR so the sidebar stays on the physical left in Arabic */}
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-hidden" dir="ltr">
                 <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
                 <AnimatePresence>
@@ -35,7 +39,7 @@ export default function AppLayout({ children, flush = false }: Props) {
                     )}
                 </AnimatePresence>
 
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-hidden" dir={contentDir}>
                     <main
                         className={`min-h-0 min-w-0 flex-1 overflow-x-hidden bg-[#070708] ${
                             flush

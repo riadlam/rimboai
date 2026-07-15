@@ -128,7 +128,6 @@ export default function Sidebar({ open, onClose }: Props) {
     const [langMenuOpen, setLangMenuOpen] = useState(false);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const langWrapRef = useRef<HTMLDivElement>(null);
-    const isRtl = lang === 'ar';
 
     const selectLanguage = (next: AppLang) => {
         setLang(next);
@@ -142,7 +141,7 @@ export default function Sidebar({ open, onClose }: Props) {
         const rect = el.getBoundingClientRect();
         setMenuPos({
             top: rect.top + rect.height / 2,
-            left: isRtl ? rect.left - 4 : rect.right + 4,
+            left: rect.right + 4,
         });
     };
 
@@ -173,13 +172,13 @@ export default function Sidebar({ open, onClose }: Props) {
             document.removeEventListener('mousedown', onPointerDown);
             window.removeEventListener('keydown', onKey);
         };
-    }, [langMenuOpen, isRtl]);
+    }, [langMenuOpen]);
 
     return (
         <aside
             data-slot="app-sidebar"
-            className={`fixed bottom-0 start-0 top-14 z-40 box-border flex w-[84px] min-w-[84px] shrink-0 flex-col overflow-visible border-e border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 md:top-16 lg:static lg:top-auto lg:z-40 lg:me-4 lg:h-full lg:translate-x-0 ${
-                open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full rtl:max-lg:translate-x-full'
+            className={`fixed bottom-0 left-0 top-14 z-40 box-border flex w-[84px] min-w-[84px] shrink-0 flex-col overflow-visible border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 md:top-16 lg:static lg:top-auto lg:z-40 lg:mr-4 lg:h-full lg:translate-x-0 ${
+                open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
             }`}
         >
             <div className="flex-shrink-0 px-2 py-3">
@@ -312,13 +311,13 @@ export default function Sidebar({ open, onClose }: Props) {
                         {langMenuOpen && (
                             <motion.div
                                 id="sidebar-lang-menu"
-                                initial={{ opacity: 0, x: isRtl ? 8 : -8, scale: 0.92 }}
+                                initial={{ opacity: 0, x: -8, scale: 0.92 }}
                                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                                exit={{ opacity: 0, x: isRtl ? 8 : -8, scale: 0.92 }}
+                                exit={{ opacity: 0, x: -8, scale: 0.92 }}
                                 transition={{ type: 'spring', stiffness: 520, damping: 28 }}
                                 style={{
                                     top: menuPos.top,
-                                    ...(isRtl ? { right: window.innerWidth - menuPos.left } : { left: menuPos.left }),
+                                    left: menuPos.left,
                                 }}
                                 className="fixed z-[200] w-[128px] -translate-y-1/2 overflow-hidden rounded-xl border border-white/10 bg-black p-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)]"
                                 role="menu"

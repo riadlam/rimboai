@@ -30,5 +30,26 @@
   },
   "openLab": "فتح Lab",
   "toolsTitle": "الأدوات",
-  "signInClose": "إغلاق تسجيل الدخول"
+  "signInClose": "إغلاق تسجيل الدخول",
+  "toolsReady": "{{count}}+ أداة جاهزة",
+  "whatWillYou": "ماذا ستُنشئ",
+  "createToday": "اليوم؟",
+  "toolsDesc": "أدوات بنقرة واحدة للتحسين والرفع ومزامنة الشفاه والمزيد — مصممة لسير العمل الإبداعي الحقيقي.",
+  "tags": {
+    "upscale": "رفع الدقة",
+    "enhance": "تحسين",
+    "lipSync": "مزامنة الشفاه",
+    "motion": "حركة"
+  },
+  "exploreAllTools": "استكشف كل الأدوات",
+  "useTool": "استخدم الأداة",
+  "hot": "رائج",
+  "new": "جديد",
+  "creatorsTrends": "اتجاهات المبدعين",
+  "creatorsTrendsSub": "قوالب رائجة من المجتمع",
+  "bestSocial": "أفضل محتوى التواصل",
+  "bestAvatar": "أفضل الملف الشخصي والأفاتار",
+  "featured": "مميز",
+  "creditsLabel": "{{count}} رصيد",
+  "seeAll": "عرض الكل"
 }

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import VideoThumb from '@/Components/VideoThumb';
 
@@ -121,6 +122,7 @@ export default function ImageLabLibrary({
     onUseResult,
     generating = false,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'albums'>('generation');
     const [search, setSearch] = useState('');
     const [columns, setColumns] = useState(6);
@@ -298,7 +300,7 @@ export default function ImageLabLibrary({
                                 type="search"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder={hasImages ? 'Search by prompt…' : 'Search generations…'}
+                                placeholder={hasImages ? t('searchByPrompt') : t('searchGenerations')}
                                 className="h-10 w-full rounded-xl border border-white/12 bg-[#14141c] py-2 ps-9 pe-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-orange-400/50 focus:ring-2 focus:ring-orange-500/20"
                             />
                         </div>

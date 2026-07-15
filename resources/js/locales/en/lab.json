@@ -122,6 +122,9 @@
     "trackDuration": "Track duration",
     "withVocals": "With Vocals",
     "withoutVocals": "Without Vocals",
+    "includeVocalsHint": "Include sung vocals",
+    "musicOnlyHint": "Music only, no singing",
+    "noVocalsSupport": "This model does not support singing vocals",
     "instrumental": "Instrumental",
     "instrumentalOnly": "Instrumental only",
     "examples": "Examples",
@@ -133,5 +136,9 @@
   "uploader": {
     "uploadVideo": "Upload Video",
     "clickOrDrag": "Click or drag to upload"
-  }
+  },
+  "searchByPrompt": "Search by prompt…",
+  "searchGenerations": "Search generations…",
+  "searchTracks": "Search tracks…",
+  "searchVoiceovers": "Search voiceovers…"
 }

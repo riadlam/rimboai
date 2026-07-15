@@ -787,13 +787,19 @@ export default function SoundLabCreateForm({
                         )}
                     </AnimatePresence>
 
-                    {/* Instrumental / Vocals — not used for ACE audio edit (Remix / Lyrics edit drive that) */}
+                    {/* Vocals — not used for ACE audio edit (Remix / Lyrics edit drive that) */}
                     {!needsSourceAudio && (
                     <div className={`space-y-3 rounded-2xl border border-white/10 bg-black p-3 ${!canUseVocals ? 'opacity-70' : ''}`}>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                                {instrumental ? (
-                                    <svg className="h-4 w-4 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                                {!instrumental ? (
+                                    <svg className="h-4 w-4 shrink-0 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                        <line x1="12" x2="12" y1="19" y2="22" />
+                                    </svg>
+                                ) : (
+                                    <svg className="h-4 w-4 shrink-0 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                         <line x1="2" x2="22" y1="2" y2="22" />
                                         <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
                                         <path d="M5 10v2a7 7 0 0 0 12 5" />
@@ -801,33 +807,26 @@ export default function SoundLabCreateForm({
                                         <path d="M9 9v3a3 3 0 0 0 5.12 2.12" />
                                         <line x1="12" x2="12" y1="19" y2="22" />
                                     </svg>
-                                ) : (
-                                    <svg className="h-4 w-4 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                        <line x1="12" x2="12" y1="19" y2="22" />
-                                    </svg>
                                 )}
-                                <div>
+                                <div className="min-w-0">
                                     <label className="text-sm font-medium text-white">
                                         {!canUseVocals
                                             ? t('music.instrumentalOnly')
-                                            : instrumental
-                                              ? t('music.withoutVocals')
-                                              : t('music.withVocals')}
+                                            : t('music.withVocals')}
                                     </label>
                                     <p className="text-xs text-white/45">
                                         {!canUseVocals
-                                            ? 'This model does not support singing vocals'
+                                            ? t('music.noVocalsSupport')
                                             : instrumental
-                                              ? 'Music only, no singing'
-                                              : 'Include sung vocals'}
+                                              ? t('music.musicOnlyHint')
+                                              : t('music.includeVocalsHint')}
                                     </p>
                                 </div>
                             </div>
+                            {/* ON = include vocals (instrumental off). Knob forced LTR so Arabic doesn’t flip it. */}
                             <Toggle
-                                checked={instrumental}
-                                onChange={setInstrumental}
+                                checked={!instrumental}
+                                onChange={(vocalsOn) => setInstrumental(!vocalsOn)}
                                 disabled={!canUseVocals}
                             />
                         </div>
@@ -1228,16 +1227,17 @@ function Toggle({
         <button
             type="button"
             role="switch"
+            dir="ltr"
             aria-checked={checked}
             disabled={disabled}
             onClick={() => !disabled && onChange(!checked)}
-            className={`peer inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors ${
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors ${
                 disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
             } ${checked ? 'bg-[#FF5733]' : 'bg-white/15'}`}
         >
             <span
-                className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${
-                    checked ? 'translate-x-5' : 'translate-x-0'
+                className={`pointer-events-none absolute top-0.5 block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-[left] duration-200 ${
+                    checked ? 'left-[22px]' : 'left-0.5'
                 }`}
             />
         </button>

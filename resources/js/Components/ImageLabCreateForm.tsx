@@ -605,7 +605,7 @@ export default function ImageLabCreateForm({
                                 className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5"
                             >
                                 <span className="text-[11px] text-white/55">{t('image.autoPolish')}</span>
-                                <span className={`relative h-5 w-9 rounded-full transition ${autoPolish ? 'bg-orange-500' : 'bg-white/15'}`}>
+                                <span className={`relative h-5 w-9 rounded-full transition ${autoPolish ? 'bg-orange-500' : 'bg-white/15'}`} dir="ltr">
                                     <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${autoPolish ? 'left-4' : 'left-0.5'}`} />
                                 </span>
                             </button>

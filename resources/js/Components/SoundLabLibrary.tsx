@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import MusicLabPreviewModal from '@/Components/MusicLabPreviewModal';
 import { musicPalette } from '@/lib/musicPalette';
 
@@ -56,6 +57,7 @@ export default function SoundLabLibrary({
     onDelete,
     generating = false,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'playlists'>('generation');
     const [search, setSearch] = useState('');
     const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -227,7 +229,7 @@ export default function SoundLabLibrary({
                             <input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search tracks…"
+                                placeholder={t('searchTracks')}
                                 className="h-8 w-40 rounded-lg border border-white/10 bg-white/[0.03] pe-3 ps-8 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-orange-400/40 md:w-52"
                             />
                         </div>
@@ -383,7 +385,7 @@ export default function SoundLabLibrary({
                             <input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search tracks…"
+                                placeholder={t('searchTracks')}
                                 className="h-9 w-full rounded-lg border border-white/10 bg-white/[0.03] pe-3 ps-8 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-orange-400/40"
                             />
                         </div>

@@ -30,5 +30,26 @@
   },
   "openLab": "Ouvrir le Lab",
   "toolsTitle": "Outils",
-  "signInClose": "Fermer la connexion"
+  "signInClose": "Fermer la connexion",
+  "toolsReady": "{{count}}+ outils prêts",
+  "whatWillYou": "QUE VOULEZ-VOUS",
+  "createToday": "CRÉER AUJOURD'HUI ?",
+  "toolsDesc": "Des outils en un clic pour l'upscale, l'amélioration, le lip sync et plus — pensés pour les vrais workflows créatifs.",
+  "tags": {
+    "upscale": "Upscale",
+    "enhance": "Améliorer",
+    "lipSync": "Lip Sync",
+    "motion": "Motion"
+  },
+  "exploreAllTools": "Voir tous les outils",
+  "useTool": "Utiliser",
+  "hot": "Hot",
+  "new": "Nouveau",
+  "creatorsTrends": "Tendances créateurs",
+  "creatorsTrendsSub": "Modèles tendance de la communauté",
+  "bestSocial": "Meilleur des réseaux sociaux",
+  "bestAvatar": "Meilleur profil & avatar",
+  "featured": "À la une",
+  "creditsLabel": "{{count}} crédits",
+  "seeAll": "Voir tout"
 }

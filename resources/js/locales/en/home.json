@@ -30,5 +30,26 @@
   },
   "openLab": "Open Lab",
   "toolsTitle": "Tools",
-  "signInClose": "Close sign in"
+  "signInClose": "Close sign in",
+  "toolsReady": "{{count}}+ tools ready",
+  "whatWillYou": "WHAT WILL YOU",
+  "createToday": "CREATE TODAY?",
+  "toolsDesc": "One-click tools for upscaling, enhancement, lip sync, and more — built for real creative workflows.",
+  "tags": {
+    "upscale": "Upscale",
+    "enhance": "Enhance",
+    "lipSync": "Lip Sync",
+    "motion": "Motion"
+  },
+  "exploreAllTools": "Explore all tools",
+  "useTool": "Use tool",
+  "hot": "Hot",
+  "new": "New",
+  "creatorsTrends": "Creators Trends",
+  "creatorsTrendsSub": "Trending templates from the community",
+  "bestSocial": "Best of Social Media",
+  "bestAvatar": "Best of Profile & Avatar",
+  "featured": "Featured",
+  "creditsLabel": "{{count}} Credits",
+  "seeAll": "See all"
 }

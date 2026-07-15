@@ -122,6 +122,9 @@
     "trackDuration": "Durée du titre",
     "withVocals": "Avec voix",
     "withoutVocals": "Sans voix",
+    "includeVocalsHint": "Inclure des voix chantées",
+    "musicOnlyHint": "Musique seulement, sans chant",
+    "noVocalsSupport": "Ce modèle ne prend pas en charge le chant",
     "instrumental": "Instrumental",
     "instrumentalOnly": "Instrumental uniquement",
     "examples": "Exemples",
@@ -133,5 +136,9 @@
   "uploader": {
     "uploadVideo": "Téléverser une vidéo",
     "clickOrDrag": "Cliquez ou glissez pour téléverser"
-  }
+  },
+  "searchByPrompt": "Rechercher par invite…",
+  "searchGenerations": "Rechercher des créations…",
+  "searchTracks": "Rechercher des titres…",
+  "searchVoiceovers": "Rechercher des voix off…"
 }
