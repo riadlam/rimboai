@@ -15,3 +15,10 @@ Schedule::command('fal:sync-pricing')
     ->everyTenMinutes()
     ->withoutOverlapping(10)
     ->runInBackground();
+
+// Safety net: credit tokens for SofizPay payments where the user paid but never
+// returned to the return URL. Idempotent, so it can never double-credit.
+Schedule::command('payments:reconcile-sofizpay')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10)
+    ->runInBackground();
