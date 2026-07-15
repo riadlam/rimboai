@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\FalVideoPricingNormalizer;
+use App\Services\TelegramNotifier;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -75,6 +76,9 @@ class FalSyncPricing extends Command
         $deactivated = 0;
         $reactivated = 0;
 
+        // Every detected change (status/unit/unit_price) for the Telegram report + audit log.
+        $changeEvents = [];
+
         foreach ($tables as $table) {
             if (! Schema::hasTable($table)) {
                 $this->warn("Skipping missing table: {$table}");
@@ -86,13 +90,14 @@ class FalSyncPricing extends Command
                 ->whereNotNull('endpoint_id')
                 ->where('endpoint_id', '!=', '')
                 ->orderBy('id')
-                ->get(['endpoint_id', 'status']);
+                ->get(['endpoint_id', 'name', 'status', 'unit', 'unit_price']);
 
             $count = $rows->count();
             $this->info("[{$table}] syncing {$count} endpoints...");
 
             foreach ($rows->values() as $i => $row) {
                 $endpointId = $row->endpoint_id;
+                $label = $row->name ?: $endpointId;
                 $changes = [];
 
                 // 1) Status: only change when fal gives a definitive answer.
@@ -101,6 +106,15 @@ class FalSyncPricing extends Command
 
                     if ($status !== null && $status !== $row->status) {
                         $changes['status'] = $status;
+
+                        $changeEvents[] = [
+                            'table' => $table,
+                            'endpoint' => $endpointId,
+                            'name' => $label,
+                            'field' => 'status',
+                            'old' => $row->status,
+                            'new' => $status,
+                        ];
 
                         if ($status === 'active') {
                             $reactivated++;
@@ -114,7 +128,7 @@ class FalSyncPricing extends Command
                     }
                 }
 
-                // 2) Pricing.
+                // 2) Pricing — only recorded when it actually changed.
                 $price = $this->fetchPricing($key, $endpointId);
 
                 if ($price === null) {
@@ -127,9 +141,34 @@ class FalSyncPricing extends Command
                         $priceFailed++;
                         $this->warn("  ! {$endpointId}: invalid price ({$price['unit_price']})");
                     } else {
-                        $changes['unit'] = $unit;
-                        $changes['unit_price'] = $unitPrice;
                         $priced++;
+
+                        $oldUnit = $row->unit;
+                        $oldPrice = $row->unit_price !== null ? (float) $row->unit_price : null;
+
+                        if ((string) $oldUnit !== (string) $unit) {
+                            $changes['unit'] = $unit;
+                            $changeEvents[] = [
+                                'table' => $table,
+                                'endpoint' => $endpointId,
+                                'name' => $label,
+                                'field' => 'unit',
+                                'old' => $oldUnit,
+                                'new' => $unit,
+                            ];
+                        }
+
+                        if ($oldPrice === null || round($oldPrice, 6) !== round($unitPrice, 6)) {
+                            $changes['unit_price'] = $unitPrice;
+                            $changeEvents[] = [
+                                'table' => $table,
+                                'endpoint' => $endpointId,
+                                'name' => $label,
+                                'field' => 'unit_price',
+                                'old' => $oldPrice,
+                                'new' => $unitPrice,
+                            ];
+                        }
                     }
                 }
 
@@ -151,13 +190,20 @@ class FalSyncPricing extends Command
 
         $durationSeconds = round(microtime(true) - $startedAt, 1);
 
+        // Snapshot current active/inactive counts per table.
+        $activeCounts = $this->activeCounts($tables);
+        $totalActive = array_sum(array_column($activeCounts, 'active'));
+        $totalInactive = array_sum(array_column($activeCounts, 'inactive'));
+
         $this->newLine();
         $this->info(sprintf(
-            'Done. priced=%d price_failed=%d deactivated=%d reactivated=%d%s',
+            'Done. priced=%d price_failed=%d deactivated=%d reactivated=%d changes=%d active=%d%s',
             $priced,
             $priceFailed,
             $deactivated,
             $reactivated,
+            count($changeEvents),
+            $totalActive,
             $dryRun ? ' (dry-run: nothing written)' : '',
         ));
 
@@ -166,11 +212,179 @@ class FalSyncPricing extends Command
             'price_failed' => $priceFailed,
             'deactivated' => $deactivated,
             'reactivated' => $reactivated,
+            'changes' => count($changeEvents),
+            'active' => $totalActive,
             'duration_seconds' => $durationSeconds,
             'dry_run' => $dryRun,
         ]);
 
+        // Persist the audit trail (skip on dry-run — nothing was written to models).
+        if (! $dryRun && $changeEvents !== [] && Schema::hasTable('model_change_logs')) {
+            $this->logChanges($changeEvents);
+        }
+
+        // Report the run result to Telegram.
+        $this->reportToTelegram([
+            'priced' => $priced,
+            'price_failed' => $priceFailed,
+            'deactivated' => $deactivated,
+            'reactivated' => $reactivated,
+            'total_active' => $totalActive,
+            'total_inactive' => $totalInactive,
+            'active_counts' => $activeCounts,
+            'duration' => $durationSeconds,
+            'dry_run' => $dryRun,
+            'events' => $changeEvents,
+        ]);
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Count active/inactive endpoints per table after the run.
+     *
+     * @param  list<string>  $tables
+     * @return array<string, array{active: int, inactive: int}>
+     */
+    private function activeCounts(array $tables): array
+    {
+        $counts = [];
+
+        foreach ($tables as $table) {
+            if (! Schema::hasTable($table)) {
+                continue;
+            }
+
+            $active = DB::table($table)->where('status', 'active')->count();
+            $total = DB::table($table)
+                ->whereNotNull('endpoint_id')
+                ->where('endpoint_id', '!=', '')
+                ->count();
+
+            $counts[$table] = [
+                'active' => $active,
+                'inactive' => max(0, $total - $active),
+            ];
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @param  list<array{table: string, endpoint: string, name: string, field: string, old: mixed, new: mixed}>  $events
+     */
+    private function logChanges(array $events): void
+    {
+        $now = now();
+        $rows = [];
+
+        foreach ($events as $event) {
+            $rows[] = [
+                'model_table' => $event['table'],
+                'endpoint_id' => $event['endpoint'],
+                'name' => $event['name'],
+                'field' => $event['field'],
+                'old_value' => $event['old'] === null ? null : (string) $event['old'],
+                'new_value' => $event['new'] === null ? null : (string) $event['new'],
+                'created_at' => $now,
+            ];
+        }
+
+        foreach (array_chunk($rows, 200) as $chunk) {
+            DB::table('model_change_logs')->insert($chunk);
+        }
+    }
+
+    /**
+     * Build and send the Telegram run report.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function reportToTelegram(array $data): void
+    {
+        $notifier = app(TelegramNotifier::class);
+
+        if (! $notifier->isConfigured()) {
+            $this->warn('Telegram not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) — skipping report.');
+
+            return;
+        }
+
+        $events = $data['events'];
+        $deactivations = array_values(array_filter(
+            $events,
+            fn ($e) => $e['field'] === 'status' && $e['new'] !== 'active'
+        ));
+        $reactivations = array_values(array_filter(
+            $events,
+            fn ($e) => $e['field'] === 'status' && $e['new'] === 'active'
+        ));
+        $priceChanges = array_values(array_filter(
+            $events,
+            fn ($e) => $e['field'] === 'unit' || $e['field'] === 'unit_price'
+        ));
+
+        $lines = [];
+        $lines[] = '<b>🔄 fal Pricing Sync — Done</b>';
+        if ($data['dry_run']) {
+            $lines[] = '<i>(dry-run: nothing written)</i>';
+        }
+        $lines[] = '';
+        $lines[] = sprintf('✅ Active models: <b>%d</b>', $data['total_active']);
+        $lines[] = sprintf('⛔ Inactive models: <b>%d</b>', $data['total_inactive']);
+        $lines[] = sprintf('💲 Priced OK: %d   ⚠️ Price failed: %d', $data['priced'], $data['price_failed']);
+        $lines[] = sprintf('🟢 Reactivated: %d   🔴 Deactivated: %d', $data['reactivated'], $data['deactivated']);
+        $lines[] = sprintf('⏱ Duration: %ss', $data['duration']);
+
+        if ($deactivations !== []) {
+            $lines[] = '';
+            $lines[] = '<b>🔴 Just deactivated:</b>';
+            foreach ($deactivations as $e) {
+                $lines[] = '• ' . $this->esc($e['name']) . ' <i>(' . $this->shortTable($e['table']) . ')</i>';
+            }
+        }
+
+        if ($reactivations !== []) {
+            $lines[] = '';
+            $lines[] = '<b>🟢 Just reactivated:</b>';
+            foreach ($reactivations as $e) {
+                $lines[] = '• ' . $this->esc($e['name']) . ' <i>(' . $this->shortTable($e['table']) . ')</i>';
+            }
+        }
+
+        if ($priceChanges !== []) {
+            $lines[] = '';
+            $lines[] = '<b>💲 Pricing changes:</b>';
+            foreach ($priceChanges as $e) {
+                $old = $e['old'] === null || $e['old'] === '' ? '—' : $e['old'];
+                $lines[] = sprintf(
+                    '• %s <i>(%s)</i>: %s %s → %s',
+                    $this->esc($e['name']),
+                    $this->shortTable($e['table']),
+                    $e['field'],
+                    $this->esc((string) $old),
+                    $this->esc((string) $e['new']),
+                );
+            }
+        }
+
+        if ($events === []) {
+            $lines[] = '';
+            $lines[] = 'No changes this run.';
+        }
+
+        $notifier->send(implode("\n", $lines));
+        $this->info('Telegram report sent.');
+    }
+
+    private function shortTable(string $table): string
+    {
+        return str_replace(['text_to_', 'image_to_', '_models'], ['', 'img→', ''], $table);
+    }
+
+    private function esc(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
     }
 
     /**

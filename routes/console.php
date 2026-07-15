@@ -10,7 +10,8 @@ Artisan::command('inspire', function () {
 
 // Keep model pricing and active/inactive status in sync with fal.
 // Runs in background without overlapping so a slow run never stacks.
+// Sends a run report to Telegram on completion (see FalSyncPricing).
 Schedule::command('fal:sync-pricing')
-    ->everyMinute()
+    ->everyTenMinutes()
     ->withoutOverlapping(10)
     ->runInBackground();
