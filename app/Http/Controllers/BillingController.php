@@ -68,12 +68,23 @@ class BillingController extends Controller
         $returnUrl = route('billing.sofizpay.return', [], true)
             . '?eid=' . rawurlencode(Crypt::encryptString((string) $payment->id));
 
+        // SofizPay rejects empty phone/email ("Full name, phone, and email are required").
+        $phone = trim((string) ($user->phone ?? ''));
+        if ($phone === '') {
+            $phone = '+213000000000';
+        }
+
+        $email = trim((string) ($user->email ?? ''));
+        if ($email === '') {
+            $email = 'customer@rimboai.com';
+        }
+
         $query = [
             'account' => $sofizPay->merchantAccount(),
             'amount' => number_format($amount, 2, '.', ''),
-            'full_name' => $user->name ?: 'RIMBOAI User',
-            'phone' => '',
-            'email' => $user->email ?: '',
+            'full_name' => trim((string) ($user->name ?: 'RIMBOAI User')) ?: 'RIMBOAI User',
+            'phone' => $phone,
+            'email' => $email,
             'return_url' => $returnUrl,
             'memo' => 'RIMBOAI '.$payment->reference,
             'redirect' => (string) config('services.sofizpay.redirect', 'no'),
@@ -85,6 +96,7 @@ class BillingController extends Controller
             'reference' => $payment->reference,
             'amount' => $query['amount'],
             'sandbox' => $sofizPay->isSandbox(),
+            'return_url' => $returnUrl,
         ]);
 
         $create = $sofizPay->createCibTransaction($query);
@@ -95,16 +107,26 @@ class BillingController extends Controller
         if (! $create['success'] || ! $paymentUrl || ! filter_var($paymentUrl, FILTER_VALIDATE_URL)) {
             $payment->update([
                 'status' => 'failed',
-                'create_response' => $data,
+                'create_response' => $data !== [] ? $data : ['raw' => $create['raw'] ?? null],
             ]);
+
+            $gatewayError = null;
+            foreach (['error', 'message', 'detail'] as $key) {
+                if (isset($data[$key]) && is_string($data[$key]) && $data[$key] !== '') {
+                    $gatewayError = $data[$key];
+                    break;
+                }
+            }
 
             Log::warning('SofizPay CIB create failed', [
                 'payment_id' => $payment->id,
                 'http_status' => $create['http_status'] ?? null,
+                'gateway_error' => $gatewayError,
+                'data' => $data,
             ]);
 
             return response()->json([
-                'message' => 'Could not start the payment. Please try again.',
+                'message' => $gatewayError ?: 'Could not start the payment. Please try again.',
             ], 422);
         }
 
