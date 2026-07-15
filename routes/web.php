@@ -62,6 +62,7 @@ Route::redirect('/text-to-voice/lab', '/lab?type=text-to-voice');
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/history', [DashboardController::class, 'history'])->name('history');
+    Route::get('/billing/history', [BillingController::class, 'history'])->name('billing.history');
     Route::get('/settings', [DashboardController::class, 'settings'])->name('settings');
     // Start a SofizPay (DZD) checkout for a token pack.
     Route::post('/billing/sofizpay/create', [BillingController::class, 'createSofizPay'])

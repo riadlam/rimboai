@@ -65,6 +65,21 @@
         max-width: 100%;
     }
 
+    /* Show the hand cursor on interactive controls */
+    button:not(:disabled),
+    a[href],
+    [role='button']:not([aria-disabled='true']),
+    label[for],
+    summary,
+    select:not(:disabled) {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    [role='button'][aria-disabled='true'] {
+        cursor: not-allowed;
+    }
+
     .dark body,
     .dark {
         @apply bg-[var(--dark-surface)] text-[var(--dark-text-primary)];

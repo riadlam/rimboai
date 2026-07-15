@@ -13,9 +13,62 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class BillingController extends Controller
 {
+    /**
+     * Show only the authenticated user's safe billing data. Provider payloads,
+     * transaction IDs and gateway order IDs are intentionally never exposed.
+     */
+    public function history(Request $request): Response
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $status = (string) $request->query('status', 'all');
+        $allowedStatuses = ['all', 'paid', 'pending', 'failed', 'canceled'];
+
+        if (! in_array($status, $allowedStatuses, true)) {
+            $status = 'all';
+        }
+
+        $base = Payment::query()->where('user_id', $user->id);
+        $payments = (clone $base)
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->latest('id')
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (Payment $payment) => [
+                'reference' => $payment->reference,
+                'package' => $payment->package_slug,
+                'tokens' => (int) $payment->tokens,
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'status' => $payment->status,
+                'created_at' => $payment->created_at?->toIso8601String(),
+                'paid_at' => $payment->paid_at?->toIso8601String(),
+            ]);
+
+        $stats = (clone $base)
+            ->selectRaw('COUNT(*) as total_count')
+            ->selectRaw("SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count")
+            ->selectRaw("COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount")
+            ->selectRaw("COALESCE(SUM(CASE WHEN status = 'paid' THEN tokens ELSE 0 END), 0) as purchased_tokens")
+            ->first();
+
+        return Inertia::render('BillingHistory', [
+            'payments' => $payments,
+            'filters' => ['status' => $status],
+            'stats' => [
+                'total_count' => (int) ($stats?->total_count ?? 0),
+                'paid_count' => (int) ($stats?->paid_count ?? 0),
+                'paid_amount' => (float) ($stats?->paid_amount ?? 0),
+                'purchased_tokens' => (int) ($stats?->purchased_tokens ?? 0),
+            ],
+        ]);
+    }
+
     /**
      * Create a SofizPay CIB (DZD) checkout for a token pack and return its URL.
      */
