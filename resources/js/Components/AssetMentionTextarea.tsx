@@ -87,9 +87,12 @@ export default function AssetMentionTextarea({
     onBlur,
     onClick,
     onKeyUp,
+    className,
+    style,
     ...props
 }: Props) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const backdropRef = useRef<HTMLDivElement>(null);
     const [token, setToken] = useState<ActiveToken | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
 
@@ -97,6 +100,22 @@ export default function AssetMentionTextarea({
         if (!token) return [];
         return mentions.filter((mention) => mention.alias.slice(1).toLowerCase().includes(token.query));
     }, [mentions, token]);
+
+    const highlightedValue = useMemo(() => {
+        const validAliases = new Set(mentions.map((mention) => mention.alias.toLowerCase()));
+        return value.split(/(@(?:image|video|audio)[1-9]\d*\b)/gi).map((part, index) =>
+            validAliases.has(part.toLowerCase()) ? (
+                <mark
+                    key={`${part}-${index}`}
+                    className="rounded bg-[#FF5733]/20 text-orange-200"
+                >
+                    {part}
+                </mark>
+            ) : (
+                <span key={`${index}-${part.slice(0, 8)}`}>{part}</span>
+            ),
+        );
+    }, [mentions, value]);
 
     const refreshToken = (element: HTMLTextAreaElement) => {
         const next = tokenAtCaret(element.value, element.selectionStart);
@@ -145,30 +164,67 @@ export default function AssetMentionTextarea({
 
     return (
         <div className="relative">
-            <textarea
-                {...props}
-                ref={textareaRef}
-                value={value}
-                maxLength={maxLength}
-                onChange={(event) => {
-                    const next = maxLength ? event.target.value.slice(0, maxLength) : event.target.value;
-                    onChange(next);
-                    refreshToken(event.target);
-                }}
-                onKeyDown={handleKeyDown}
-                onKeyUp={(event) => {
-                    refreshToken(event.currentTarget);
-                    onKeyUp?.(event);
-                }}
-                onClick={(event) => {
-                    refreshToken(event.currentTarget);
-                    onClick?.(event);
-                }}
-                onBlur={(event) => {
-                    window.setTimeout(() => setToken(null), 120);
-                    onBlur?.(event);
-                }}
-            />
+            <div className="relative">
+                {value && (
+                    <div
+                        ref={backdropRef}
+                        aria-hidden
+                        className={`${className ?? ''} pointer-events-none absolute inset-0 z-0 whitespace-pre-wrap break-words`}
+                        style={{
+                            ...style,
+                            borderColor: 'transparent',
+                            outline: 'none',
+                            resize: 'none',
+                            scrollbarWidth: 'none',
+                        }}
+                    >
+                        {highlightedValue}
+                        {value.endsWith('\n') ? '\u200b' : null}
+                    </div>
+                )}
+                <textarea
+                    {...props}
+                    ref={textareaRef}
+                    value={value}
+                    maxLength={maxLength}
+                    className={`${className ?? ''} relative z-10`}
+                    style={
+                        value
+                            ? {
+                                  ...style,
+                                  backgroundColor: 'transparent',
+                                  color: 'transparent',
+                                  WebkitTextFillColor: 'transparent',
+                                  caretColor: '#fff',
+                              }
+                            : style
+                    }
+                    onChange={(event) => {
+                        const next = maxLength ? event.target.value.slice(0, maxLength) : event.target.value;
+                        onChange(next);
+                        refreshToken(event.target);
+                    }}
+                    onScroll={(event) => {
+                        if (backdropRef.current) {
+                            backdropRef.current.scrollTop = event.currentTarget.scrollTop;
+                            backdropRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                        }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    onKeyUp={(event) => {
+                        refreshToken(event.currentTarget);
+                        onKeyUp?.(event);
+                    }}
+                    onClick={(event) => {
+                        refreshToken(event.currentTarget);
+                        onClick?.(event);
+                    }}
+                    onBlur={(event) => {
+                        window.setTimeout(() => setToken(null), 120);
+                        onBlur?.(event);
+                    }}
+                />
+            </div>
 
             <AnimatePresence>
                 {token && filtered.length > 0 && (

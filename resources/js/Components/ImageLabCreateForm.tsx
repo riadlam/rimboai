@@ -477,68 +477,6 @@ export default function ImageLabCreateForm({
                             </button>
                         </div>
 
-                        {/* Optional references — Create mode only */}
-                        {!isVariations && (
-                            <div className="mx-3 mb-3">
-                                {refs.length === 0 ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => fileRef.current?.click()}
-                                        className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-white/15 bg-black/20 px-3 py-3.5 text-left transition hover:border-orange-400/40 hover:bg-orange-500/[0.04]"
-                                    >
-                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/10 ring-1 ring-orange-400/20 transition group-hover:scale-105">
-                                            <svg className="h-5 w-5 text-orange-300/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                                                <circle cx="9" cy="9" r="2" />
-                                                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                                            </svg>
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="text-sm font-semibold text-white">Add visual references</span>
-                                                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                                                    Optional
-                                                </span>
-                                            </div>
-                                            <p className="mt-0.5 text-xs text-white/40">Guide look & consistency · up to 8</p>
-                                        </div>
-                                        <span className="text-xs text-white/30">0/8</span>
-                                    </button>
-                                ) : (
-                                    <div className="rounded-xl border border-white/10 bg-black/20 p-2.5">
-                                        <div className="mb-2 flex items-center justify-between px-0.5">
-                                            <span className="text-xs font-medium text-white/60">References · {refs.length}/8</span>
-                                            <button type="button" onClick={() => fileRef.current?.click()} className="text-[11px] font-medium text-orange-300 hover:text-orange-200">
-                                                + Add
-                                            </button>
-                                        </div>
-                                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                            {refs.map((r, index) => (
-                                                <div key={r.id} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
-                                                    {r.kind === 'video' ? (
-                                                        <video src={r.url} className="size-full object-cover" muted />
-                                                    ) : (
-                                                        <img src={r.url} alt="" className="size-full object-cover" />
-                                                    )}
-                                                    <span className="absolute bottom-1 start-1 rounded bg-black/75 px-1 py-0.5 text-[8px] font-semibold text-orange-200">
-                                                        @{r.kind}{refs.slice(0, index + 1).filter((item) => item.kind === r.kind).length}
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeRef(r.id)}
-                                                        aria-label="Remove"
-                                                        className="absolute end-0.5 top-0.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/75 text-xs text-white ring-1 ring-white/20 md:end-1 md:top-1 md:h-5 md:w-5 md:text-[10px]"
-                                                    >
-                                                        ×
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
                         <input
                             ref={fileRef}
                             type="file"
@@ -552,28 +490,101 @@ export default function ImageLabCreateForm({
                         />
 
                         <div className="px-3 pb-2">
-                            <AssetMentionTextarea
-                                value={prompt}
-                                onChange={setPrompt}
-                                mentions={assetMentions}
-                                maxLength={1200}
-                                placeholder={
-                                    isVariations
-                                        ? 'e.g. Same subject, softer lighting, cinematic color grade…'
-                                        : placeholder
-                                }
-                                rows={5}
-                                className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
-                            />
-                            <div className="mt-1.5 flex items-center justify-between px-1">
-                                <span className={`text-[11px] ${prompt.length > 800 ? 'text-orange-300' : 'text-white/30'}`}>{prompt.length}/1200</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setPrompt((p) => p.trim())}
-                                    className="text-[11px] text-white/35 hover:text-white/60"
-                                >
-                                    Trim
-                                </button>
+                            {/* Composer: attach + preview refs live inside the prompt box */}
+                            <div className="rounded-xl border border-white/10 bg-black/30 transition focus-within:border-orange-400/40 focus-within:ring-2 focus-within:ring-orange-500/15">
+                                {!isVariations && (
+                                    <div className="px-2.5 pt-2.5">
+                                        {refs.length === 0 ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => fileRef.current?.click()}
+                                                className="group flex w-full items-center gap-3 rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-2.5 text-left transition hover:border-orange-400/40 hover:bg-orange-500/[0.04]"
+                                            >
+                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/10 ring-1 ring-orange-400/20 transition group-hover:scale-105">
+                                                    <svg className="h-4 w-4 text-orange-300/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                                        <circle cx="9" cy="9" r="2" />
+                                                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                                    </svg>
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-[13px] font-semibold text-white">Add visual references</span>
+                                                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                                                            Optional
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-0.5 text-[11px] text-white/40">Guide look & consistency · up to 8 · then type @ in the prompt</p>
+                                                </div>
+                                                <span className="text-[11px] text-white/30">0/8</span>
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
+                                                {refs.map((r, index) => (
+                                                    <div key={r.id} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
+                                                        {r.kind === 'video' ? (
+                                                            <video src={r.url} className="size-full object-cover" muted />
+                                                        ) : (
+                                                            <img src={r.url} alt="" className="size-full object-cover" />
+                                                        )}
+                                                        <span className="absolute bottom-0.5 start-0.5 rounded bg-black/75 px-1 py-px text-[8px] font-semibold text-orange-200">
+                                                            @{r.kind}
+                                                            {refs.slice(0, index + 1).filter((item) => item.kind === r.kind).length}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeRef(r.id)}
+                                                            aria-label="Remove"
+                                                            className="absolute end-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/75 text-[10px] text-white ring-1 ring-white/20"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                {refs.length < 8 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => fileRef.current?.click()}
+                                                        className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-white/15 text-white/45 transition hover:border-orange-400/40 hover:text-orange-200"
+                                                        title="Add another reference"
+                                                    >
+                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M12 5v14M5 12h14" />
+                                                        </svg>
+                                                        <span className="text-[9px] font-medium">{refs.length}/8</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <AssetMentionTextarea
+                                    value={prompt}
+                                    onChange={setPrompt}
+                                    mentions={assetMentions}
+                                    maxLength={1200}
+                                    placeholder={
+                                        isVariations
+                                            ? 'e.g. Same subject, softer lighting, cinematic color grade…'
+                                            : placeholder
+                                    }
+                                    rows={4}
+                                    className="w-full resize-none border-0 bg-transparent px-3.5 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:ring-0"
+                                />
+
+                                <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
+                                    <span className="text-[10px] text-white/30">
+                                        {!isVariations && refs.length > 0 ? (
+                                            <>
+                                                Type <span className="font-semibold text-orange-300/80">@</span> to mention a reference
+                                            </>
+                                        ) : (
+                                            ' '
+                                        )}
+                                    </span>
+                                    <span className={`text-[11px] ${prompt.length > 800 ? 'text-orange-300' : 'text-white/30'}`}>{prompt.length}/1200</span>
+                                </div>
                             </div>
                         </div>
 
