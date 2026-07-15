@@ -107,7 +107,7 @@ export default function Home({ tools }: Props) {
                 <div className="-mx-4 -my-4 sm:-mx-5 lg:-mx-6 lg:-my-5 xl:-mx-8">
                     <Hero />
 
-                    <div className="space-y-10 px-4 pb-16 sm:px-5 lg:px-8">
+                    <div className="space-y-8 px-4 pb-16 pt-8 sm:px-5 sm:pt-0 lg:px-8">
                         <ToolRail tools={tools} />
                         <TrendRail />
                         <InspirationRail title="Best of Social Media" items={INSPIRATIONS} />
@@ -299,7 +299,7 @@ function Hero() {
     };
 
     return (
-        <section className="relative flex min-h-[calc(100dvh-3.5rem)] flex-col overflow-hidden px-4 md:min-h-[calc(100dvh-4rem)] sm:px-5 lg:px-8">
+        <section className="relative flex flex-col overflow-hidden px-4 md:min-h-[calc(100dvh-4rem)] sm:px-5 lg:px-8">
             {/* Atmosphere */}
             <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
                 <motion.div
@@ -326,7 +326,7 @@ function Hero() {
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,transparent_0%,#070708_78%)]" />
             </div>
 
-            <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-start gap-3 pb-3 pt-3 sm:justify-center sm:gap-4 sm:py-4 lg:gap-5">
+            <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-start gap-3 pb-0 pt-5 sm:justify-center sm:gap-4 sm:py-4 lg:gap-5">
                 {/* Headline */}
                 <motion.div
                     initial={{ opacity: 0, y: 28, filter: 'blur(12px)' }}
