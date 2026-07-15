@@ -214,7 +214,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                             </Link>
                             <Link
                                 href="/?login"
-                                className="inline-flex h-7 items-center rounded-[5px] border border-white/15 bg-white/[0.04] px-2.5 text-[11.5px] font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08] sm:px-3.5 sm:text-[12.5px]"
+                                className="hidden h-7 items-center rounded-[5px] border border-white/15 bg-white/[0.04] px-2.5 text-[11.5px] font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08] sm:inline-flex sm:px-3.5 sm:text-[12.5px]"
                             >
                                 Sign in
                             </Link>
