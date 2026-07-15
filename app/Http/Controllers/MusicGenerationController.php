@@ -388,7 +388,7 @@ class MusicGenerationController extends Controller
         if ($state !== 'COMPLETED') {
             if (in_array($state, ['FAILED', 'ERROR', 'CANCELLED'], true) || ! empty($status['error'])) {
                 $creation->markFailed(
-                    (string) ($status['error'] ?? 'Generation failed.'),
+                    $this->friendlyMusicError((string) ($status['error'] ?? 'Generation failed.')),
                     $status['error_type'] ?? 'error',
                 );
             }
@@ -397,7 +397,10 @@ class MusicGenerationController extends Controller
         }
 
         if (! empty($status['error'])) {
-            $creation->markFailed((string) $status['error'], $status['error_type'] ?? 'error');
+            $creation->markFailed(
+                $this->friendlyMusicError((string) $status['error']),
+                $status['error_type'] ?? 'error',
+            );
 
             return;
         }
@@ -568,6 +571,8 @@ class MusicGenerationController extends Controller
 
     private function messageFromFalException(\Throwable $e): string
     {
+        $raw = 'Generation failed. Please try again.';
+
         if ($e instanceof RequestException && $e->response) {
             $json = $e->response->json();
             if (is_array($json)) {
@@ -582,19 +587,75 @@ class MusicGenerationController extends Controller
                         }
                     }
                     if ($messages !== []) {
-                        return implode(' ', $messages);
+                        $raw = implode(' ', $messages);
                     }
                 }
 
-                foreach (['error', 'message'] as $key) {
-                    if (isset($json[$key]) && is_string($json[$key]) && $json[$key] !== '') {
-                        return $json[$key];
+                if ($raw === 'Generation failed. Please try again.') {
+                    foreach (['error', 'message'] as $key) {
+                        if (isset($json[$key]) && is_string($json[$key]) && $json[$key] !== '') {
+                            $raw = $json[$key];
+                            break;
+                        }
                     }
                 }
             }
         }
 
-        return 'Generation failed. Please try again.';
+        return $this->friendlyMusicError($raw);
+    }
+
+    /**
+     * Turn provider/safety failures into short, clear user-facing copy so people
+     * understand the prompt/lyrics were blocked (not a site outage).
+     */
+    private function friendlyMusicError(string $raw): string
+    {
+        $text = trim($raw);
+        if ($text === '') {
+            return 'Generation failed. Please try again.';
+        }
+
+        $lower = mb_strtolower($text);
+
+        // Celebrity / copyright / voice cloning style blocks (e.g. named artists).
+        if (
+            str_contains($lower, 'content checker')
+            || str_contains($lower, 'content policy')
+            || str_contains($lower, 'copyright')
+            || str_contains($lower, 'trademark')
+            || str_contains($lower, 'public figure')
+            || str_contains($lower, 'celebrity')
+            || str_contains($lower, 'impersonat')
+            || str_contains($lower, 'artist name')
+            || str_contains($lower, 'voice of')
+        ) {
+            return 'Blocked: your prompt looks like copyrighted or celebrity content (artist name/voice). Remove famous names and try again.';
+        }
+
+        // Profanity / drugs / unsafe lyrics — fal often returns a vague "invalid" reject.
+        if (
+            str_contains($lower, 'rejected this request as invalid')
+            || str_contains($lower, 'flagged')
+            || str_contains($lower, 'safety')
+            || str_contains($lower, 'moderat')
+            || str_contains($lower, 'inappropriate')
+            || str_contains($lower, 'nsfw')
+            || str_contains($lower, 'prohibited')
+            || str_contains($lower, 'unsafe')
+            || str_contains($lower, 'violat')
+            || str_contains($lower, 'bad word')
+            || str_contains($lower, 'profan')
+        ) {
+            return 'Blocked: your prompt or lyrics contain restricted words (profanity, drugs, violence, etc.). Clean them up and retry.';
+        }
+
+        // Keep short provider hints when useful; otherwise a neutral fallback.
+        if (mb_strlen($text) > 220) {
+            return 'Generation failed. Try a simpler prompt and lyrics, then retry.';
+        }
+
+        return $text;
     }
 
     /**
@@ -606,6 +667,11 @@ class MusicGenerationController extends Controller
         $durationLabel = null;
         if (is_int($duration) && $duration > 0) {
             $durationLabel = sprintf('%d:%02d', intdiv($duration, 60), $duration % 60);
+        }
+
+        $error = $creation->error_message;
+        if (is_string($error) && $error !== '') {
+            $error = $this->friendlyMusicError($error);
         }
 
         return [
@@ -623,7 +689,7 @@ class MusicGenerationController extends Controller
             'cover_url' => $creation->cover_url,
             'duration_seconds' => $duration,
             'duration' => $durationLabel,
-            'error' => $creation->error_message,
+            'error' => $error,
             'credits' => $creation->settings['credits'] ?? $creation->credits_charged,
             'token_balance' => (int) (auth()->user()?->fresh()->tokens ?? 0),
             'fal_cost_usd' => $creation->settings['fal_cost_usd'] ?? null,
