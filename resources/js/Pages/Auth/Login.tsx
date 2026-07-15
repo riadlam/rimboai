@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import AuthLayout from '@/Layouts/AuthLayout';
 import Input from '@/Components/Input';
 import Button from '@/Components/Button';
+import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import type { FormEvent } from 'react';
 
 export default function Login() {
@@ -19,6 +20,9 @@ export default function Login() {
     return (
         <AuthLayout title="Welcome back" subtitle="Sign in to continue to AI Studio">
             <Head title="Sign In" />
+            <div className="mb-5">
+                <GoogleAuthButton label="Sign in with Google" />
+            </div>
             <form onSubmit={submit} className="space-y-5">
                 <Input
                     label="Email address"

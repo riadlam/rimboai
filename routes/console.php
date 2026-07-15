@@ -11,6 +11,6 @@ Artisan::command('inspire', function () {
 // Keep model pricing and active/inactive status in sync with fal.
 // Runs in background without overlapping so a slow run never stacks.
 Schedule::command('fal:sync-pricing')
-    ->everyTenMinutes()
+    ->everyMinute()
     ->withoutOverlapping(10)
     ->runInBackground();

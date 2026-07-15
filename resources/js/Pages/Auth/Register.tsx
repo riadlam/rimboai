@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import AuthLayout from '@/Layouts/AuthLayout';
 import Input from '@/Components/Input';
 import Button from '@/Components/Button';
+import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import type { FormEvent } from 'react';
 
 export default function Register() {
@@ -20,6 +21,9 @@ export default function Register() {
     return (
         <AuthLayout title="Create account" subtitle="Join AI Studio and start creating">
             <Head title="Register" />
+            <div className="mb-5">
+                <GoogleAuthButton label="Sign up with Google" />
+            </div>
             <form onSubmit={submit} className="space-y-5">
                 <Input
                     label="Name"
