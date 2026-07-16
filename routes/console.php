@@ -16,6 +16,18 @@ Schedule::command('fal:sync-pricing')
     ->withoutOverlapping(10)
     ->runInBackground();
 
+// Drain delayed jobs (wallet cost reconcile, etc.) on shared hosting without a queue daemon.
+Schedule::command('queue:work database --stop-when-empty --max-time=50 --tries=1 --sleep=1')
+    ->everyMinute()
+    ->withoutOverlapping(1)
+    ->runInBackground();
+
+// Safety net if queue drain missed a job: fill cost_usd / wallet-after on recent creations.
+Schedule::command('fal:reconcile-wallet-costs --hours=48 --limit=40')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(5)
+    ->runInBackground();
+
 // Safety net: credit tokens for SofizPay payments where the user paid but never
 // returned to the return URL. Idempotent, so it can never double-credit.
 Schedule::command('payments:reconcile-sofizpay')

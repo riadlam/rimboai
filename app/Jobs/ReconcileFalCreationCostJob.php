@@ -38,7 +38,7 @@ class ReconcileFalCreationCostJob implements ShouldQueue
             return;
         }
 
-        $tracker->reconcile($creation);
+        $tracker->reconcile($creation, $this->attempt >= 5);
         $creation->refresh();
 
         $exhausted = $this->attempt >= 5;

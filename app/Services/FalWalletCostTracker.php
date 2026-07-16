@@ -111,9 +111,10 @@ class FalWalletCostTracker
     /**
      * Fill cost_usd from fal billing-events; set deducted + after from that cost.
      *
+     * @param  bool  $finalizeZeroCharge  When true (exhausted retries), persist cost_usd=0 if wallet did not move.
      * @return bool True when cost_usd is present after this call
      */
-    public function reconcile(Model $creation): bool
+    public function reconcile(Model $creation, bool $finalizeZeroCharge = false): bool
     {
         $updates = [];
 
@@ -131,26 +132,38 @@ class FalWalletCostTracker
         $before = $creation->getAttribute('fal_wallet_balance_before');
         $beforeOk = $before !== null && is_numeric($before);
 
+        $live = null;
+        if ($beforeOk || $creation->getAttribute('fal_wallet_balance_after') === null) {
+            $live = $this->account->getCreditBalance();
+        }
+
+        // Always snapshot wallet-after when we can read live balance (even if unchanged).
+        if ($live !== null && $this->walletAfterNeedsRefresh($creation)) {
+            $updates['fal_wallet_balance_after'] = $live;
+        }
+
+        // Fallback: billing-events lag — infer cost from wallet drop.
+        if ($cost === null && $beforeOk && $live !== null) {
+            $delta = (float) $before - $live;
+            if ($delta > 0.0000001) {
+                $cost = round($delta, 8);
+                $updates['cost_usd'] = $cost;
+            } elseif ($finalizeZeroCharge && abs($delta) <= 0.0000001) {
+                $cost = 0.0;
+                $updates['cost_usd'] = 0.0;
+            }
+        }
+
         if ($cost !== null && $beforeOk) {
-            // Per-request accounting from fal's bill (immune to concurrent wallet noise).
             $updates['deducted_amount_from_main_wallet'] = (float) $cost;
-            $updates['fal_wallet_balance_after'] = (float) $before - (float) $cost;
+            // Prefer bill-derived after when we have an authoritative cost.
+            if (! array_key_exists('fal_wallet_balance_after', $updates) || $cost > 0) {
+                $updates['fal_wallet_balance_after'] = (float) $before - (float) $cost;
+            }
         } elseif ($cost !== null) {
             $updates['deducted_amount_from_main_wallet'] = (float) $cost;
-
-            $after = $creation->getAttribute('fal_wallet_balance_after');
-            if ($after === null || $this->balancesEqual($after, $before)) {
-                $live = $this->account->getCreditBalance();
-                if ($live !== null) {
-                    $updates['fal_wallet_balance_after'] = $live;
-                }
-            }
-        } elseif ($beforeOk && $this->walletAfterNeedsRefresh($creation)) {
-            // Billing not ready yet — only store a live after if the wallet actually moved.
-            $live = $this->account->getCreditBalance();
-            if ($live !== null && ! $this->balancesEqual($live, $before)) {
+            if ($live !== null && ! array_key_exists('fal_wallet_balance_after', $updates)) {
                 $updates['fal_wallet_balance_after'] = $live;
-                $updates['deducted_amount_from_main_wallet'] = (float) $before - $live;
             }
         }
 
