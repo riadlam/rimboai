@@ -16,7 +16,9 @@ import {
 } from '@/lib/labReuse';
 import type { Brand, PageProps } from '@/types';
 import Button from '@/Components/Button';
+import { LabToastProvider, useLabToast } from '@/Components/LabToast';
 import { Head, Link, usePage } from '@inertiajs/react';
+import { getEcho } from '@/lib/echo';
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,6 +85,7 @@ type ApiImageItem = {
     model?: string | null;
     status?: CreationStatus;
     progress?: string | null;
+    queue_position?: number | null;
     error?: string | null;
     video_url?: string | null;
 };
@@ -102,6 +105,7 @@ type ApiTrackItem = {
     audio_url?: string | null;
     status?: CreationStatus;
     progress?: string | null;
+    queue_position?: number | null;
     error?: string | null;
 };
 
@@ -119,6 +123,7 @@ type ApiVoiceItem = {
     audio_url?: string | null;
     status?: CreationStatus;
     progress?: string | null;
+    queue_position?: number | null;
     error?: string | null;
 };
 
@@ -157,6 +162,7 @@ function mapApiImage(item: ApiImageItem): LabImage {
         modelName: item.model ?? undefined,
         status: item.status,
         progress: item.progress,
+        queuePosition: item.queue_position ?? null,
         error: item.error,
         videoUrl: item.video_url ?? undefined,
     };
@@ -178,6 +184,7 @@ function mapApiTrack(item: ApiTrackItem): LabTrack {
         audioUrl: item.audio_url ?? undefined,
         status: item.status,
         progress: item.progress ?? undefined,
+        queuePosition: item.queue_position ?? null,
         error: item.error ?? undefined,
     };
 }
@@ -197,6 +204,7 @@ function mapApiVoice(item: ApiVoiceItem, index: number): LabVoice {
         audioUrl: item.audio_url ?? undefined,
         status: item.status,
         progress: item.progress ?? undefined,
+        queuePosition: item.queue_position ?? null,
         error: item.error ?? undefined,
     };
 }
@@ -205,23 +213,15 @@ function isActiveStatus(status?: CreationStatus) {
     return status !== undefined && status !== 'completed' && status !== 'failed' && status !== 'cancelled';
 }
 
-/** Back off polling so long fal jobs don't hammer /status or trip rate limits. */
-function nextStatusPollDelayMs(elapsedMs: number, kind: 'image' | 'video'): number {
-    if (kind === 'video') {
-        if (elapsedMs < 30_000) return 2_000;
-        if (elapsedMs < 2 * 60_000) return 4_000;
-        if (elapsedMs < 10 * 60_000) return 8_000;
-        return 15_000;
-    }
-    if (elapsedMs < 20_000) return 1_500;
-    if (elapsedMs < 2 * 60_000) return 4_000;
-    return 8_000;
+export default function LabWorkspace(props: Props) {
+    return (
+        <LabToastProvider>
+            <LabWorkspaceInner {...props} />
+        </LabToastProvider>
+    );
 }
 
-const VIDEO_POLL_MAX_MS = 45 * 60_000;
-const IMAGE_POLL_MAX_MS = 15 * 60_000;
-
-export default function LabWorkspace({
+function LabWorkspaceInner({
     type = 'text-to-video',
     title,
     brands = [],
@@ -229,6 +229,7 @@ export default function LabWorkspace({
     creditsConfig,
 }: Props) {
     const { t: tLab } = useTranslation('lab');
+    const { pushError } = useLabToast();
     const { props: pageProps } = usePage<PageProps>();
     const isGuest = pageProps.auth.user === null;
     const [prompt, setPrompt] = useState('');
@@ -238,7 +239,6 @@ export default function LabWorkspace({
     const isVideoLab = type === 'text-to-video';
     const isMusicLab = type === 'text-to-music' || type === 'text-to-sound';
     const isVoiceLab = type === 'text-to-voice';
-
     const syncTokenBalance = useCallback((balance?: number) => {
         if (typeof balance !== 'number' || !Number.isFinite(balance)) return;
         const normalized = Math.max(0, Math.floor(balance));
@@ -255,31 +255,17 @@ export default function LabWorkspace({
         [syncTokenBalance],
     );
 
-    /** Extra status hits so fal wallet cost can backfill after billing lag. */
-    const softReconcileStatus = useCallback((statusPath: string) => {
-        [15_000, 45_000, 90_000].forEach((ms) => {
-            window.setTimeout(() => {
-                void apiGet(statusPath).catch(() => {});
-            }, ms);
-        });
-    }, []);
-
     const usesStudioLab = isImageLab || isVideoLab || isMusicLab || isVoiceLab;
     const [images, setImages] = useState<LabImage[]>([]);
     const [tracks, setTracks] = useState<LabTrack[]>([]);
     const [voices, setVoices] = useState<LabVoice[]>([]);
     const [reuseDraft, setReuseDraft] = useState<LabReuseDraft | null>(null);
-    const pollTimers = useRef<Record<string, number>>({});
-    const pollImageRef = useRef<(batchId: string, creationId: number, aspect: string, expectedCount: number) => void>(() => {});
-    const pollVideoRef = useRef<(batchId: string, creationId: number, aspect: string) => void>(() => {});
     const model = brands[0]?.models[0]?.name || 'Auto';
 
     const imageGenerating = isImageLab && images.some((i) => isActiveStatus(i.status));
     const videoGenerating = isVideoLab && images.some((i) => isActiveStatus(i.status));
     const musicGenerating = isMusicLab && tracks.some((t) => isActiveStatus(t.status));
     const voiceGenerating = isVoiceLab && voices.some((v) => isActiveStatus(v.status));
-    const pollVoiceRef = useRef<(localId: string, creationId: number) => void>(() => {});
-    const pollMusicRef = useRef<(localId: string, creationId: number) => void>(() => {});
 
     useEffect(() => {
         const expectedLab = isVideoLab ? 'video' : isImageLab ? 'image' : isMusicLab ? 'music' : undefined;
@@ -287,13 +273,6 @@ export default function LabWorkspace({
         const pending = consumeLabReuseDraft(expectedLab);
         if (pending) setReuseDraft(pending);
     }, [isImageLab, isVideoLab, isMusicLab]);
-
-    useEffect(() => {
-        const timers = pollTimers.current;
-        return () => {
-            Object.values(timers).forEach((t) => window.clearTimeout(t));
-        };
-    }, []);
 
     const toReuseSource = useCallback((img: LabImage) => {
         return {
@@ -328,266 +307,221 @@ export default function LabWorkspace({
     );
 
     const failBatch = useCallback((batchId: string, error?: string | null) => {
+        const message = error ?? 'Generation failed.';
+        pushError(message);
         setImages((prev) =>
             prev.map((i) =>
                 i.batchId === batchId
-                    ? { ...i, status: 'failed' as const, progress: null, error: error ?? 'Generation failed.' }
+                    ? { ...i, status: 'failed' as const, progress: null, error: message }
                     : i,
             ),
         );
-    }, []);
+    }, [pushError]);
 
-    const pollImage = useCallback(
-        (batchId: string, creationId: number, aspect: string, expectedCount: number) => {
-            const started = Date.now();
-            let rateLimitUntil = 0;
+    // Realtime completion via Pusher (fal webhook → CreationUpdated).
+    useEffect(() => {
+        if (isGuest || !pageProps.auth.user?.id) return;
 
-            const tick = async () => {
-                let data: CreationResponse;
-                try {
-                    data = await apiGet<CreationResponse>(`/lab/image/creations/${creationId}/status`);
-                } catch (e) {
-                    if (e instanceof ApiError && e.status === 429) {
-                        rateLimitUntil = Date.now() + 25_000;
-                    }
-                    scheduleNext();
-                    return;
-                }
+        const echo = getEcho();
+        if (!echo) return;
 
-                if (data.status === 'completed') {
-                    delete pollTimers.current[batchId];
-                    softReconcileStatus(`/lab/image/creations/${creationId}/status`);
-                    const urls = data.images ?? [];
-                    if (urls.length === 0) {
-                        failBatch(batchId, 'Generation finished without an image.');
-                        return;
-                    }
+        const channelName = `user.${pageProps.auth.user.id}`;
+        const channel = echo.private(channelName);
+        const onUpdated = (event: {
+            type?: string;
+            creation_id?: number;
+            creation?: CreationResponse & { type?: string };
+        }) => {
+            const creation = event.creation;
+            const creationId = event.creation_id ?? creation?.id;
+            const kind = event.type ?? creation?.type;
+            if (!creation || !creationId || !kind) return;
 
-                    setImages((prev) =>
-                        prev.map((i) => (i.batchId === batchId ? { ...i, completing: true } : i)),
-                    );
+            if (typeof creation.token_balance === 'number') {
+                syncTokenBalance(creation.token_balance);
+            }
 
-                    window.setTimeout(() => {
+            if (creation.status === 'failed' || creation.status === 'cancelled') {
+                pushError(creation.error || 'Generation failed.');
+            }
+
+            if (kind === 'image' || kind === 'video') {
+                if (creation.status === 'completed') {
+                    if (kind === 'image') {
+                        const urls = creation.images ?? [];
                         setImages((prev) => {
-                            const batch = prev
-                                .filter((i) => i.batchId === batchId)
-                                .sort((a, b) => (a.batchIndex ?? 0) - (b.batchIndex ?? 0));
-                            const rest = prev.filter((i) => i.batchId !== batchId);
-
-                            const cards: LabImage[] = batch.map((slot, idx) => {
+                            const batch = prev.filter((i) => i.creationId === creationId);
+                            if (batch.length === 0) return prev;
+                            const rest = prev.filter((i) => i.creationId !== creationId);
+                            const cards = batch.map((slot, idx) => {
                                 const url = urls[idx];
-                                if (url) {
-                                    return {
-                                        id: slot.id,
-                                        prompt: data.prompt,
-                                        src: url,
-                                        favorite: false,
-                                        createdAt: Date.now(),
-                                        aspect: slot.aspect ?? aspect,
-                                        resolution: slot.resolution,
-                                        quantity: slot.quantity,
-                                        imageMode: slot.imageMode,
-                                        inputAssets: slot.inputAssets,
-                                        method: slot.method ?? 'text-to-image',
-                                        modelName: data.model_name ?? slot.modelName,
-                                        status: 'completed' as const,
-                                        creationId,
-                                        batchId,
-                                        batchIndex: idx,
-                                    };
+                                if (!url) {
+                                    return { ...slot, status: 'failed' as const, completing: false, error: 'Output missing.' };
                                 }
                                 return {
                                     ...slot,
-                                    status: 'failed' as const,
+                                    src: url,
+                                    status: 'completed' as const,
                                     completing: false,
-                                    error: 'This output was not returned by the model.',
+                                    progress: null,
+                                    error: null,
+                                    modelName: creation.model_name ?? slot.modelName,
                                 };
                             });
-
-                            if (urls.length > expectedCount) {
-                                for (let i = expectedCount; i < urls.length; i++) {
-                                    const template = batch[0];
-                                    cards.push({
-                                        id: `${batchId}-extra-${i}`,
-                                        prompt: data.prompt,
-                                        src: urls[i],
-                                        favorite: false,
-                                        createdAt: Date.now(),
-                                        aspect: template?.aspect ?? aspect,
-                                        resolution: template?.resolution,
-                                        quantity: template?.quantity,
-                                        imageMode: template?.imageMode,
-                                        inputAssets: template?.inputAssets,
-                                        method: template?.method ?? 'text-to-image',
-                                        modelName: data.model_name ?? undefined,
-                                        status: 'completed',
-                                        creationId,
-                                        batchId,
-                                        batchIndex: i,
-                                    });
-                                }
-                            }
-
                             return [...cards, ...rest];
                         });
-                    }, 380);
-                    return;
-                }
-
-                if (data.status === 'failed' || data.status === 'cancelled') {
-                    delete pollTimers.current[batchId];
-                    failBatch(batchId, data.error);
-                    return;
-                }
-
-                setImages((prev) =>
-                    prev.map((i) =>
-                        i.batchId === batchId
-                            ? { ...i, status: data.status, progress: data.progress_message ?? i.progress }
-                            : i,
-                    ),
-                );
-                scheduleNext();
-            };
-
-            const scheduleNext = () => {
-                const elapsed = Date.now() - started;
-                if (elapsed > IMAGE_POLL_MAX_MS) {
-                    delete pollTimers.current[batchId];
-                    // Don't mark failed — server job may still complete; refresh resumes polling.
-                    setImages((prev) =>
-                        prev.map((i) =>
-                            i.batchId === batchId
-                                ? {
-                                      ...i,
-                                      progress: tLab('pollPausedRefresh', {
-                                          defaultValue:
-                                              'Still generating on the server — refresh the page to check status.',
-                                      }),
-                                  }
-                                : i,
-                        ),
-                    );
-                    return;
-                }
-                const backoff = Math.max(0, rateLimitUntil - Date.now());
-                const delay = Math.max(nextStatusPollDelayMs(elapsed, 'image'), backoff);
-                pollTimers.current[batchId] = window.setTimeout(tick, delay);
-            };
-
-            scheduleNext();
-        },
-        [failBatch, softReconcileStatus, tLab],
-    );
-
-    pollImageRef.current = pollImage;
-
-    const pollVideo = useCallback(
-        (batchId: string, creationId: number, aspect: string) => {
-            const started = Date.now();
-            let rateLimitUntil = 0;
-
-            const tick = async () => {
-                let data: CreationResponse;
-                try {
-                    data = await apiGet<CreationResponse>(`/lab/video/creations/${creationId}/status`);
-                } catch (e) {
-                    if (e instanceof ApiError && e.status === 429) {
-                        rateLimitUntil = Date.now() + 25_000;
-                    }
-                    scheduleNext();
-                    return;
-                }
-
-                if (data.status === 'completed') {
-                    delete pollTimers.current[batchId];
-                    softReconcileStatus(`/lab/video/creations/${creationId}/status`);
-                    const videoUrl = data.video_url || data.preview_url;
-                    if (!videoUrl) {
-                        failBatch(batchId, 'Generation finished without a video.');
-                        return;
-                    }
-
-                    setImages((prev) =>
-                        prev.map((i) => (i.batchId === batchId ? { ...i, completing: true } : i)),
-                    );
-
-                    window.setTimeout(() => {
+                    } else {
+                        const videoUrl = creation.video_url || creation.preview_url;
                         setImages((prev) => {
-                            const existing = prev.find((i) => i.batchId === batchId);
-                            const rest = prev.filter((i) => i.batchId !== batchId);
-                            const card: LabImage = {
-                                id: `video-${creationId}`,
-                                prompt: data.prompt,
-                                src: data.thumbnail_url || videoUrl,
-                                videoUrl,
-                                favorite: false,
-                                createdAt: Date.now(),
-                                aspect: existing?.aspect ?? aspect,
-                                resolution: existing?.resolution,
-                                duration: existing?.duration,
-                                audio: existing?.audio,
-                                inputAssets: existing?.inputAssets,
-                                method: (data.mode as LabImage['method']) || existing?.method || 'text-to-video',
-                                modelName: data.model_name ?? existing?.modelName,
-                                status: 'completed',
-                                creationId,
-                                batchId,
-                                batchIndex: 0,
-                            };
-                            return [card, ...rest];
+                            const existing = prev.find((i) => i.creationId === creationId);
+                            if (!existing) return prev;
+                            const rest = prev.filter((i) => i.creationId !== creationId);
+                            if (!videoUrl) {
+                                return [
+                                    { ...existing, status: 'failed' as const, error: 'Generation finished without a video.' },
+                                    ...rest,
+                                ];
+                            }
+                            return [
+                                {
+                                    ...existing,
+                                    id: `video-${creationId}`,
+                                    src: creation.thumbnail_url || videoUrl,
+                                    videoUrl,
+                                    status: 'completed' as const,
+                                    completing: false,
+                                    progress: null,
+                                    error: null,
+                                    modelName: creation.model_name ?? existing.modelName,
+                                },
+                                ...rest,
+                            ];
                         });
-                    }, 380);
+                    }
                     return;
                 }
 
-                if (data.status === 'failed' || data.status === 'cancelled') {
-                    delete pollTimers.current[batchId];
-                    failBatch(batchId, data.error);
-                    return;
-                }
-
-                setImages((prev) =>
-                    prev.map((i) =>
-                        i.batchId === batchId
-                            ? { ...i, status: data.status, progress: data.progress_message ?? i.progress }
-                            : i,
-                    ),
-                );
-                scheduleNext();
-            };
-
-            const scheduleNext = () => {
-                const elapsed = Date.now() - started;
-                if (elapsed > VIDEO_POLL_MAX_MS) {
-                    delete pollTimers.current[batchId];
-                    // Soft stop only — fal may still finish; library refresh resumes active jobs.
+                if (creation.status === 'failed' || creation.status === 'cancelled') {
                     setImages((prev) =>
                         prev.map((i) =>
-                            i.batchId === batchId
-                                ? {
-                                      ...i,
-                                      progress: tLab('pollPausedRefresh', {
-                                          defaultValue:
-                                              'Still generating on the server — refresh the page to check status.',
-                                      }),
-                                  }
+                            i.creationId === creationId
+                                ? { ...i, status: 'failed' as const, progress: null, error: creation.error ?? 'Generation failed.' }
                                 : i,
                         ),
                     );
                     return;
                 }
-                const backoff = Math.max(0, rateLimitUntil - Date.now());
-                const delay = Math.max(nextStatusPollDelayMs(elapsed, 'video'), backoff);
-                pollTimers.current[batchId] = window.setTimeout(tick, delay);
-            };
 
-            scheduleNext();
-        },
-        [failBatch, softReconcileStatus, tLab],
-    );
+                setImages((prev) =>
+                    prev.map((i) =>
+                        i.creationId === creationId
+                            ? {
+                                  ...i,
+                                  status: creation.status,
+                                  progress: creation.progress_message ?? i.progress,
+                                  queuePosition: creation.queue_position ?? i.queuePosition ?? null,
+                              }
+                            : i,
+                    ),
+                );
+                return;
+            }
 
-    pollVideoRef.current = pollVideo;
+            if (kind === 'music') {
+                if (creation.status === 'completed') {
+                    const audioUrl = creation.audio_url || creation.preview_url;
+                    setTracks((prev) =>
+                        prev.map((track) =>
+                            track.creationId === creationId
+                                ? {
+                                      ...track,
+                                      status: 'completed' as const,
+                                      audioUrl: audioUrl ?? track.audioUrl,
+                                      cover: creation.cover_url || track.cover,
+                                      progress: null,
+                                      error: null,
+                                      completing: false,
+                                  }
+                                : track,
+                        ),
+                    );
+                    return;
+                }
+                if (creation.status === 'failed' || creation.status === 'cancelled') {
+                    setTracks((prev) =>
+                        prev.map((track) =>
+                            track.creationId === creationId
+                                ? { ...track, status: 'failed', error: creation.error || 'Generation failed.', progress: tLab('failed') }
+                                : track,
+                        ),
+                    );
+                    return;
+                }
+                setTracks((prev) =>
+                    prev.map((track) =>
+                        track.creationId === creationId
+                            ? {
+                                  ...track,
+                                  status: creation.status,
+                                  progress: creation.progress_message ?? track.progress,
+                                  queuePosition: creation.queue_position ?? track.queuePosition ?? null,
+                              }
+                            : track,
+                    ),
+                );
+                return;
+            }
+
+            if (kind === 'voice') {
+                if (creation.status === 'completed') {
+                    const audioUrl = creation.audio_url || creation.preview_url;
+                    setVoices((prev) =>
+                        prev.map((v) =>
+                            v.creationId === creationId
+                                ? {
+                                      ...v,
+                                      status: 'completed' as const,
+                                      audioUrl: audioUrl ?? v.audioUrl,
+                                      progress: undefined,
+                                      error: undefined,
+                                  }
+                                : v,
+                        ),
+                    );
+                    return;
+                }
+                if (creation.status === 'failed' || creation.status === 'cancelled') {
+                    setVoices((prev) =>
+                        prev.map((v) =>
+                            v.creationId === creationId
+                                ? { ...v, status: 'failed', error: creation.error || 'Generation failed.', progress: tLab('failed') }
+                                : v,
+                        ),
+                    );
+                    return;
+                }
+                setVoices((prev) =>
+                    prev.map((v) =>
+                        v.creationId === creationId
+                            ? {
+                                  ...v,
+                                  status: creation.status,
+                                  progress: creation.progress_message ?? v.progress,
+                                  queuePosition: creation.queue_position ?? v.queuePosition ?? null,
+                              }
+                            : v,
+                    ),
+                );
+            }
+        };
+
+        channel.listen('.creation.updated', onUpdated);
+
+        return () => {
+            channel.stopListening('.creation.updated');
+            echo.leave(channelName);
+        };
+    }, [isGuest, pageProps.auth.user?.id, pushError, syncTokenBalance, tLab]);
 
     useEffect(() => {
         if (!usesStudioLab || isGuest) return;
@@ -604,19 +538,6 @@ export default function LabWorkspace({
                     const mapped = (data.images ?? []).map(mapApiImage);
                     setImages(mapped);
 
-                    const resumed = new Set<string>();
-                    for (const img of mapped) {
-                        if (!img.batchId || !img.creationId || !isActiveStatus(img.status)) continue;
-                        if (resumed.has(img.batchId)) continue;
-                        resumed.add(img.batchId);
-
-                        if (isVideoLab) {
-                            pollVideoRef.current(img.batchId, img.creationId, img.aspect ?? '16:9');
-                        } else {
-                            const slots = mapped.filter((i) => i.batchId === img.batchId);
-                            pollImageRef.current(img.batchId, img.creationId, img.aspect ?? '1:1', slots.length);
-                        }
-                    }
                     return;
                 }
 
@@ -626,17 +547,14 @@ export default function LabWorkspace({
                     const mapped = (data.tracks ?? []).map(mapApiTrack);
                     setTracks(mapped);
 
-                    for (const track of mapped) {
-                        if (!track.creationId || !isActiveStatus(track.status)) continue;
-                        pollMusicRef.current(track.id, track.creationId);
-                    }
                     return;
                 }
 
                 if (isVoiceLab) {
                     const data = await apiGet<{ voices: ApiVoiceItem[] }>(`/lab/creations?type=${encodeURIComponent(labType)}`);
                     if (cancelled) return;
-                    setVoices((data.voices ?? []).map((item, index) => mapApiVoice(item, index)));
+                    const mapped = (data.voices ?? []).map((item, index) => mapApiVoice(item, index));
+                    setVoices(mapped);
                 }
             } catch {
                 // Keep empty library if fetch fails.
@@ -715,13 +633,12 @@ export default function LabWorkspace({
                     failBatch(batchId, data.error);
                     return;
                 }
-                pollImage(batchId, data.id, aspect, quantity);
             } catch (e) {
                 syncTokenBalanceFromError(e);
                 failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
             }
         },
-        [failBatch, pollImage, syncTokenBalance, syncTokenBalanceFromError, tLab],
+        [failBatch, syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
 
     const startVideoGenerate = useCallback(
@@ -854,13 +771,12 @@ export default function LabWorkspace({
                     failBatch(batchId, data.error);
                     return;
                 }
-                pollVideo(batchId, data.id, aspect);
             } catch (e) {
                 syncTokenBalanceFromError(e);
                 failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
             }
         },
-        [failBatch, pollVideo, syncTokenBalance, syncTokenBalanceFromError, tLab],
+        [failBatch, syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
 
     const startGenerate = (
@@ -983,6 +899,7 @@ export default function LabWorkspace({
                 );
 
                 if (data.status === 'failed') {
+                    pushError(data.error || 'Generation failed.');
                     setTracks((prev) =>
                         prev.map((track) =>
                             track.id === localId
@@ -994,9 +911,9 @@ export default function LabWorkspace({
                     return;
                 }
 
-                pollMusicRef.current(localId, data.id);
             } catch (e) {
                 syncTokenBalanceFromError(e);
+                pushError(e instanceof Error ? e.message : 'Could not start generation.');
                 setTracks((prev) =>
                     prev.map((track) =>
                         track.id === localId
@@ -1012,141 +929,8 @@ export default function LabWorkspace({
                 setLoading(false);
             }
         },
-        [syncTokenBalance, syncTokenBalanceFromError, tLab],
+        [pushError, syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
-
-    const pollMusic = useCallback((localId: string, creationId: number) => {
-        const started = Date.now();
-
-        const scheduleNext = () => {
-            const elapsed = Date.now() - started;
-            // Music can run a long time — 15 min timeout
-            if (elapsed > 15 * 60 * 1000) {
-                setTracks((prev) =>
-                    prev.map((track) =>
-                        track.id === localId || track.creationId === creationId
-                            ? { ...track, status: 'failed', error: 'Timed out waiting for music.', progress: tLab('failed') }
-                            : track,
-                    ),
-                );
-                setLoading(false);
-                delete pollTimers.current[localId];
-                return;
-            }
-            // Every 2s at first, then every 8s after 4s to avoid rate limits
-            const delay = elapsed < 4000 ? 2000 : 8000;
-            pollTimers.current[localId] = window.setTimeout(tick, delay);
-        };
-
-        const tick = async () => {
-            let data: CreationResponse;
-            try {
-                data = await apiGet<CreationResponse>(`/lab/music/creations/${creationId}/status`);
-            } catch {
-                scheduleNext();
-                return;
-            }
-
-            if (data.status === 'completed') {
-                delete pollTimers.current[localId];
-                softReconcileStatus(`/lab/music/creations/${creationId}/status`);
-                const audioUrl = data.audio_url || data.preview_url;
-                if (!audioUrl) {
-                    setTracks((prev) =>
-                        prev.map((track) =>
-                            track.id === localId || track.creationId === creationId
-                                ? { ...track, status: 'failed', error: 'Generation finished without audio.', progress: tLab('failed') }
-                                : track,
-                        ),
-                    );
-                    setLoading(false);
-                    return;
-                }
-
-                setTracks((prev) =>
-                    prev.map((track) =>
-                        track.id === localId || track.creationId === creationId
-                            ? {
-                                  ...track,
-                                  completing: true,
-                                  progress: tLab('completed'),
-                              }
-                            : track,
-                    ),
-                );
-
-                window.setTimeout(() => {
-                    setTracks((prev) =>
-                        prev.map((track) =>
-                            track.id === localId || track.creationId === creationId
-                                ? {
-                                      ...track,
-                                      id: `track-${creationId}`,
-                                      creationId,
-                                      status: 'completed',
-                                      completing: false,
-                                      progress: tLab('completed'),
-                                      audioUrl,
-                                      cover: data.cover_url || track.cover || '',
-                                      title: data.title || track.title,
-                                      style: data.prompt || track.style,
-                                      lyrics: data.lyrics ?? track.lyrics,
-                                      model: data.model_name ?? track.model,
-                                      instrumental: data.instrumental ?? track.instrumental,
-                                      duration: data.duration ?? track.duration,
-                                      error: undefined,
-                                  }
-                                : track,
-                        ),
-                    );
-                    setLoading(false);
-                }, 380);
-                return;
-            }
-
-            if (data.status === 'failed' || data.status === 'cancelled') {
-                delete pollTimers.current[localId];
-                setTracks((prev) =>
-                    prev.map((track) =>
-                        track.id === localId || track.creationId === creationId
-                            ? {
-                                  ...track,
-                                  status: data.status,
-                                  error: data.error || 'Generation failed.',
-                                  progress: tLab('failed'),
-                              }
-                            : track,
-                    ),
-                );
-                setLoading(false);
-                return;
-            }
-
-            setTracks((prev) =>
-                prev.map((track) =>
-                    track.id === localId || track.creationId === creationId
-                        ? {
-                              ...track,
-                              creationId,
-                              status: data.status,
-                              progress:
-                                  data.progress_message ||
-                                  (data.status === 'queued'
-                                      ? tLab('inQueue')
-                                      : data.status === 'in_progress'
-                                        ? tLab('generating')
-                                        : track.progress),
-                          }
-                        : track,
-                ),
-            );
-            scheduleNext();
-        };
-
-        scheduleNext();
-    }, [tLab]);
-
-    pollMusicRef.current = pollMusic;
 
     const startVoiceGenerate = useCallback(
         async (text: string, options?: VoiceGenerateOptions) => {
@@ -1201,6 +985,7 @@ export default function LabWorkspace({
                 );
 
                 if (data.status === 'failed') {
+                    pushError(data.error || 'Generation failed.');
                     setVoices((prev) =>
                         prev.map((v) =>
                             v.id === localId
@@ -1212,9 +997,9 @@ export default function LabWorkspace({
                     return;
                 }
 
-                pollVoiceRef.current(localId, data.id);
             } catch (e) {
                 syncTokenBalanceFromError(e);
+                pushError(e instanceof Error ? e.message : 'Could not start generation.');
                 setVoices((prev) =>
                     prev.map((v) =>
                         v.id === localId
@@ -1230,120 +1015,8 @@ export default function LabWorkspace({
                 setLoading(false);
             }
         },
-        [syncTokenBalance, syncTokenBalanceFromError, tLab],
+        [pushError, syncTokenBalance, syncTokenBalanceFromError, tLab],
     );
-
-    const pollVoice = useCallback((localId: string, creationId: number) => {
-        const started = Date.now();
-
-        const scheduleNext = () => {
-            const elapsed = Date.now() - started;
-            if (elapsed > 5 * 60 * 1000) {
-                setVoices((prev) =>
-                    prev.map((v) =>
-                        v.id === localId
-                            ? { ...v, status: 'failed', error: 'Timed out waiting for audio.', progress: tLab('failed') }
-                            : v,
-                    ),
-                );
-                setLoading(false);
-                delete pollTimers.current[localId];
-                return;
-            }
-            const delay = elapsed < 5000 ? 1500 : 4000;
-            pollTimers.current[localId] = window.setTimeout(tick, delay);
-        };
-
-        const tick = async () => {
-            let data: CreationResponse;
-            try {
-                data = await apiGet<CreationResponse>(`/lab/voice/creations/${creationId}/status`);
-            } catch {
-                scheduleNext();
-                return;
-            }
-
-            if (data.status === 'completed') {
-                delete pollTimers.current[localId];
-                softReconcileStatus(`/lab/voice/creations/${creationId}/status`);
-                const audioUrl = data.audio_url || data.preview_url;
-                if (!audioUrl) {
-                    setVoices((prev) =>
-                        prev.map((v) =>
-                            v.id === localId
-                                ? { ...v, status: 'failed', error: 'Generation finished without audio.', progress: tLab('failed') }
-                                : v,
-                        ),
-                    );
-                    setLoading(false);
-                    return;
-                }
-
-                setVoices((prev) =>
-                    prev.map((v) =>
-                        v.id === localId
-                            ? {
-                                  ...v,
-                                  id: `voice-${creationId}`,
-                                  creationId,
-                                  status: 'completed',
-                                  progress: tLab('completed'),
-                                  audioUrl,
-                                  title: data.prompt.length > 42 ? `${data.prompt.slice(0, 42)}…` : data.prompt,
-                                  text: data.prompt,
-                                  voice: data.voice ?? v.voice,
-                                  model: data.model_name ?? v.model,
-                                  error: undefined,
-                              }
-                            : v,
-                    ),
-                );
-                setLoading(false);
-                return;
-            }
-
-            if (data.status === 'failed' || data.status === 'cancelled') {
-                delete pollTimers.current[localId];
-                setVoices((prev) =>
-                    prev.map((v) =>
-                        v.id === localId
-                            ? {
-                                  ...v,
-                                  status: data.status,
-                                  error: data.error || 'Generation failed.',
-                                  progress: tLab('failed'),
-                              }
-                            : v,
-                    ),
-                );
-                setLoading(false);
-                return;
-            }
-
-            setVoices((prev) =>
-                prev.map((v) =>
-                    v.id === localId
-                        ? {
-                              ...v,
-                              status: data.status,
-                              progress:
-                                  data.progress_message ||
-                                  (data.status === 'queued'
-                                      ? data.queue_position
-                                          ? `${tLab('inQueue')} (#${data.queue_position})`
-                                          : tLab('inQueue')
-                                      : tLab('generating')),
-                          }
-                        : v,
-                ),
-            );
-            scheduleNext();
-        };
-
-        scheduleNext();
-    }, [tLab]);
-
-    pollVoiceRef.current = pollVoice;
 
     const toggleFavorite = (id: string) => {
         setImages((prev) => prev.map((img) => (img.id === id ? { ...img, favorite: !img.favorite } : img)));
@@ -1358,12 +1031,6 @@ export default function LabWorkspace({
     };
 
     const deleteTracks = (ids: string[]) => {
-        for (const id of ids) {
-            if (pollTimers.current[id]) {
-                window.clearTimeout(pollTimers.current[id]);
-                delete pollTimers.current[id];
-            }
-        }
         setTracks((prev) => prev.filter((t) => !ids.includes(t.id)));
     };
 

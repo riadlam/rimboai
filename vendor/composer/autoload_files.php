@@ -17,8 +17,8 @@ return array(
     '667aeda72477189d0494fecd327c3641' => $vendorDir . '/symfony/var-dumper/Resources/functions/dump.php',
     '7b11c4dc42b3b3023073cb14e519683c' => $vendorDir . '/ralouphie/getallheaders/src/getallheaders.php',
     '606a39d89246991a373564698c2d8383' => $vendorDir . '/symfony/polyfill-php85/bootstrap.php',
-    '662a729f963d39afe703c9d9b7ab4a8c' => $vendorDir . '/symfony/polyfill-php83/bootstrap.php',
     '37a3dc5111fe8f707ab4c132ef1dbc62' => $vendorDir . '/guzzlehttp/guzzle/src/functions_include.php',
+    '662a729f963d39afe703c9d9b7ab4a8c' => $vendorDir . '/symfony/polyfill-php83/bootstrap.php',
     '35a6ad97d21e794e7e22a17d806652e4' => $vendorDir . '/nunomaduro/termwind/src/Functions.php',
     '2203a247e6fda86070a5e4e07aed533a' => $vendorDir . '/symfony/clock/Resources/now.php',
     '09f6b20656683369174dd6fa83b7e5fb' => $vendorDir . '/symfony/polyfill-uuid/bootstrap.php',
@@ -42,5 +42,6 @@ return array(
     'c72349b1fe8d0deeedd3a52e8aa814d8' => $vendorDir . '/mockery/mockery/library/helpers.php',
     'ce9671a430e4846b44e1c68c7611f9f5' => $vendorDir . '/mockery/mockery/library/Mockery.php',
     'a1cfe24d14977df6878b9bf804af2d1c' => $vendorDir . '/nunomaduro/collision/src/Adapters/Phpunit/Autoload.php',
+    '3109cb1a231dcd04bee1f9f620d46975' => $vendorDir . '/paragonie/sodium_compat/autoload.php',
     'ec07570ca5a812141189b1fa81503674' => $vendorDir . '/phpunit/phpunit/src/Framework/Assert/Functions.php',
 );

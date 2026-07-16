@@ -33,23 +33,72 @@ class FalService
     }
 
     /**
+     * Public HTTPS URL fal should POST when the job finishes.
+     * Null on local http:// so submit still works without webhooks.
+     */
+    public function webhookUrl(): ?string
+    {
+        $configured = config('services.fal.webhook_url');
+        if (is_string($configured) && $configured !== '') {
+            $configured = trim($configured);
+            if (str_starts_with($configured, 'https://')) {
+                return $configured;
+            }
+
+            Log::warning('fal.webhook_url_ignored_not_https', ['url' => $configured]);
+
+            return null;
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+        if (str_starts_with($appUrl, 'https://')) {
+            return $appUrl.'/webhooks/fal';
+        }
+
+        return null;
+    }
+
+    /**
      * Submit a request to the queue. Returns fal payload including
      * request_id, status_url, response_url, queue_position.
+     *
+     * When an HTTPS webhook URL is available it is attached as ?fal_webhook=
+     * so fal notifies us on completion (no long client polling required).
      *
      * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      *
      * @throws RequestException
      */
-    public function submit(string $endpointId, array $input): array
+    public function submit(string $endpointId, array $input, ?string $webhookUrl = null): array
     {
+        $url = "{$this->queueBase}/{$endpointId}";
+        $hook = $webhookUrl ?? $this->webhookUrl();
+        if (is_string($hook) && $hook !== '') {
+            $url .= (str_contains($url, '?') ? '&' : '?').'fal_webhook='.rawurlencode($hook);
+        }
+
+        Log::info('fal.queue.submit', [
+            'endpoint' => $endpointId,
+            'webhook' => $hook ? true : false,
+        ]);
+
         $response = Http::withHeaders($this->headers())
             ->timeout(30)
-            ->post("{$this->queueBase}/{$endpointId}", $input);
+            ->post($url, $input);
 
         $response->throw();
 
-        return $response->json() ?? [];
+        $json = $response->json() ?? [];
+
+        Log::info('fal.queue.submitted', [
+            'endpoint' => $endpointId,
+            'request_id' => $json['request_id'] ?? null,
+            'queue_position' => $json['queue_position'] ?? null,
+            'webhook' => $hook ? true : false,
+        ]);
+
+        return $json;
     }
 
     /**

@@ -39,6 +39,8 @@ return [
         'key' => env('FAL_KEY'),
         // Platform/Admin API key for billing + usage (env key is literally admin_key).
         'admin_key' => env('admin_key'),
+        // Optional override; defaults to {APP_URL}/webhooks/fal when APP_URL is https.
+        'webhook_url' => env('FAL_WEBHOOK_URL'),
     ],
 
     'telegram' => [

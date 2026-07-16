@@ -151,6 +151,7 @@ class LabCreationsController extends Controller
                     'model' => $creation->model_name,
                     'status' => $creation->status,
                     'progress' => $creation->progress_message,
+                    'queue_position' => $creation->queue_position,
                     ...$reuseMeta,
                 ]);
             }
@@ -272,6 +273,7 @@ class LabCreationsController extends Controller
                 'model' => $creation->model_name,
                 'status' => $creation->status,
                 'progress' => $creation->progress_message,
+                    'queue_position' => $creation->queue_position,
                 ...$reuseMeta,
             ]);
         }
@@ -326,6 +328,8 @@ class LabCreationsController extends Controller
                     'audio_url' => $creation->result_audio_url,
                     'status' => $creation->status,
                     'progress' => $creation->progress_message,
+                    'queue_position' => $creation->queue_position,
+                    'queue_position' => $creation->queue_position,
                     'error' => $creation->error_message,
                 ];
             })
@@ -347,7 +351,13 @@ class LabCreationsController extends Controller
     {
         return UserVoiceCreation::query()
             ->where('user_id', $userId)
-            ->where('status', UserVoiceCreation::STATUS_COMPLETED)
+            ->whereIn('status', [
+                UserVoiceCreation::STATUS_PENDING,
+                UserVoiceCreation::STATUS_QUEUED,
+                UserVoiceCreation::STATUS_IN_PROGRESS,
+                UserVoiceCreation::STATUS_COMPLETED,
+                UserVoiceCreation::STATUS_FAILED,
+            ])
             ->orderByDesc('created_at')
             ->limit(100)
             ->get()
@@ -371,6 +381,10 @@ class LabCreationsController extends Controller
                         : null,
                     'audio_url' => $creation->result_audio_url,
                     'gradient' => $settings['gradient'] ?? null,
+                    'status' => $creation->status,
+                    'progress' => $creation->progress_message,
+                    'queue_position' => $creation->queue_position,
+                    'error' => $creation->error_message,
                 ];
             })
             ->values()
@@ -406,6 +420,7 @@ class LabCreationsController extends Controller
             'model' => $data['model'] ?? null,
             'status' => $data['status'] ?? 'completed',
             'progress' => $data['progress'] ?? null,
+            'queue_position' => $data['queue_position'] ?? null,
             'error' => $data['error'] ?? null,
             'video_url' => $data['video_url'] ?? null,
         ];

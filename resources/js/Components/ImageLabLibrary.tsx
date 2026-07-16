@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import VideoThumb from '@/Components/VideoThumb';
+import { labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 
 export type LabImage = {
     id: string;
@@ -22,6 +23,7 @@ export type LabImage = {
     status?: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
     creationId?: number;
     progress?: string | null;
+    queuePosition?: number | null;
     error?: string | null;
     /** Links multiple placeholders from one generate request */
     batchId?: string;
@@ -584,6 +586,8 @@ export default function ImageLabLibrary({
                                             key={img.id}
                                             prompt={img.prompt}
                                             status={img.status}
+                                            progress={img.progress}
+                                            queuePosition={img.queuePosition}
                                             startedAt={img.startedAt ?? img.createdAt}
                                             batchIndex={img.batchIndex ?? 0}
                                             completing={img.completing}
@@ -596,8 +600,6 @@ export default function ImageLabLibrary({
                                     return (
                                         <FailedCard
                                             key={img.id}
-                                            prompt={img.prompt}
-                                            error={img.error}
                                             onDismiss={() => onDelete?.([img.id])}
                                         />
                                     );
@@ -819,73 +821,35 @@ function GeneratingState() {
     );
 }
 
-/** Fake progress curves — image is snappy; video stays moving over minutes. */
-function useSmartProgress(
+/** Progress from queue position (real) + in-progress stage estimate (fal has no %). */
+function useLabCardProgress(
     startedAt: number,
     status?: LabImage['status'],
-    batchIndex = 0,
-    kind: 'image' | 'video' = 'image',
+    queuePosition?: number | null,
+    completing?: boolean,
 ) {
-    const [pct, setPct] = useState(0);
+    const [pct, setPct] = useState(() =>
+        labProgressPercent({ status, queuePosition, startedAt, completing }),
+    );
 
     useEffect(() => {
         const tick = () => {
-            const elapsed = (Date.now() - startedAt) / 1000 + batchIndex * 0.35;
-            let next: number;
-            const cap = kind === 'video' ? 93 : 94;
-
-            if (kind === 'video') {
-                // Video gens often run 1–5+ min — keep the bar alive the whole time.
-                if (status === 'in_progress') {
-                    // Ease toward ~88% over ~3 min, then crawl to 93%.
-                    const t = Math.min(elapsed / 180, 1);
-                    const eased = 1 - Math.pow(1 - t, 2.15);
-                    next = 10 + eased * 78; // 10 → 88
-                    if (elapsed > 180) {
-                        next = 88 + Math.min(5, (elapsed - 180) / 90); // 88 → 93 over +1.5 min
-                    }
-                    // Tiny pulse so the digit never looks frozen for long stretches
-                    next += (Math.sin(elapsed / 9) + 1) * 0.35;
-                } else if (status === 'queued') {
-                    next = Math.min(22, 5 + elapsed * 0.28);
-                } else {
-                    next = Math.min(12, 3 + elapsed * 1.2);
-                }
-            } else if (status === 'in_progress') {
-                const t = Math.min(elapsed / 13, 0.97);
-                next = 18 + (1 - Math.pow(1 - t, 3.2)) * 72;
-            } else if (status === 'queued') {
-                next = Math.min(16, 6 + elapsed * 1.4);
-            } else {
-                next = Math.min(12, elapsed * 7);
-            }
-
-            const rounded = Math.round(Math.min(cap, next));
-            setPct((prev) => Math.min(cap, Math.max(prev, rounded)));
+            const next = labProgressPercent({ status, queuePosition, startedAt, completing });
+            setPct((prev) => (completing || next >= prev ? next : prev));
         };
-
         tick();
-        const id = window.setInterval(tick, kind === 'video' ? 320 : 160);
+        const id = window.setInterval(tick, 400);
         return () => window.clearInterval(id);
-    }, [startedAt, status, batchIndex, kind]);
+    }, [startedAt, status, queuePosition, completing]);
 
     return pct;
-}
-
-function videoPhaseLabel(pct: number, status?: LabImage['status'], completing?: boolean): string {
-    if (completing) return 'Done';
-    if (status === 'queued') return 'In queue';
-    if (status === 'pending') return 'Starting';
-    if (pct < 28) return 'Planning shots';
-    if (pct < 55) return 'Rendering frames';
-    if (pct < 78) return 'Adding motion';
-    if (pct < 90) return 'Refining detail';
-    return 'Almost ready';
 }
 
 function BuildingCard({
     prompt,
     status,
+    progress,
+    queuePosition,
     startedAt,
     batchIndex = 0,
     completing = false,
@@ -893,89 +857,74 @@ function BuildingCard({
 }: {
     prompt: string;
     status?: LabImage['status'];
+    progress?: string | null;
+    queuePosition?: number | null;
     startedAt: number;
     batchIndex?: number;
     completing?: boolean;
     method?: LabImage['method'];
 }) {
     const isVideo = method === 'text-to-video' || method === 'image-to-video' || method === 'reference-to-video';
-    const simulated = useSmartProgress(startedAt, status, batchIndex, isVideo ? 'video' : 'image');
-    const pct = completing ? 100 : simulated;
-    const phase = isVideo
-        ? videoPhaseLabel(pct, status, completing)
-        : completing
-          ? 'Done'
-          : status === 'queued'
-            ? 'In queue'
-            : status === 'in_progress'
-              ? 'Rendering'
-              : 'Starting';
+    const pct = useLabCardProgress(startedAt, status, queuePosition, completing);
+    const phase = labPhaseLabel({
+        status,
+        queuePosition,
+        progress,
+        completing,
+        kind: isVideo ? 'video' : 'image',
+    });
 
     return (
         <motion.div
             layout
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: batchIndex * 0.05, duration: 0.22 }}
-            className="relative w-full overflow-hidden rounded-[5px] bg-[#0e0e13] ring-1 ring-white/[0.05]"
+            transition={{ delay: batchIndex * 0.04, duration: 0.22 }}
+            className="relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-[#15151c] to-[#0c0c10] ring-1 ring-white/[0.07]"
             style={{ aspectRatio: '1 / 1' }}
         >
-            {/* Soft ambient wash */}
-            <motion.div
-                aria-hidden
-                className="absolute inset-0 opacity-60"
-                style={{
-                    background: isVideo
-                        ? 'radial-gradient(70% 60% at 30% 20%, rgba(255,87,51,0.10), transparent), radial-gradient(60% 50% at 75% 80%, rgba(255,140,0,0.07), transparent)'
-                        : 'radial-gradient(70% 60% at 30% 20%, rgba(139,92,246,0.07), transparent), radial-gradient(60% 50% at 75% 80%, rgba(99,102,241,0.06), transparent)',
-                }}
-                animate={{ opacity: [0.45, 0.65, 0.45] }}
-                transition={{ duration: isVideo ? 7 : 5, repeat: Infinity, ease: 'easeInOut' }}
-            />
-
-            {/* Faint resolving grid */}
             <motion.div
                 aria-hidden
                 className="absolute inset-0"
                 style={{
-                    backgroundImage:
-                        'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
-                    backgroundSize: '20px 20px',
+                    background: isVideo
+                        ? 'radial-gradient(80% 55% at 50% 0%, rgba(255,87,51,0.14), transparent 70%)'
+                        : 'radial-gradient(80% 55% at 50% 0%, rgba(199,33,255,0.12), transparent 70%)',
                 }}
-                animate={{ opacity: [0.25, 0.5, 0.25] }}
-                transition={{ duration: isVideo ? 5 : 3.5, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ opacity: [0.55, 0.85, 0.55] }}
+                transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
             />
 
-            {/* Gentle scan line */}
-            <motion.div
-                aria-hidden
-                className="absolute inset-x-0 h-1/4"
-                style={{
-                    background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.04) 50%, transparent)',
-                }}
-                animate={{ top: ['-30%', '110%'] }}
-                transition={{ duration: isVideo ? 5.5 : 3.2, repeat: Infinity, ease: 'easeInOut' }}
-            />
-
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-3 text-center">
-                <span className="text-2xl font-light tabular-nums tracking-tight text-white/75">{pct}%</span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/30">{phase}</span>
-                {isVideo && !completing && (
-                    <span className="text-[10px] text-white/20">Video usually takes a few minutes</span>
-                )}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 text-center">
+                <div className="relative flex h-14 w-14 items-center justify-center">
+                    <motion.span
+                        className={`absolute inset-0 rounded-full border ${
+                            isVideo ? 'border-[#FF5733]/35' : 'border-[#C721FF]/35'
+                        }`}
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                        style={{ borderTopColor: 'transparent', borderLeftColor: 'transparent' }}
+                    />
+                    <span className="text-xl font-medium tabular-nums tracking-tight text-white/90">{pct}%</span>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-[11px] font-medium tracking-wide text-white/70">{phase}</p>
+                    {isVideo && status === 'in_progress' && !completing && (
+                        <p className="text-[10px] text-white/30">Usually a few minutes</p>
+                    )}
+                </div>
                 <p className="line-clamp-2 max-w-[92%] text-[10px] leading-snug text-white/25">{prompt}</p>
             </div>
 
-            {/* Determinate progress rail */}
-            <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/[0.04]">
+            <div className="absolute inset-x-3 bottom-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
                 <motion.div
-                    className={`h-full bg-gradient-to-r ${
+                    className={`h-full rounded-full ${
                         isVideo
-                            ? 'from-orange-400/30 via-white/35 to-orange-300/25'
-                            : 'from-violet-400/25 via-white/35 to-violet-300/25'
+                            ? 'bg-gradient-to-r from-[#FF5733]/80 to-[#ff8c4a]/70'
+                            : 'bg-gradient-to-r from-[#C721FF]/75 to-[#7c3aed]/70'
                     }`}
                     animate={{ width: `${pct}%` }}
-                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
                 />
             </div>
         </motion.div>
@@ -983,12 +932,8 @@ function BuildingCard({
 }
 
 function FailedCard({
-    prompt,
-    error,
     onDismiss,
 }: {
-    prompt: string;
-    error?: string | null;
     onDismiss?: () => void;
 }) {
     return (
@@ -996,23 +941,23 @@ function FailedCard({
             layout
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="group relative flex w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[5px] border border-red-500/20 bg-[#160f11] px-4 text-center"
+            className="group relative flex w-full flex-col items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-white/[0.06] bg-[#121218] px-4 text-center"
             style={{ aspectRatio: '1 / 1' }}
         >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-red-300">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.04] text-white/45 ring-1 ring-white/10">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                     <path d="M12 9v4" />
                     <path d="M12 17h.01" />
                     <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
                 </svg>
             </div>
-            <p className="text-[12px] font-semibold text-red-200">Generation failed</p>
-            <p className="line-clamp-2 max-w-[92%] text-[10px] leading-snug text-white/40">{error || prompt}</p>
+            <p className="text-[12px] font-medium text-white/55">Failed</p>
+            <p className="text-[10px] text-white/30">See notification for details</p>
             {onDismiss && (
                 <button
                     type="button"
                     onClick={onDismiss}
-                    className="mt-1 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-white/70 transition hover:bg-white/[0.1] hover:text-white"
+                    className="mt-0.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white"
                 >
                     Dismiss
                 </button>

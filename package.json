@@ -23,7 +23,9 @@
         "@inertiajs/react": "^3.6.1",
         "framer-motion": "^12.42.2",
         "i18next": "^26.3.6",
+        "laravel-echo": "^2.4.0",
         "plyr": "^3.8.4",
+        "pusher-js": "^8.5.0",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
         "react-i18next": "^17.0.9"

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import MusicLabPreviewModal from '@/Components/MusicLabPreviewModal';
+import { labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 import { musicPalette } from '@/lib/musicPalette';
 
 export type LabTrack = {
@@ -19,6 +20,7 @@ export type LabTrack = {
     creationId?: number;
     status?: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
     progress?: string | null;
+    queuePosition?: number | null;
     error?: string | null;
     /** Brief flash at 100% before the real track appears */
     completing?: boolean;
@@ -445,6 +447,8 @@ export default function SoundLabLibrary({
                                             title={track.title}
                                             stylePrompt={track.style}
                                             status={track.status}
+                                            progress={track.progress}
+                                            queuePosition={track.queuePosition}
                                             startedAt={track.createdAt}
                                             completing={track.completing}
                                             instrumental={track.instrumental}
@@ -456,8 +460,6 @@ export default function SoundLabLibrary({
                                     return (
                                         <MusicFailedCard
                                             key={track.id}
-                                            title={track.title}
-                                            error={track.error}
                                             onDismiss={() => onDelete?.([track.id])}
                                         />
                                     );
@@ -625,57 +627,35 @@ export default function SoundLabLibrary({
     );
 }
 
-/** Same long-running curve as video — music gens often take minutes. */
-function useMusicSmartProgress(startedAt: number, status?: LabTrack['status']) {
-    const [pct, setPct] = useState(0);
+function useMusicCardProgress(
+    startedAt: number,
+    status?: LabTrack['status'],
+    queuePosition?: number | null,
+    completing?: boolean,
+) {
+    const [pct, setPct] = useState(() =>
+        labProgressPercent({ status, queuePosition, startedAt, completing }),
+    );
 
     useEffect(() => {
         const tick = () => {
-            const elapsed = (Date.now() - startedAt) / 1000;
-            let next: number;
-            const cap = 93;
-
-            if (status === 'in_progress') {
-                const t = Math.min(elapsed / 180, 1);
-                const eased = 1 - Math.pow(1 - t, 2.15);
-                next = 10 + eased * 78; // 10 → 88 over ~3 min
-                if (elapsed > 180) {
-                    next = 88 + Math.min(5, (elapsed - 180) / 90); // 88 → 93
-                }
-                next += (Math.sin(elapsed / 9) + 1) * 0.35;
-            } else if (status === 'queued') {
-                next = Math.min(22, 5 + elapsed * 0.28);
-            } else {
-                next = Math.min(12, 3 + elapsed * 1.2);
-            }
-
-            const rounded = Math.round(Math.min(cap, next));
-            setPct((prev) => Math.min(cap, Math.max(prev, rounded)));
+            const next = labProgressPercent({ status, queuePosition, startedAt, completing });
+            setPct((prev) => (completing || next >= prev ? next : prev));
         };
-
         tick();
-        const id = window.setInterval(tick, 320);
+        const id = window.setInterval(tick, 400);
         return () => window.clearInterval(id);
-    }, [startedAt, status]);
+    }, [startedAt, status, queuePosition, completing]);
 
     return pct;
-}
-
-function musicPhaseLabel(pct: number, status?: LabTrack['status'], completing?: boolean): string {
-    if (completing) return 'Done';
-    if (status === 'queued') return 'In queue';
-    if (status === 'pending') return 'Starting';
-    if (pct < 28) return 'Writing arrangement';
-    if (pct < 55) return 'Composing melody';
-    if (pct < 78) return 'Mixing layers';
-    if (pct < 90) return 'Mastering';
-    return 'Almost ready';
 }
 
 function MusicBuildingCard({
     title,
     stylePrompt,
     status,
+    progress,
+    queuePosition,
     startedAt,
     completing = false,
     instrumental,
@@ -683,41 +663,48 @@ function MusicBuildingCard({
     title: string;
     stylePrompt: string;
     status?: LabTrack['status'];
+    progress?: string | null;
+    queuePosition?: number | null;
     startedAt: number;
     completing?: boolean;
     instrumental: boolean;
 }) {
-    const simulated = useMusicSmartProgress(startedAt, status);
-    const pct = completing ? 100 : simulated;
-    const phase = musicPhaseLabel(pct, status, completing);
+    const pct = useMusicCardProgress(startedAt, status, queuePosition, completing);
+    const phase = labPhaseLabel({
+        status,
+        queuePosition,
+        progress,
+        completing,
+        kind: 'music',
+    });
 
     return (
         <motion.div
             layout
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0e0e13] p-3 ring-1 ring-white/[0.04]"
+            className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#15151c] to-[#0e0e13] p-3"
         >
             <div className="flex items-center gap-3">
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[#14141c]">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[#14141c] ring-1 ring-white/10">
                     <motion.div
                         aria-hidden
-                        className="absolute inset-0 opacity-70"
+                        className="absolute inset-0"
                         style={{
                             background:
-                                'radial-gradient(70% 60% at 30% 20%, rgba(255,87,51,0.22), transparent), radial-gradient(60% 50% at 75% 80%, rgba(255,140,0,0.12), transparent)',
+                                'radial-gradient(80% 60% at 50% 0%, rgba(255,87,51,0.28), transparent 70%)',
                         }}
-                        animate={{ opacity: [0.45, 0.75, 0.45] }}
-                        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+                        animate={{ opacity: [0.5, 0.85, 0.5] }}
+                        transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
                     />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                        <span className="text-lg font-light tabular-nums tracking-tight text-white/80">{pct}%</span>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-lg font-medium tabular-nums tracking-tight text-white/90">{pct}%</span>
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/[0.06]">
+                    <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-white/[0.08]">
                         <motion.div
-                            className="h-full bg-gradient-to-r from-orange-400/40 via-white/40 to-orange-300/30"
+                            className="h-full rounded-full bg-gradient-to-r from-[#FF5733]/85 to-[#ff8c4a]/70"
                             animate={{ width: `${pct}%` }}
-                            transition={{ duration: 0.45, ease: 'easeOut' }}
+                            transition={{ duration: 0.4, ease: 'easeOut' }}
                         />
                     </div>
                 </div>
@@ -725,13 +712,14 @@ function MusicBuildingCard({
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                         <p className="truncate text-[13px] font-semibold text-zinc-100">{title || 'New track'}</p>
-                        <span className="shrink-0 rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
+                        <span className="shrink-0 rounded-md border border-orange-400/20 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-200/90">
                             {phase}
                         </span>
                     </div>
                     <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">{stylePrompt}</p>
                     <p className="mt-1 text-[11px] text-white/30">
-                        {instrumental ? 'Instrumental' : 'Vocals'} · Music usually takes a few minutes
+                        {instrumental ? 'Instrumental' : 'Vocals'}
+                        {status === 'in_progress' ? ' · Usually a few minutes' : ''}
                     </p>
                 </div>
             </div>
@@ -740,12 +728,8 @@ function MusicBuildingCard({
 }
 
 function MusicFailedCard({
-    title,
-    error,
     onDismiss,
 }: {
-    title: string;
-    error?: string | null;
     onDismiss?: () => void;
 }) {
     return (
@@ -753,9 +737,9 @@ function MusicFailedCard({
             layout
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-[#160f11] p-3"
+            className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-[#121218] p-3"
         >
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-red-300">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/[0.04] text-white/40 ring-1 ring-white/10">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                     <path d="M12 9v4" />
                     <path d="M12 17h.01" />
@@ -763,14 +747,14 @@ function MusicFailedCard({
                 </svg>
             </div>
             <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold text-red-200">Generation failed</p>
-                <p className="mt-0.5 line-clamp-2 text-[12px] text-white/40">{error || title}</p>
+                <p className="text-[13px] font-medium text-white/60">Generation failed</p>
+                <p className="text-[11px] text-white/35">See notification for details</p>
             </div>
             {onDismiss && (
                 <button
                     type="button"
                     onClick={onDismiss}
-                    className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-white/70 transition hover:bg-white/[0.1] hover:text-white"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white"
                 >
                     Dismiss
                 </button>

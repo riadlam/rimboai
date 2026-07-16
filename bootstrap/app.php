@@ -10,9 +10,17 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        ['middleware' => ['web', 'auth']],
+    )
     ->withMiddleware(function (Middleware $middleware): void {
         // Shared hosting / Cloudflare / cPanel SSL terminate TLS in front of PHP.
         $middleware->trustProxies(at: '*');
+
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/fal',
+        ]);
 
         $middleware->web(append: [
             \App\Http\Middleware\SetLocale::class,

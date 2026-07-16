@@ -13,6 +13,12 @@ use App\Http\Controllers\VideoGenerationController;
 use App\Http\Controllers\MusicGenerationController;
 use App\Http\Controllers\TrendsController;
 use App\Http\Controllers\VoiceGenerationController;
+use App\Http\Controllers\FalWebhookController;
+
+// fal.ai completion callbacks (CSRF exempt; signature-verified in controller).
+Route::post('/webhooks/fal', FalWebhookController::class)
+    ->middleware('throttle:120,1')
+    ->name('webhooks.fal');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');

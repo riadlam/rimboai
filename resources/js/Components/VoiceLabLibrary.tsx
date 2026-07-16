@@ -17,6 +17,7 @@ export type LabVoice = {
     gradient?: string;
     audioUrl?: string;
     status?: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+    queuePosition?: number | null;
     progress?: string;
     error?: string;
 };
@@ -463,9 +464,9 @@ export default function VoiceLabLibrary({
                                                         )}
                                                     </span>
                                                 </span>
-                                                {(item.progress || item.error) && item.status && item.status !== 'completed' && (
+                                                {item.progress && item.status && item.status !== 'completed' && item.status !== 'failed' && (
                                                     <span className="absolute inset-x-1.5 bottom-1.5 truncate rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white/85">
-                                                        {item.error || item.progress}
+                                                        {item.progress}
                                                     </span>
                                                 )}
                                                 {item.duration && (
