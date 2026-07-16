@@ -110,7 +110,13 @@ export function buildUseResultDraft(source: LabReuseSource): LabReuseDraft {
         duration: source.duration ?? (video ? 5 : null),
         audio: source.audio ?? (video ? true : null),
         quantity: 1,
-        imageMode: video ? null : 'variations',
+        // Attach the result as a ref. Keep Variations only when the source was already remix/i2i;
+        // text-to-image results stay on Create Image (refs are supported there too).
+        imageMode: video
+            ? null
+            : source.imageMode === 'variations' || source.method === 'image-to-image'
+              ? 'variations'
+              : 'create',
         media: resultUrl
             ? [
                   {

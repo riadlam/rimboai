@@ -178,12 +178,7 @@ export default function ImageLabCreateForm({
             if (draft.resolution && ['1K', '2K', '4K'].includes(draft.resolution)) setResolution(draft.resolution);
             if (draft.quantity && draft.quantity >= 1) setQuantity(Math.min(4, draft.quantity));
 
-            const nextMode =
-                draft.intent === 'use-result'
-                    ? 'variations'
-                    : draft.imageMode === 'variations'
-                      ? 'variations'
-                      : 'create';
+            const nextMode = draft.imageMode === 'variations' ? 'variations' : 'create';
             setMode(nextMode);
 
             refsRef.current.forEach((r) => URL.revokeObjectURL(r.url));
