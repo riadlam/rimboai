@@ -10,7 +10,9 @@ import type { CreditsConfig } from '@/lib/imageCredits';
 import { hasMeaningfulPrompt } from '@/lib/promptText';
 import {
     buildReuseSettingsDraft,
+    buildUseLastFrameDraft,
     buildUseResultDraft,
+    captureVideoLastFrameFile,
     consumeLabReuseDraft,
     type LabReuseDraft,
 } from '@/lib/labReuse';
@@ -462,6 +464,27 @@ function LabWorkspaceInner({
             setReuseDraft(draft);
         },
         [toReuseSource],
+    );
+
+    const handleUseLastFrame = useCallback(
+        async (img: LabImage) => {
+            const videoUrl = img.videoUrl || img.src;
+            if (!videoUrl) {
+                pushError('No video to capture a frame from.');
+                throw new Error('No video');
+            }
+            try {
+                const file = await captureVideoLastFrameFile(videoUrl, {
+                    name: `last-frame-${img.id}`,
+                });
+                const frameUrl = URL.createObjectURL(file);
+                setReuseDraft(buildUseLastFrameDraft(toReuseSource(img), frameUrl));
+            } catch (e) {
+                pushError(e instanceof Error ? e.message : 'Could not capture the last frame.');
+                throw e;
+            }
+        },
+        [pushError, toReuseSource],
     );
 
     const failBatch = useCallback((batchId: string, error?: string | null) => {
@@ -1279,6 +1302,7 @@ function LabWorkspaceInner({
                                     onDelete={deleteImages}
                                     onReuseSettings={handleReuseSettings}
                                     onUseResult={handleUseResult}
+                                    onUseLastFrame={handleUseLastFrame}
                                 />
                             )}
                         </div>

@@ -33,6 +33,7 @@ type Props = {
     onDelete?: (ids: string[]) => void;
     onReuseSettings?: (image: ImageLabPreviewItem) => void;
     onUseResult?: (image: ImageLabPreviewItem) => void;
+    onUseLastFrame?: (image: ImageLabPreviewItem) => void | Promise<void>;
 };
 
 function methodLabel(method?: ImageLabPreviewItem['method']): string {
@@ -89,12 +90,14 @@ export default function ImageLabPreviewModal({
     onDelete,
     onReuseSettings,
     onUseResult,
+    onUseLastFrame,
 }: Props) {
     const [zoom, setZoom] = useState(1);
     const [detailsOpen, setDetailsOpen] = useState(true);
     const [copied, setCopied] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [reusing, setReusing] = useState(false);
+    const [capturingFrame, setCapturingFrame] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
 
     const isVideo =
@@ -128,17 +131,28 @@ export default function ImageLabPreviewModal({
     };
 
     const handleReuseSettings = () => {
-        if (!onReuseSettings || reusing) return;
+        if (!onReuseSettings || reusing || capturingFrame) return;
         setReusing(true);
         onReuseSettings(image);
         onClose();
     };
 
     const handleUseResult = () => {
-        if (!onUseResult || reusing || !mediaUrl) return;
+        if (!onUseResult || reusing || capturingFrame || !mediaUrl) return;
         setReusing(true);
         onUseResult(image);
         onClose();
+    };
+
+    const handleUseLastFrame = async () => {
+        if (!onUseLastFrame || reusing || capturingFrame || !mediaUrl || !isVideo) return;
+        setCapturingFrame(true);
+        try {
+            await onUseLastFrame(image);
+            onClose();
+        } catch {
+            setCapturingFrame(false);
+        }
     };
 
     useEffect(() => {
@@ -413,7 +427,7 @@ export default function ImageLabPreviewModal({
                             {detailsOpen && (
                                 <div className="space-y-3 px-4 pb-4">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <DetailBtn onClick={handleReuseSettings} disabled={!onReuseSettings || reusing}>
+                                        <DetailBtn onClick={handleReuseSettings} disabled={!onReuseSettings || reusing || capturingFrame}>
                                             <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                                 <path d="M20 7h-9" />
                                                 <path d="M14 17H5" />
@@ -422,7 +436,7 @@ export default function ImageLabPreviewModal({
                                             </svg>
                                             Reuse Settings
                                         </DetailBtn>
-                                        <DetailBtn onClick={handleUseResult} disabled={!onUseResult || reusing || !mediaUrl}>
+                                        <DetailBtn onClick={handleUseResult} disabled={!onUseResult || reusing || capturingFrame || !mediaUrl}>
                                             <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                                 <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
                                                 <rect x="2" y="6" width="14" height="12" rx="2" />
@@ -430,6 +444,19 @@ export default function ImageLabPreviewModal({
                                             {isVideo ? 'Use Video' : 'Use Image'}
                                         </DetailBtn>
                                     </div>
+                                    {isVideo && onUseLastFrame && (
+                                        <DetailBtn
+                                            onClick={() => void handleUseLastFrame()}
+                                            disabled={reusing || capturingFrame || !mediaUrl}
+                                        >
+                                            <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                                <path d="M3 15h18" />
+                                                <path d="m9 9 3 3 3-3" />
+                                            </svg>
+                                            {capturingFrame ? 'Capturing last frame…' : 'Continue from last frame'}
+                                        </DetailBtn>
+                                    )}
 
                                     <div className="flex items-center justify-between gap-3 text-[13px]">
                                         <span className="shrink-0 text-zinc-500">Model</span>

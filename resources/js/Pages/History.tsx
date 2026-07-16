@@ -8,7 +8,10 @@ import AppLayout from '@/Layouts/AppLayout';
 import { apiGet, apiPost } from '@/lib/api';
 import {
     buildReuseSettingsDraft,
+    buildUseLastFrameDraft,
     buildUseResultDraft,
+    captureVideoLastFrameFile,
+    fileToDataUrl,
     saveLabReuseDraft,
     type LabReuseMediaItem,
 } from '@/lib/labReuse';
@@ -444,6 +447,17 @@ function HistoryWorkspace() {
         saveLabReuseDraft(draft);
         const labType = draft.lab === 'video' ? 'text-to-video' : 'text-to-image';
         router.visit(`/lab?type=${labType}`);
+    }, []);
+
+    const sendLastFrameToLab = useCallback(async (item: HistoryItem) => {
+        const videoUrl = item.videoUrl || item.src;
+        if (!videoUrl) return;
+        const file = await captureVideoLastFrameFile(videoUrl, { name: `last-frame-${item.id}` });
+        // data: URL survives sessionStorage + navigation; blob: would break after leave History.
+        const frameUrl = await fileToDataUrl(file);
+        const draft = buildUseLastFrameDraft(toReuseSource(item), frameUrl);
+        saveLabReuseDraft(draft);
+        router.visit('/lab?type=text-to-video');
     }, []);
 
     useEffect(() => {
@@ -907,6 +921,12 @@ function HistoryWorkspace() {
                             const source = items.find((it) => it.id === img.id) ?? preview;
                             closePreview();
                             sendToLab(source, 'use-result');
+                        }}
+                        onUseLastFrame={async (img) => {
+                            const source = items.find((it) => it.id === img.id) ?? preview;
+                            if (!source) throw new Error('Missing item');
+                            await sendLastFrameToLab(source);
+                            closePreview();
                         }}
                     />
                 )}

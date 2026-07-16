@@ -16,7 +16,7 @@ export type LabReuseDraft = {
     /** Bumps whenever the user clicks Reuse / Use so forms re-apply */
     id: string;
     lab: 'image' | 'video' | 'music';
-    intent: 'reuse-settings' | 'use-result';
+    intent: 'reuse-settings' | 'use-result' | 'use-last-frame';
     prompt: string;
     /** Optional lyrics payload (music lab) */
     lyrics?: string | null;
@@ -126,6 +126,150 @@ export function buildUseResultDraft(source: LabReuseSource): LabReuseDraft {
     };
 }
 
+/**
+ * Continue editing: attach a captured last-frame still as an image reference (I2V / R2V).
+ * Pass a blob: or same-origin URL of the JPEG/PNG frame.
+ */
+export function buildUseLastFrameDraft(source: LabReuseSource, frameUrl: string): LabReuseDraft {
+    return {
+        id: draftId('use-last-frame'),
+        lab: 'video',
+        intent: 'use-last-frame',
+        prompt: '',
+        modelName: source.modelName ?? null,
+        aspect: source.aspect ?? '16:9',
+        resolution: source.resolution ?? '720p',
+        duration: source.duration ?? 5,
+        audio: source.audio ?? true,
+        quantity: 1,
+        imageMode: null,
+        media: [
+            {
+                url: frameUrl,
+                kind: 'image',
+                name: `last-frame-${source.id}.jpg`,
+            },
+        ],
+    };
+}
+
+/**
+ * Download video (via asset proxy when needed) and capture the last visible frame as a JPEG File.
+ */
+export async function captureVideoLastFrameFile(
+    videoUrl: string,
+    opts?: { name?: string; signal?: AbortSignal },
+): Promise<File> {
+    const videoFile = await fetchUrlAsFile(videoUrl, 'video', 'source.mp4', opts?.signal);
+    const objectUrl = URL.createObjectURL(videoFile);
+    try {
+        const blob = await grabLastFrameBlob(objectUrl, opts?.signal);
+        const base = (opts?.name || 'last-frame').replace(/\.[^.]+$/, '');
+        return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
+function grabLastFrameBlob(videoObjectUrl: string, signal?: AbortSignal): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+            return;
+        }
+
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        video.src = videoObjectUrl;
+
+        let settled = false;
+        const fail = (err: unknown) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(err instanceof Error ? err : new Error('Frame capture failed'));
+        };
+        const succeed = (blob: Blob) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(blob);
+        };
+        const cleanup = () => {
+            signal?.removeEventListener('abort', onAbort);
+            video.onerror = null;
+            video.onloadedmetadata = null;
+            video.onseeked = null;
+            video.removeAttribute('src');
+            video.load();
+        };
+        const onAbort = () => fail(new DOMException('Aborted', 'AbortError'));
+        signal?.addEventListener('abort', onAbort, { once: true });
+
+        video.onerror = () => fail(new Error('Could not decode video for frame capture'));
+
+        video.onloadedmetadata = () => {
+            const duration = Number.isFinite(video.duration) ? video.duration : 0;
+            // Slightly before EOS — some encoders leave the last timestamp blank/black.
+            const target = duration > 0.12 ? duration - 0.08 : 0;
+
+            video.onseeked = () => {
+                try {
+                    const w = video.videoWidth || 1280;
+                    const h = video.videoHeight || 720;
+                    if (w < 2 || h < 2) {
+                        fail(new Error('Invalid video dimensions'));
+                        return;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        fail(new Error('Canvas unavailable'));
+                        return;
+                    }
+                    ctx.drawImage(video, 0, 0, w, h);
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob || blob.size === 0) {
+                                fail(new Error('Empty frame'));
+                                return;
+                            }
+                            succeed(blob);
+                        },
+                        'image/jpeg',
+                        0.92,
+                    );
+                } catch (err) {
+                    fail(err);
+                }
+            };
+
+            try {
+                video.currentTime = target;
+            } catch (err) {
+                fail(err);
+            }
+        };
+    });
+}
+
+/**
+ * Encode a File as a data URL so drafts survive History → Lab navigation
+ * (blob: URLs die when the History page unloads).
+ */
+export function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not encode frame'));
+        reader.readAsDataURL(file);
+    });
+}
+
 export function saveLabReuseDraft(draft: LabReuseDraft): void {
     try {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
@@ -174,7 +318,7 @@ function mimeForKind(kind: LabReuseMediaKind, contentType: string): string {
 }
 
 function resolveFetchUrl(raw: string): string {
-    if (raw.startsWith('blob:') || raw.startsWith('/')) return raw;
+    if (raw.startsWith('blob:') || raw.startsWith('data:') || raw.startsWith('/')) return raw;
     const absolute = raw.startsWith('http://') || raw.startsWith('https://');
     if (absolute && raw.startsWith(window.location.origin)) return raw;
     if (!absolute) {

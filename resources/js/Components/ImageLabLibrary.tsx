@@ -44,6 +44,7 @@ type Props = {
     onDelete?: (ids: string[]) => void;
     onReuseSettings?: (image: LabImage) => void;
     onUseResult?: (image: LabImage) => void;
+    onUseLastFrame?: (image: LabImage) => void | Promise<void>;
     generating?: boolean;
 };
 
@@ -124,6 +125,7 @@ export default function ImageLabLibrary({
     onDelete,
     onReuseSettings,
     onUseResult,
+    onUseLastFrame,
     generating = false,
 }: Props) {
     const { t } = useTranslation('lab');
@@ -755,6 +757,7 @@ export default function ImageLabLibrary({
                         onDelete={onDelete}
                         onReuseSettings={onReuseSettings}
                         onUseResult={onUseResult}
+                        onUseLastFrame={onUseLastFrame}
                     />
                 )}
             </AnimatePresence>

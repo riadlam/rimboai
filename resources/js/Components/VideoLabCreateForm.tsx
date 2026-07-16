@@ -397,7 +397,7 @@ export default function VideoLabCreateForm({
             setDraftLoading(true);
             setSettingsOpen(true);
             setModelOpen(false);
-            setPrompt(draft.intent === 'use-result' ? '' : draft.prompt || '');
+            setPrompt(draft.intent === 'reuse-settings' ? draft.prompt || '' : '');
 
             const matched = matchLabModel(allModels, {
                 modelName: draft.modelName,
@@ -453,6 +453,8 @@ export default function VideoLabCreateForm({
 
                     if (loaded.failed > 0 && loaded.files.length === 0) {
                         setDraftNotice(t('settingsRestored'));
+                    } else if (draft.intent === 'use-last-frame') {
+                        setDraftNotice(t('lastFrameAttached'));
                     } else if (loaded.failed > 0) {
                         setDraftNotice(t('settingsRestored'));
                     } else {
@@ -563,9 +565,11 @@ export default function VideoLabCreateForm({
                 {draftLoading && (
                     <LabFormSkeleton
                         label={
-                            draft?.intent === 'use-result'
-                                ? t('attaching')
-                                : t('restoring')
+                            draft?.intent === 'use-last-frame'
+                                ? t('attachingLastFrame')
+                                : draft?.intent === 'use-result'
+                                  ? t('attaching')
+                                  : t('restoring')
                         }
                     />
                 )}
