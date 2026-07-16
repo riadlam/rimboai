@@ -62,19 +62,27 @@ class FalAccountService
     /**
      * Actual fal cost for a request from billing-events (nano USD → USD).
      */
-    public function getRequestCostUsd(string $requestId): ?float
+    public function getRequestCostUsd(string $requestId, ?string $start = null, ?string $end = null): ?float
     {
         if (! $this->configured() || $requestId === '') {
             return null;
         }
 
         try {
+            $query = [
+                'request_id' => $requestId,
+                'limit' => 5,
+            ];
+            if ($start !== null) {
+                $query['start'] = $start;
+            }
+            if ($end !== null) {
+                $query['end'] = $end;
+            }
+
             $response = Http::withHeaders($this->headers())
                 ->timeout(15)
-                ->get("{$this->base}/models/billing-events", [
-                    'request_id' => $requestId,
-                    'limit' => 1,
-                ]);
+                ->get("{$this->base}/models/billing-events", $query);
 
             if (! $response->successful()) {
                 Log::warning('fal billing-events failed', [
@@ -88,10 +96,23 @@ class FalAccountService
 
             $events = data_get($response->json(), 'billing_events', []);
             if (! is_array($events) || $events === []) {
+                Log::info('fal billing-events empty (may lag)', [
+                    'request_id' => $requestId,
+                ]);
+
                 return null;
             }
 
-            $nano = $events[0]['cost_estimate_nano_usd'] ?? null;
+            $match = null;
+            foreach ($events as $event) {
+                if (($event['request_id'] ?? null) === $requestId) {
+                    $match = $event;
+                    break;
+                }
+            }
+            $match ??= $events[0];
+
+            $nano = $match['cost_estimate_nano_usd'] ?? null;
             if (! is_numeric($nano)) {
                 return null;
             }

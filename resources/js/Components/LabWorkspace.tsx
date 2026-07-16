@@ -238,6 +238,16 @@ export default function LabWorkspace({
         },
         [syncTokenBalance],
     );
+
+    /** Extra status hits so fal wallet cost can backfill after billing lag. */
+    const softReconcileStatus = useCallback((statusPath: string) => {
+        [15_000, 45_000, 90_000].forEach((ms) => {
+            window.setTimeout(() => {
+                void apiGet(statusPath).catch(() => {});
+            }, ms);
+        });
+    }, []);
+
     const usesStudioLab = isImageLab || isVideoLab || isMusicLab || isVoiceLab;
     const [images, setImages] = useState<LabImage[]>([]);
     const [tracks, setTracks] = useState<LabTrack[]>([]);
@@ -326,6 +336,7 @@ export default function LabWorkspace({
 
                 if (data.status === 'completed') {
                     delete pollTimers.current[batchId];
+                    softReconcileStatus(`/lab/image/creations/${creationId}/status`);
                     const urls = data.images ?? [];
                     if (urls.length === 0) {
                         failBatch(batchId, 'Generation finished without an image.');
@@ -452,6 +463,7 @@ export default function LabWorkspace({
 
                 if (data.status === 'completed') {
                     delete pollTimers.current[batchId];
+                    softReconcileStatus(`/lab/video/creations/${creationId}/status`);
                     const videoUrl = data.video_url || data.preview_url;
                     if (!videoUrl) {
                         failBatch(batchId, 'Generation finished without a video.');
@@ -935,6 +947,7 @@ export default function LabWorkspace({
 
             if (data.status === 'completed') {
                 delete pollTimers.current[localId];
+                softReconcileStatus(`/lab/music/creations/${creationId}/status`);
                 const audioUrl = data.audio_url || data.preview_url;
                 if (!audioUrl) {
                     setTracks((prev) =>
@@ -1150,6 +1163,7 @@ export default function LabWorkspace({
 
             if (data.status === 'completed') {
                 delete pollTimers.current[localId];
+                softReconcileStatus(`/lab/voice/creations/${creationId}/status`);
                 const audioUrl = data.audio_url || data.preview_url;
                 if (!audioUrl) {
                     setVoices((prev) =>

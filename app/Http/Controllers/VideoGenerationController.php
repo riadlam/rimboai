@@ -272,8 +272,8 @@ class VideoGenerationController extends Controller
             $this->refresh($creation, $fal, $walletCost);
         } elseif (
             $creation->status === UserVideoCreation::STATUS_COMPLETED
-            && $creation->cost_usd === null
             && $creation->fal_request_id
+            && ! $walletCost->isFullyReconciled($creation)
         ) {
             $walletCost->maybeFillCostUsd($creation);
         }

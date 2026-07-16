@@ -170,8 +170,8 @@ class VoiceGenerationController extends Controller
             $this->refresh($creation, $fal, $walletCost);
         } elseif (
             $creation->status === UserVoiceCreation::STATUS_COMPLETED
-            && $creation->cost_usd === null
             && $creation->fal_request_id
+            && ! $walletCost->isFullyReconciled($creation)
         ) {
             $walletCost->maybeFillCostUsd($creation);
         }
