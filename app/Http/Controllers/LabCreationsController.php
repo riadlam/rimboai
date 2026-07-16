@@ -7,6 +7,7 @@ use App\Models\UserMusicCreation;
 use App\Models\UserVideoCreation;
 use App\Models\UserVoiceCreation;
 use App\Services\FalWebhookProcessor;
+use App\Services\LabCreationPresenter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,60 @@ class LabCreationsController extends Controller
                 'voices' => $this->loadVoiceCreations($userId),
             ]),
         };
+    }
+
+    /**
+     * Batched live-status sync for active creations.
+     *
+     * One request updates several creations at once. Each fal HTTP call is throttled
+     * server-side (shared across tabs/users), so scaling users does not scale fal traffic.
+     */
+    public function statusBatch(Request $request, FalWebhookProcessor $processor): JsonResponse
+    {
+        $data = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:8'],
+            'items.*.type' => ['required', 'string', Rule::in(['image', 'video', 'music', 'voice'])],
+            'items.*.id' => ['required', 'integer'],
+        ]);
+
+        $userId = $request->user()->id;
+        $tokenBalance = (int) ($request->user()->tokens ?? 0);
+        $creations = [];
+
+        foreach ($data['items'] as $item) {
+            $type = $item['type'];
+            $class = match ($type) {
+                'image' => UserImageCreation::class,
+                'video' => UserVideoCreation::class,
+                'music' => UserMusicCreation::class,
+                'voice' => UserVoiceCreation::class,
+                default => null,
+            };
+            if ($class === null) {
+                continue;
+            }
+
+            /** @var Model|null $creation */
+            $creation = $class::query()
+                ->where('user_id', $userId)
+                ->whereKey($item['id'])
+                ->first();
+            if ($creation === null) {
+                continue;
+            }
+
+            if (method_exists($creation, 'isTerminal') && ! $creation->isTerminal() && $creation->getAttribute('fal_request_id')) {
+                $processor->syncFromFal($type, $creation);
+                $creation->refresh();
+            }
+
+            $creations[] = $processor->snapshot($type, $creation);
+        }
+
+        return response()->json([
+            'creations' => $creations,
+            'token_balance' => $tokenBalance,
+        ]);
     }
 
     private function syncActiveCreations(int $userId, string $labType, FalWebhookProcessor $processor): void
@@ -189,6 +244,7 @@ class LabCreationsController extends Controller
                     'status' => $creation->status,
                     'progress' => $creation->progress_message,
                     'queue_position' => $creation->queue_position,
+                    'progress_percent' => LabCreationPresenter::progressPercent($creation),
                     ...$reuseMeta,
                 ]);
             }
@@ -310,7 +366,8 @@ class LabCreationsController extends Controller
                 'model' => $creation->model_name,
                 'status' => $creation->status,
                 'progress' => $creation->progress_message,
-                    'queue_position' => $creation->queue_position,
+                'queue_position' => $creation->queue_position,
+                'progress_percent' => LabCreationPresenter::progressPercent($creation),
                 ...$reuseMeta,
             ]);
         }
@@ -366,7 +423,7 @@ class LabCreationsController extends Controller
                     'status' => $creation->status,
                     'progress' => $creation->progress_message,
                     'queue_position' => $creation->queue_position,
-                    'queue_position' => $creation->queue_position,
+                    'progress_percent' => LabCreationPresenter::progressPercent($creation),
                     'error' => $creation->error_message,
                 ];
             })
@@ -421,6 +478,7 @@ class LabCreationsController extends Controller
                     'status' => $creation->status,
                     'progress' => $creation->progress_message,
                     'queue_position' => $creation->queue_position,
+                    'progress_percent' => LabCreationPresenter::progressPercent($creation),
                     'error' => $creation->error_message,
                 ];
             })
@@ -458,6 +516,7 @@ class LabCreationsController extends Controller
             'status' => $data['status'] ?? 'completed',
             'progress' => $data['progress'] ?? null,
             'queue_position' => $data['queue_position'] ?? null,
+            'progress_percent' => $data['progress_percent'] ?? null,
             'error' => $data['error'] ?? null,
             'video_url' => $data['video_url'] ?? null,
         ];

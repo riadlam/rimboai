@@ -10,6 +10,8 @@ use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalVideoInputBuilder;
 use App\Services\FalWalletCostTracker;
+use App\Services\FalWebhookProcessor;
+use App\Services\LabCreationPresenter;
 use App\Services\MediaReferenceStorage;
 use App\Services\Tokens\TokenService;
 use App\Services\VideoModelCapabilities;
@@ -34,6 +36,7 @@ class VideoGenerationController extends Controller
         FalPricingService $pricing,
         AssetPromptReferences $promptReferences,
         FalWalletCostTracker $walletCost,
+        FalWebhookProcessor $processor,
     ): JsonResponse {
         $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
         if ($contentLength > 0 && $request->all() === [] && $request->allFiles() === []) {
@@ -332,15 +335,19 @@ class VideoGenerationController extends Controller
             $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
         }
 
+        $creation->refresh();
+        $processor->broadcastSnapshot('video', $creation);
+
         return response()->json($this->present($creation), 201);
     }
 
-    public function status(Request $request, UserVideoCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
+    public function status(Request $request, UserVideoCreation $creation, FalWebhookProcessor $processor, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal, $walletCost);
+            $processor->syncFromFal('video', $creation);
+            $creation->refresh();
         } elseif (
             $creation->status === UserVideoCreation::STATUS_COMPLETED
             && $creation->fal_request_id
@@ -556,6 +563,7 @@ class VideoGenerationController extends Controller
             'status' => $creation->status,
             'queue_position' => $creation->queue_position,
             'progress_message' => $creation->progress_message,
+            'progress_percent' => LabCreationPresenter::progressPercent($creation),
             'prompt' => $creation->prompt,
             'model_name' => $creation->model_name,
             'video_url' => $creation->result_video_url,

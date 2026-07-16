@@ -10,6 +10,7 @@ use App\Models\UserVideoCreation;
 use App\Models\UserVoiceCreation;
 use App\Services\Tokens\TokenService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -28,6 +29,12 @@ class FalWebhookProcessor
      * Pull latest state from fal queue URLs (used when a webhook was missed).
      * Not a browser poll — one server-side check, e.g. on library refresh.
      */
+    /**
+     * Minimum seconds between real fal status calls for a single creation.
+     * Shared across tabs/users via cache so concurrent viewers do not multiply fal traffic.
+     */
+    private const SYNC_THROTTLE_SECONDS = 8;
+
     public function syncFromFal(string $type, Model $creation): void
     {
         if (method_exists($creation, 'isTerminal') && $creation->isTerminal()) {
@@ -38,6 +45,14 @@ class FalWebhookProcessor
         if (! is_string($statusUrl) || $statusUrl === '') {
             return;
         }
+
+        // Global (cross-tab, cross-user) throttle: skip the fal HTTP call if one ran recently.
+        // The DB already holds the latest known state and Pusher already broadcast it.
+        $throttleKey = "fal_sync_throttle_{$type}_{$creation->getKey()}";
+        if (Cache::get($throttleKey)) {
+            return;
+        }
+        Cache::put($throttleKey, 1, self::SYNC_THROTTLE_SECONDS);
 
         try {
             $status = $this->fal->statusByUrl($statusUrl);
@@ -55,10 +70,11 @@ class FalWebhookProcessor
         $state = strtoupper((string) ($status['status'] ?? ''));
 
         if ($state === 'IN_QUEUE') {
+            $queuePosition = isset($status['queue_position']) ? (int) $status['queue_position'] : null;
             $creation->forceFill([
                 'status' => $creation::STATUS_QUEUED,
-                'queue_position' => $status['queue_position'] ?? null,
-                'progress_message' => 'In queue',
+                'queue_position' => $queuePosition,
+                'progress_message' => LabCreationPresenter::queueProgressMessage($queuePosition),
             ])->save();
             $this->broadcast($type, $creation->fresh() ?? $creation);
 
@@ -578,6 +594,21 @@ class FalWebhookProcessor
         return null;
     }
 
+    public function broadcastSnapshot(string $type, Model $creation): void
+    {
+        $this->broadcast($type, $creation);
+    }
+
+    /**
+     * Presented creation payload (same shape the UI receives via Pusher).
+     *
+     * @return array<string, mixed>
+     */
+    public function snapshot(string $type, Model $creation): array
+    {
+        return $this->present($type, $creation);
+    }
+
     private function broadcast(string $type, Model $creation): void
     {
         $userId = (int) $creation->getAttribute('user_id');
@@ -613,6 +644,7 @@ class FalWebhookProcessor
             'status' => $creation->getAttribute('status'),
             'queue_position' => $creation->getAttribute('queue_position'),
             'progress_message' => $creation->getAttribute('progress_message'),
+            'progress_percent' => LabCreationPresenter::progressPercent($creation),
             'error' => $creation->getAttribute('error_message'),
             'prompt' => $creation->getAttribute('prompt'),
             'model_name' => $creation->getAttribute('model_name'),

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
 import VideoThumb from '@/Components/VideoThumb';
-import { labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
+import { labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 
 export type LabImage = {
     id: string;
@@ -25,6 +25,7 @@ export type LabImage = {
     creationId?: number;
     progress?: string | null;
     queuePosition?: number | null;
+    progressPercent?: number | null;
     error?: string | null;
     /** Links multiple placeholders from one generate request */
     batchId?: string;
@@ -589,6 +590,7 @@ export default function ImageLabLibrary({
                                             status={img.status}
                                             progress={img.progress}
                                             queuePosition={img.queuePosition}
+                                            progressPercent={img.progressPercent}
                                             startedAt={img.startedAt ?? img.createdAt}
                                             batchIndex={img.batchIndex ?? 0}
                                             completing={img.completing}
@@ -831,20 +833,27 @@ function useLabCardProgress(
     status?: LabImage['status'],
     queuePosition?: number | null,
     completing?: boolean,
+    serverProgressPercent?: number | null,
 ) {
     const [pct, setPct] = useState(() =>
-        labProgressPercent({ status, queuePosition, startedAt, completing }),
+        labEffectiveProgressPercent({ serverPercent: serverProgressPercent, status, queuePosition, startedAt, completing }),
     );
 
     useEffect(() => {
         const tick = () => {
-            const next = labProgressPercent({ status, queuePosition, startedAt, completing });
+            const next = labEffectiveProgressPercent({
+                serverPercent: serverProgressPercent,
+                status,
+                queuePosition,
+                startedAt,
+                completing,
+            });
             setPct((prev) => (completing || next >= prev ? next : prev));
         };
         tick();
         const id = window.setInterval(tick, 400);
         return () => window.clearInterval(id);
-    }, [startedAt, status, queuePosition, completing]);
+    }, [startedAt, status, queuePosition, completing, serverProgressPercent]);
 
     return pct;
 }
@@ -854,6 +863,7 @@ function BuildingCard({
     status,
     progress,
     queuePosition,
+    progressPercent,
     startedAt,
     batchIndex = 0,
     completing = false,
@@ -863,13 +873,14 @@ function BuildingCard({
     status?: LabImage['status'];
     progress?: string | null;
     queuePosition?: number | null;
+    progressPercent?: number | null;
     startedAt: number;
     batchIndex?: number;
     completing?: boolean;
     method?: LabImage['method'];
 }) {
     const isVideo = method === 'text-to-video' || method === 'image-to-video' || method === 'reference-to-video';
-    const pct = useLabCardProgress(startedAt, status, queuePosition, completing);
+    const pct = useLabCardProgress(startedAt, status, queuePosition, completing, progressPercent);
     const phase = labPhaseLabel({
         status,
         queuePosition,
@@ -913,6 +924,11 @@ function BuildingCard({
                 </div>
                 <div className="space-y-1">
                     <p className="text-[11px] font-medium tracking-wide text-white/70">{phase}</p>
+                    {isVideo && status === 'queued' && typeof queuePosition === 'number' && queuePosition >= 0 && !completing && (
+                        <p className="text-[10px] text-white/30">
+                            {queuePosition > 0 ? `Queue #${queuePosition}` : 'Next up'}
+                        </p>
+                    )}
                     {isVideo && status === 'in_progress' && !completing && (
                         <p className="text-[10px] text-white/30">Usually a few minutes</p>
                     )}

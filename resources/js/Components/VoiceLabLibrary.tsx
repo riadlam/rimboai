@@ -19,6 +19,7 @@ export type LabVoice = {
     audioUrl?: string;
     status?: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
     queuePosition?: number | null;
+    progressPercent?: number | null;
     progress?: string;
     error?: string;
 };

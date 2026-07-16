@@ -39,6 +39,7 @@ type CreationResponse = {
     status: CreationStatus;
     queue_position: number | null;
     progress_message: string | null;
+    progress_percent?: number | null;
     prompt: string;
     lyrics?: string | null;
     title?: string | null;
@@ -86,6 +87,7 @@ type ApiImageItem = {
     status?: CreationStatus;
     progress?: string | null;
     queue_position?: number | null;
+    progress_percent?: number | null;
     error?: string | null;
     video_url?: string | null;
 };
@@ -106,6 +108,7 @@ type ApiTrackItem = {
     status?: CreationStatus;
     progress?: string | null;
     queue_position?: number | null;
+    progress_percent?: number | null;
     error?: string | null;
 };
 
@@ -124,8 +127,149 @@ type ApiVoiceItem = {
     status?: CreationStatus;
     progress?: string | null;
     queue_position?: number | null;
+    progress_percent?: number | null;
     error?: string | null;
 };
+
+const ACTIVE_CREATION_POLL_MS = 6000;
+// Max active cards synced per tick (round-robin). Keeps fal traffic flat as users scale.
+const ACTIVE_CREATION_BATCH = 3;
+
+function patchActiveCreationFields<
+    T extends { progress?: string | null; queuePosition?: number | null; progressPercent?: number | null },
+>(item: T, data: CreationResponse): T & { status: CreationStatus } {
+    return {
+        ...item,
+        status: data.status,
+        progress: data.progress_message ?? item.progress,
+        queuePosition: data.queue_position ?? item.queuePosition ?? null,
+        progressPercent: data.progress_percent ?? item.progressPercent ?? null,
+    };
+}
+
+function mergeImageVideoCreationState(
+    prev: LabImage[],
+    creationId: number,
+    creation: CreationResponse,
+    kind: 'image' | 'video',
+): LabImage[] {
+    if (creation.status === 'completed') {
+        if (kind === 'image') {
+            const urls = creation.images ?? [];
+            const batch = prev.filter((i) => i.creationId === creationId);
+            if (batch.length === 0) return prev;
+            const rest = prev.filter((i) => i.creationId !== creationId);
+            const cards = batch.map((slot, idx) => {
+                const url = urls[idx];
+                if (!url) {
+                    return { ...slot, status: 'failed' as const, completing: false, error: 'Output missing.' };
+                }
+                return {
+                    ...slot,
+                    src: url,
+                    status: 'completed' as const,
+                    completing: false,
+                    progress: null,
+                    progressPercent: 100,
+                    error: null,
+                    modelName: creation.model_name ?? slot.modelName,
+                };
+            });
+            return [...cards, ...rest];
+        }
+
+        const videoUrl = creation.video_url || creation.preview_url;
+        const existing = prev.find((i) => i.creationId === creationId);
+        if (!existing) return prev;
+        const rest = prev.filter((i) => i.creationId !== creationId);
+        if (!videoUrl) {
+            return [{ ...existing, status: 'failed' as const, error: 'Generation finished without a video.' }, ...rest];
+        }
+        return [
+            {
+                ...existing,
+                id: `video-${creationId}`,
+                src: creation.thumbnail_url || videoUrl,
+                videoUrl,
+                status: 'completed' as const,
+                completing: false,
+                progress: null,
+                progressPercent: 100,
+                error: null,
+                modelName: creation.model_name ?? existing.modelName,
+            },
+            ...rest,
+        ];
+    }
+
+    if (creation.status === 'failed' || creation.status === 'cancelled') {
+        return prev.map((i) =>
+            i.creationId === creationId
+                ? { ...i, status: 'failed' as const, progress: null, error: creation.error ?? 'Generation failed.' }
+                : i,
+        );
+    }
+
+    return prev.map((i) => (i.creationId === creationId ? patchActiveCreationFields(i, creation) : i));
+}
+
+function mergeMusicCreationState(prev: LabTrack[], creationId: number, creation: CreationResponse): LabTrack[] {
+    if (creation.status === 'completed') {
+        const audioUrl = creation.audio_url || creation.preview_url;
+        return prev.map((track) =>
+            track.creationId === creationId
+                ? {
+                      ...track,
+                      status: 'completed' as const,
+                      audioUrl: audioUrl ?? track.audioUrl,
+                      cover: creation.cover_url || track.cover,
+                      progress: null,
+                      progressPercent: 100,
+                      error: null,
+                      completing: false,
+                  }
+                : track,
+        );
+    }
+
+    if (creation.status === 'failed' || creation.status === 'cancelled') {
+        return prev.map((track) =>
+            track.creationId === creationId
+                ? { ...track, status: 'failed', error: creation.error || 'Generation failed.', progress: creation.progress_message ?? 'Failed' }
+                : track,
+        );
+    }
+
+    return prev.map((track) => (track.creationId === creationId ? patchActiveCreationFields(track, creation) : track));
+}
+
+function mergeVoiceCreationState(prev: LabVoice[], creationId: number, creation: CreationResponse): LabVoice[] {
+    if (creation.status === 'completed') {
+        const audioUrl = creation.audio_url || creation.preview_url;
+        return prev.map((v) =>
+            v.creationId === creationId
+                ? {
+                      ...v,
+                      status: 'completed' as const,
+                      audioUrl: audioUrl ?? v.audioUrl,
+                      progress: undefined,
+                      progressPercent: 100,
+                      error: undefined,
+                  }
+                : v,
+        );
+    }
+
+    if (creation.status === 'failed' || creation.status === 'cancelled') {
+        return prev.map((v) =>
+            v.creationId === creationId
+                ? { ...v, status: 'failed', error: creation.error || 'Generation failed.', progress: creation.progress_message ?? 'Failed' }
+                : v,
+        );
+    }
+
+    return prev.map((v) => (v.creationId === creationId ? patchActiveCreationFields(v, creation) : v));
+}
 
 const VOICE_GRADIENTS = [
     'linear-gradient(135deg, rgb(139, 92, 246) 0%, rgb(236, 72, 153) 50%, rgb(249, 115, 22) 100%)',
@@ -163,6 +307,7 @@ function mapApiImage(item: ApiImageItem): LabImage {
         status: item.status,
         progress: item.progress,
         queuePosition: item.queue_position ?? null,
+        progressPercent: item.progress_percent ?? null,
         error: item.error,
         videoUrl: item.video_url ?? undefined,
     };
@@ -185,6 +330,7 @@ function mapApiTrack(item: ApiTrackItem): LabTrack {
         status: item.status,
         progress: item.progress ?? undefined,
         queuePosition: item.queue_position ?? null,
+        progressPercent: item.progress_percent ?? null,
         error: item.error ?? undefined,
     };
 }
@@ -205,6 +351,7 @@ function mapApiVoice(item: ApiVoiceItem, index: number): LabVoice {
         status: item.status,
         progress: item.progress ?? undefined,
         queuePosition: item.queue_position ?? null,
+        progressPercent: item.progress_percent ?? null,
         error: item.error ?? undefined,
     };
 }
@@ -259,6 +406,12 @@ function LabWorkspaceInner({
     const [images, setImages] = useState<LabImage[]>([]);
     const [tracks, setTracks] = useState<LabTrack[]>([]);
     const [voices, setVoices] = useState<LabVoice[]>([]);
+    const imagesRef = useRef(images);
+    const tracksRef = useRef(tracks);
+    const voicesRef = useRef(voices);
+    imagesRef.current = images;
+    tracksRef.current = tracks;
+    voicesRef.current = voices;
     const [reuseDraft, setReuseDraft] = useState<LabReuseDraft | null>(null);
     const model = brands[0]?.models[0]?.name || 'Auto';
 
@@ -351,172 +504,17 @@ function LabWorkspaceInner({
             }
 
             if (kind === 'image' || kind === 'video') {
-                if (creation.status === 'completed') {
-                    if (kind === 'image') {
-                        const urls = creation.images ?? [];
-                        setImages((prev) => {
-                            const batch = prev.filter((i) => i.creationId === creationId);
-                            if (batch.length === 0) return prev;
-                            const rest = prev.filter((i) => i.creationId !== creationId);
-                            const cards = batch.map((slot, idx) => {
-                                const url = urls[idx];
-                                if (!url) {
-                                    return { ...slot, status: 'failed' as const, completing: false, error: 'Output missing.' };
-                                }
-                                return {
-                                    ...slot,
-                                    src: url,
-                                    status: 'completed' as const,
-                                    completing: false,
-                                    progress: null,
-                                    error: null,
-                                    modelName: creation.model_name ?? slot.modelName,
-                                };
-                            });
-                            return [...cards, ...rest];
-                        });
-                    } else {
-                        const videoUrl = creation.video_url || creation.preview_url;
-                        setImages((prev) => {
-                            const existing = prev.find((i) => i.creationId === creationId);
-                            if (!existing) return prev;
-                            const rest = prev.filter((i) => i.creationId !== creationId);
-                            if (!videoUrl) {
-                                return [
-                                    { ...existing, status: 'failed' as const, error: 'Generation finished without a video.' },
-                                    ...rest,
-                                ];
-                            }
-                            return [
-                                {
-                                    ...existing,
-                                    id: `video-${creationId}`,
-                                    src: creation.thumbnail_url || videoUrl,
-                                    videoUrl,
-                                    status: 'completed' as const,
-                                    completing: false,
-                                    progress: null,
-                                    error: null,
-                                    modelName: creation.model_name ?? existing.modelName,
-                                },
-                                ...rest,
-                            ];
-                        });
-                    }
-                    return;
-                }
-
-                if (creation.status === 'failed' || creation.status === 'cancelled') {
-                    setImages((prev) =>
-                        prev.map((i) =>
-                            i.creationId === creationId
-                                ? { ...i, status: 'failed' as const, progress: null, error: creation.error ?? 'Generation failed.' }
-                                : i,
-                        ),
-                    );
-                    return;
-                }
-
-                setImages((prev) =>
-                    prev.map((i) =>
-                        i.creationId === creationId
-                            ? {
-                                  ...i,
-                                  status: creation.status,
-                                  progress: creation.progress_message ?? i.progress,
-                                  queuePosition: creation.queue_position ?? i.queuePosition ?? null,
-                              }
-                            : i,
-                    ),
-                );
+                setImages((prev) => mergeImageVideoCreationState(prev, creationId, creation, kind));
                 return;
             }
 
             if (kind === 'music') {
-                if (creation.status === 'completed') {
-                    const audioUrl = creation.audio_url || creation.preview_url;
-                    setTracks((prev) =>
-                        prev.map((track) =>
-                            track.creationId === creationId
-                                ? {
-                                      ...track,
-                                      status: 'completed' as const,
-                                      audioUrl: audioUrl ?? track.audioUrl,
-                                      cover: creation.cover_url || track.cover,
-                                      progress: null,
-                                      error: null,
-                                      completing: false,
-                                  }
-                                : track,
-                        ),
-                    );
-                    return;
-                }
-                if (creation.status === 'failed' || creation.status === 'cancelled') {
-                    setTracks((prev) =>
-                        prev.map((track) =>
-                            track.creationId === creationId
-                                ? { ...track, status: 'failed', error: creation.error || 'Generation failed.', progress: tLab('failed') }
-                                : track,
-                        ),
-                    );
-                    return;
-                }
-                setTracks((prev) =>
-                    prev.map((track) =>
-                        track.creationId === creationId
-                            ? {
-                                  ...track,
-                                  status: creation.status,
-                                  progress: creation.progress_message ?? track.progress,
-                                  queuePosition: creation.queue_position ?? track.queuePosition ?? null,
-                              }
-                            : track,
-                    ),
-                );
+                setTracks((prev) => mergeMusicCreationState(prev, creationId, creation));
                 return;
             }
 
             if (kind === 'voice') {
-                if (creation.status === 'completed') {
-                    const audioUrl = creation.audio_url || creation.preview_url;
-                    setVoices((prev) =>
-                        prev.map((v) =>
-                            v.creationId === creationId
-                                ? {
-                                      ...v,
-                                      status: 'completed' as const,
-                                      audioUrl: audioUrl ?? v.audioUrl,
-                                      progress: undefined,
-                                      error: undefined,
-                                  }
-                                : v,
-                        ),
-                    );
-                    return;
-                }
-                if (creation.status === 'failed' || creation.status === 'cancelled') {
-                    setVoices((prev) =>
-                        prev.map((v) =>
-                            v.creationId === creationId
-                                ? { ...v, status: 'failed', error: creation.error || 'Generation failed.', progress: tLab('failed') }
-                                : v,
-                        ),
-                    );
-                    return;
-                }
-                setVoices((prev) =>
-                    prev.map((v) =>
-                        v.creationId === creationId
-                            ? {
-                                  ...v,
-                                  status: creation.status,
-                                  progress: creation.progress_message ?? v.progress,
-                                  queuePosition: creation.queue_position ?? v.queuePosition ?? null,
-                              }
-                            : v,
-                    ),
-                );
+                setVoices((prev) => mergeVoiceCreationState(prev, creationId, creation));
             }
         };
 
@@ -527,6 +525,108 @@ function LabWorkspaceInner({
             echo.leave(channelName);
         };
     }, [isGuest, pageProps.auth.user?.id, pushError, syncTokenBalance, tLab]);
+
+    // Live-status sync while creations are active. Designed to scale:
+    // - Pusher (fal webhook) is the primary channel; this is a safety-net sync.
+    // - One batched request per tick, only when the tab is visible.
+    // - Round-robins a small window of active cards; fal calls are throttled server-side.
+    // - Skips while a request is in flight; backs off on errors / 429.
+    useEffect(() => {
+        if (isGuest || !usesStudioLab) return;
+
+        let stopped = false;
+        let timer: number | undefined;
+        let inFlight = false;
+        let cursor = 0;
+        let backoffUntil = 0;
+
+        const collectActive = (): { type: 'image' | 'video' | 'music' | 'voice'; id: number }[] => {
+            if (isImageLab || isVideoLab) {
+                return imagesRef.current
+                    .filter((i) => i.creationId && isActiveStatus(i.status))
+                    .map((i) => {
+                        const isVideo =
+                            i.method === 'text-to-video' ||
+                            i.method === 'image-to-video' ||
+                            i.method === 'reference-to-video';
+                        return { type: (isVideo ? 'video' : 'image') as 'image' | 'video', id: i.creationId as number };
+                    });
+            }
+            if (isMusicLab) {
+                return tracksRef.current
+                    .filter((t) => t.creationId && isActiveStatus(t.status))
+                    .map((t) => ({ type: 'music' as const, id: t.creationId as number }));
+            }
+            if (isVoiceLab) {
+                return voicesRef.current
+                    .filter((v) => v.creationId && isActiveStatus(v.status))
+                    .map((v) => ({ type: 'voice' as const, id: v.creationId as number }));
+            }
+            return [];
+        };
+
+        const applyCreation = (creation: CreationResponse & { type?: string }) => {
+            const kind = creation.type;
+            if (!creation.id || !kind) return;
+            if (typeof creation.token_balance === 'number') syncTokenBalance(creation.token_balance);
+            if (kind === 'image' || kind === 'video') {
+                setImages((prev) => mergeImageVideoCreationState(prev, creation.id, creation, kind));
+            } else if (kind === 'music') {
+                setTracks((prev) => mergeMusicCreationState(prev, creation.id, creation));
+            } else if (kind === 'voice') {
+                setVoices((prev) => mergeVoiceCreationState(prev, creation.id, creation));
+            }
+        };
+
+        const tick = async () => {
+            if (stopped || inFlight) return;
+            if (document.visibilityState !== 'visible') return;
+            if (Date.now() < backoffUntil) return;
+
+            const active = collectActive();
+            if (active.length === 0) return;
+
+            // Round-robin a small window so many active cards never fan out into many fal calls.
+            const window: { type: string; id: number }[] = [];
+            for (let n = 0; n < Math.min(ACTIVE_CREATION_BATCH, active.length); n++) {
+                window.push(active[(cursor + n) % active.length]);
+            }
+            cursor = (cursor + window.length) % active.length;
+
+            inFlight = true;
+            try {
+                const data = await apiPost<{ creations: (CreationResponse & { type?: string })[] }>(
+                    '/lab/creations/status',
+                    { items: window },
+                );
+                data.creations?.forEach(applyCreation);
+            } catch (e) {
+                // Back off harder on rate limiting; softer on transient errors.
+                const status = e instanceof ApiError ? e.status : 0;
+                backoffUntil = Date.now() + (status === 429 ? 30000 : 12000);
+            } finally {
+                inFlight = false;
+            }
+        };
+
+        const loop = () => {
+            if (stopped) return;
+            void tick();
+            timer = window.setTimeout(loop, ACTIVE_CREATION_POLL_MS);
+        };
+
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') void tick();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        loop();
+
+        return () => {
+            stopped = true;
+            if (timer) window.clearTimeout(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, [isGuest, usesStudioLab, isImageLab, isVideoLab, isMusicLab, isVoiceLab, syncTokenBalance]);
 
     useEffect(() => {
         if (!usesStudioLab || isGuest) return;
@@ -629,6 +729,8 @@ function LabWorkspaceInner({
                                   creationId: data.id,
                                   status: data.status,
                                   progress: data.progress_message ?? i.progress,
+                                  queuePosition: data.queue_position ?? null,
+                                  progressPercent: data.progress_percent ?? null,
                                   modelName: data.model_name ?? i.modelName,
                               }
                             : i,
@@ -766,6 +868,8 @@ function LabWorkspaceInner({
                                   creationId: data.id,
                                   status: data.status,
                                   progress: data.progress_message ?? i.progress,
+                                  queuePosition: data.queue_position ?? null,
+                                  progressPercent: data.progress_percent ?? null,
                                   modelName: data.model_name ?? i.modelName,
                                   method: (data.mode as LabImage['method']) || i.method,
                               }
@@ -894,6 +998,8 @@ function LabWorkspaceInner({
                                   creationId: data.id,
                                   status: data.status,
                                   progress: data.progress_message ?? track.progress,
+                                  queuePosition: data.queue_position ?? null,
+                                  progressPercent: data.progress_percent ?? null,
                                   model: data.model_name ?? track.model,
                                   instrumental: data.instrumental ?? track.instrumental,
                                   title: data.title || track.title,
@@ -982,6 +1088,8 @@ function LabWorkspaceInner({
                                   creationId: data.id,
                                   status: data.status,
                                   progress: data.progress_message ?? v.progress,
+                                  queuePosition: data.queue_position ?? null,
+                                  progressPercent: data.progress_percent ?? null,
                                   model: data.model_name ?? v.model,
                                   voice: data.voice ?? v.voice,
                               }

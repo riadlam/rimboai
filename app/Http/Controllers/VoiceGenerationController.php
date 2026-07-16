@@ -9,6 +9,8 @@ use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalVoiceInputBuilder;
 use App\Services\FalWalletCostTracker;
+use App\Services\FalWebhookProcessor;
+use App\Services\LabCreationPresenter;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,7 @@ class VoiceGenerationController extends Controller
         TokenService $tokens,
         FalPricingService $pricing,
         FalWalletCostTracker $walletCost,
+        FalWebhookProcessor $processor,
     ): JsonResponse {
         $data = $request->validate([
             'text' => ['required', 'string', 'min:1', 'max:70000'],
@@ -159,15 +162,19 @@ class VoiceGenerationController extends Controller
             $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
         }
 
+        $creation->refresh();
+        $processor->broadcastSnapshot('voice', $creation);
+
         return response()->json($this->present($creation), 201);
     }
 
-    public function status(Request $request, UserVoiceCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
+    public function status(Request $request, UserVoiceCreation $creation, FalWebhookProcessor $processor, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal, $walletCost);
+            $processor->syncFromFal('voice', $creation);
+            $creation->refresh();
         } elseif (
             $creation->status === UserVoiceCreation::STATUS_COMPLETED
             && $creation->fal_request_id
@@ -297,6 +304,7 @@ class VoiceGenerationController extends Controller
             'status' => $creation->status,
             'queue_position' => $creation->queue_position,
             'progress_message' => $creation->progress_message,
+            'progress_percent' => LabCreationPresenter::progressPercent($creation),
             'prompt' => $creation->prompt,
             'model_name' => $creation->model_name,
             'voice' => $creation->voice_name,

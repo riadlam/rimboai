@@ -10,6 +10,8 @@ use App\Services\FalMusicInputBuilder;
 use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalWalletCostTracker;
+use App\Services\FalWebhookProcessor;
+use App\Services\LabCreationPresenter;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +32,7 @@ class MusicGenerationController extends Controller
         FalPricingService $pricing,
         AssetPromptReferences $promptReferences,
         FalWalletCostTracker $walletCost,
+        FalWebhookProcessor $processor,
     ): JsonResponse {
         // When PHP post_max_size is exceeded, $_POST/$_FILES are empty → fake 422s.
         $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
@@ -363,15 +366,19 @@ class MusicGenerationController extends Controller
             $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
         }
 
+        $creation->refresh();
+        $processor->broadcastSnapshot('music', $creation);
+
         return response()->json($this->present($creation), 201);
     }
 
-    public function status(Request $request, UserMusicCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
+    public function status(Request $request, UserMusicCreation $creation, FalWebhookProcessor $processor, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal, $walletCost);
+            $processor->syncFromFal('music', $creation);
+            $creation->refresh();
         } elseif (
             $creation->status === UserMusicCreation::STATUS_COMPLETED
             && $creation->fal_request_id
@@ -714,6 +721,7 @@ class MusicGenerationController extends Controller
             'status' => $creation->status,
             'queue_position' => $creation->queue_position,
             'progress_message' => $creation->progress_message,
+            'progress_percent' => LabCreationPresenter::progressPercent($creation),
             'prompt' => $creation->prompt,
             'lyrics' => $creation->lyrics,
             'title' => $creation->title,

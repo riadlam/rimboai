@@ -58,3 +58,18 @@ export function labPhaseLabel(opts: {
     if (opts.kind === 'video') return 'Generating video…';
     return 'Generating…';
 }
+
+/** Prefer server sync % when available; smooth upward between polls with local estimate. */
+export function labEffectiveProgressPercent(opts: {
+    serverPercent?: number | null;
+    status?: string | null;
+    queuePosition?: number | null;
+    startedAt?: number;
+    completing?: boolean;
+}): number {
+    const estimated = labProgressPercent(opts);
+    if (typeof opts.serverPercent === 'number' && Number.isFinite(opts.serverPercent)) {
+        return Math.max(opts.serverPercent, estimated);
+    }
+    return estimated;
+}

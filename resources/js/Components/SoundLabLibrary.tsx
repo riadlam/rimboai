@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import MusicLabPreviewModal from '@/Components/MusicLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
-import { labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
+import { labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 import { musicPalette } from '@/lib/musicPalette';
 
 export type LabTrack = {
@@ -22,6 +22,7 @@ export type LabTrack = {
     status?: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
     progress?: string | null;
     queuePosition?: number | null;
+    progressPercent?: number | null;
     error?: string | null;
     /** Brief flash at 100% before the real track appears */
     completing?: boolean;
@@ -450,6 +451,7 @@ export default function SoundLabLibrary({
                                             status={track.status}
                                             progress={track.progress}
                                             queuePosition={track.queuePosition}
+                                            progressPercent={track.progressPercent}
                                             startedAt={track.createdAt}
                                             completing={track.completing}
                                             instrumental={track.instrumental}
@@ -636,20 +638,27 @@ function useMusicCardProgress(
     status?: LabTrack['status'],
     queuePosition?: number | null,
     completing?: boolean,
+    serverProgressPercent?: number | null,
 ) {
     const [pct, setPct] = useState(() =>
-        labProgressPercent({ status, queuePosition, startedAt, completing }),
+        labEffectiveProgressPercent({ serverPercent: serverProgressPercent, status, queuePosition, startedAt, completing }),
     );
 
     useEffect(() => {
         const tick = () => {
-            const next = labProgressPercent({ status, queuePosition, startedAt, completing });
+            const next = labEffectiveProgressPercent({
+                serverPercent: serverProgressPercent,
+                status,
+                queuePosition,
+                startedAt,
+                completing,
+            });
             setPct((prev) => (completing || next >= prev ? next : prev));
         };
         tick();
         const id = window.setInterval(tick, 400);
         return () => window.clearInterval(id);
-    }, [startedAt, status, queuePosition, completing]);
+    }, [startedAt, status, queuePosition, completing, serverProgressPercent]);
 
     return pct;
 }
@@ -660,6 +669,7 @@ function MusicBuildingCard({
     status,
     progress,
     queuePosition,
+    progressPercent,
     startedAt,
     completing = false,
     instrumental,
@@ -669,11 +679,12 @@ function MusicBuildingCard({
     status?: LabTrack['status'];
     progress?: string | null;
     queuePosition?: number | null;
+    progressPercent?: number | null;
     startedAt: number;
     completing?: boolean;
     instrumental: boolean;
 }) {
-    const pct = useMusicCardProgress(startedAt, status, queuePosition, completing);
+    const pct = useMusicCardProgress(startedAt, status, queuePosition, completing, progressPercent);
     const phase = labPhaseLabel({
         status,
         queuePosition,

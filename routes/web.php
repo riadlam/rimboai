@@ -87,6 +87,11 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:60,1')
         ->name('lab.creations.index');
 
+    // Batched live-status sync for active building cards (fal calls throttled server-side).
+    Route::post('/lab/creations/status', [LabCreationsController::class, 'statusBatch'])
+        ->middleware('throttle:120,1')
+        ->name('lab.creations.status-batch');
+
     Route::get('/lab/asset-fetch', LabAssetFetchController::class)
         ->middleware('throttle:60,1')
         ->name('lab.asset.fetch');
