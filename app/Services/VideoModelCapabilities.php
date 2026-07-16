@@ -14,6 +14,9 @@ class VideoModelCapabilities
      *   supports_ref_videos: bool,
      *   supports_ref_audio: bool,
      *   supports_first_frame: bool,
+     *   max_ref_images: int|null,
+     *   max_ref_videos: int|null,
+     *   max_ref_audios: int|null,
      *   reference_endpoint_id: string|null,
      *   first_frame_endpoint_id: string|null,
      *   first_frame_param: string|null
@@ -32,6 +35,9 @@ class VideoModelCapabilities
                 videos: true,
                 audio: true,
                 firstFrame: true,
+                maxImages: 9,
+                maxVideos: 3,
+                maxAudios: 3,
                 reference: $fast
                     ? 'bytedance/seedance-2.0/fast/reference-to-video'
                     : 'bytedance/seedance-2.0/reference-to-video',
@@ -42,7 +48,7 @@ class VideoModelCapabilities
             );
         }
 
-        // Veo — multi-image reference-to-video + first-frame I2V
+        // Veo — multi-image reference-to-video (max 3) + first-frame I2V
         if ($id === 'fal-ai/veo3.1' || str_starts_with($id, 'fal-ai/veo3.1/')) {
             $tier = 'fal-ai/veo3.1';
             if (str_contains($id, '/fast')) {
@@ -54,6 +60,9 @@ class VideoModelCapabilities
                     videos: false,
                     audio: false,
                     firstFrame: true,
+                    maxImages: 1,
+                    maxVideos: 0,
+                    maxAudios: 0,
                     reference: null,
                     firstFrameEndpoint: 'fal-ai/veo3.1/lite/image-to-video',
                     firstFrameParam: 'image_url',
@@ -65,6 +74,9 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: true,
+                maxImages: 3,
+                maxVideos: 0,
+                maxAudios: 0,
                 reference: $tier === 'fal-ai/veo3.1/fast'
                     ? 'fal-ai/veo3.1/fast/reference-to-video'
                     : 'fal-ai/veo3.1/reference-to-video',
@@ -82,6 +94,9 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: $i2v !== null,
+                maxImages: 1,
+                maxVideos: 0,
+                maxAudios: 0,
                 reference: null,
                 firstFrameEndpoint: $i2v,
                 firstFrameParam: str_contains($id, '/o3/') ? 'image_url' : 'start_image_url',
@@ -90,16 +105,16 @@ class VideoModelCapabilities
 
         // Sora / Wan / Grok — first-frame I2V
         if (str_contains($id, 'sora-2/text-to-video')) {
-            return $this->caps(false, false, false, true, null, 'fal-ai/sora-2/image-to-video', 'image_url');
+            return $this->caps(false, false, false, true, 1, 0, 0, null, 'fal-ai/sora-2/image-to-video', 'image_url');
         }
         if (str_contains($id, 'wan/') && str_contains($id, 'text-to-video')) {
-            return $this->caps(false, false, false, true, null, 'fal-ai/wan/v2.7/image-to-video', 'image_url');
+            return $this->caps(false, false, false, true, 1, 0, 0, null, 'fal-ai/wan/v2.7/image-to-video', 'image_url');
         }
         if (str_contains($id, 'grok-imagine-video/text-to-video')) {
-            return $this->caps(false, false, false, true, null, 'xai/grok-imagine-video/image-to-video', 'image_url');
+            return $this->caps(false, false, false, true, 1, 0, 0, null, 'xai/grok-imagine-video/image-to-video', 'image_url');
         }
 
-        return $this->caps(false, false, false, false, null, null, null);
+        return $this->caps(false, false, false, false, 0, 0, 0, null, null, null);
     }
 
     /**
@@ -135,9 +150,21 @@ class VideoModelCapabilities
             return false;
         }
         if ($images === 1 && $videos === 0 && $audios === 0) {
-            return $caps['supports_first_frame'] || $caps['supports_ref_images'];
+            if (! ($caps['supports_first_frame'] || $caps['supports_ref_images'])) {
+                return false;
+            }
+        } elseif ($images > 0 && ! $caps['supports_ref_images'] && ! ($images === 1 && $caps['supports_first_frame'] && $videos === 0 && $audios === 0)) {
+            return false;
         }
-        if ($images > 0 && ! $caps['supports_ref_images'] && ! ($images === 1 && $caps['supports_first_frame'] && $videos === 0 && $audios === 0)) {
+
+        // Per-model reference ceilings (e.g. Veo R2V max 3 images).
+        if ($images > 0 && $caps['max_ref_images'] !== null && $images > $caps['max_ref_images']) {
+            return false;
+        }
+        if ($videos > 0 && $caps['max_ref_videos'] !== null && $videos > $caps['max_ref_videos']) {
+            return false;
+        }
+        if ($audios > 0 && $caps['max_ref_audios'] !== null && $audios > $caps['max_ref_audios']) {
             return false;
         }
 
@@ -212,6 +239,9 @@ class VideoModelCapabilities
      *   supports_ref_videos: bool,
      *   supports_ref_audio: bool,
      *   supports_first_frame: bool,
+     *   max_ref_images: int|null,
+     *   max_ref_videos: int|null,
+     *   max_ref_audios: int|null,
      *   reference_endpoint_id: string|null,
      *   first_frame_endpoint_id: string|null,
      *   first_frame_param: string|null
@@ -222,6 +252,9 @@ class VideoModelCapabilities
         bool $videos,
         bool $audio,
         bool $firstFrame,
+        ?int $maxImages,
+        ?int $maxVideos,
+        ?int $maxAudios,
         ?string $reference,
         ?string $firstFrameEndpoint,
         ?string $firstFrameParam,
@@ -231,6 +264,9 @@ class VideoModelCapabilities
             'supports_ref_videos' => $videos,
             'supports_ref_audio' => $audio,
             'supports_first_frame' => $firstFrame,
+            'max_ref_images' => $maxImages,
+            'max_ref_videos' => $maxVideos,
+            'max_ref_audios' => $maxAudios,
             'reference_endpoint_id' => $reference,
             'first_frame_endpoint_id' => $firstFrameEndpoint,
             'first_frame_param' => $firstFrameParam,

@@ -77,6 +77,9 @@ export type BrandModel = {
         supports_ref_videos: boolean;
         supports_ref_audio: boolean;
         supports_first_frame: boolean;
+        max_ref_images?: number | null;
+        max_ref_videos?: number | null;
+        max_ref_audios?: number | null;
         reference_endpoint_id?: string | null;
         first_frame_endpoint_id?: string | null;
         first_frame_param?: string | null;

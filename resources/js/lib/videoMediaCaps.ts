@@ -5,6 +5,9 @@ export type MediaCaps = {
     supports_ref_videos: boolean;
     supports_ref_audio: boolean;
     supports_first_frame: boolean;
+    max_ref_images: number | null;
+    max_ref_videos: number | null;
+    max_ref_audios: number | null;
 };
 
 export type MediaCounts = {
@@ -20,6 +23,9 @@ const EMPTY_CAPS: MediaCaps = {
     supports_ref_videos: false,
     supports_ref_audio: false,
     supports_first_frame: false,
+    max_ref_images: null,
+    max_ref_videos: null,
+    max_ref_audios: null,
 };
 
 export function getMediaCaps(model: Pick<BrandModel, 'media_capabilities'> | null | undefined): MediaCaps {
@@ -30,6 +36,9 @@ export function getMediaCaps(model: Pick<BrandModel, 'media_capabilities'> | nul
         supports_ref_videos: Boolean(caps.supports_ref_videos),
         supports_ref_audio: Boolean(caps.supports_ref_audio),
         supports_first_frame: Boolean(caps.supports_first_frame),
+        max_ref_images: typeof caps.max_ref_images === 'number' ? caps.max_ref_images : null,
+        max_ref_videos: typeof caps.max_ref_videos === 'number' ? caps.max_ref_videos : null,
+        max_ref_audios: typeof caps.max_ref_audios === 'number' ? caps.max_ref_audios : null,
     };
 }
 
@@ -53,11 +62,14 @@ export function supportsMediaMix(model: Pick<BrandModel, 'media_capabilities'> |
     if (audios > 0 && !caps.supports_ref_audio) return false;
     if (images > 1 && !caps.supports_ref_images) return false;
     if (images === 1 && videos === 0 && audios === 0) {
-        return caps.supports_first_frame || caps.supports_ref_images;
-    }
-    if (images > 0 && !caps.supports_ref_images && !(images === 1 && caps.supports_first_frame && videos === 0 && audios === 0)) {
+        if (!(caps.supports_first_frame || caps.supports_ref_images)) return false;
+    } else if (images > 0 && !caps.supports_ref_images && !(images === 1 && caps.supports_first_frame && videos === 0 && audios === 0)) {
         return false;
     }
+
+    if (images > 0 && caps.max_ref_images !== null && images > caps.max_ref_images) return false;
+    if (videos > 0 && caps.max_ref_videos !== null && videos > caps.max_ref_videos) return false;
+    if (audios > 0 && caps.max_ref_audios !== null && audios > caps.max_ref_audios) return false;
 
     return true;
 }
@@ -84,7 +96,7 @@ export type MediaGuidance = {
 };
 
 /**
- * User-facing guidance for the current media mix (no vendor names).
+ * User-facing guidance for the current media mix (no vendor names when possible).
  */
 export function describeMediaGuidance(counts: MediaCounts, compatibleCount: number): MediaGuidance | null {
     const { images, videos, audios } = counts;
@@ -112,7 +124,15 @@ export function describeMediaGuidance(counts: MediaCounts, compatibleCount: numb
         return {
             tone: 'info',
             title: 'Multimodal references',
-            body: 'Video and audio refs only work with Seedance. Incompatible models are hidden from the picker.',
+            body: 'Video and audio refs need a multimodal model. We’ve hidden models that can’t use this mix.',
+        };
+    }
+
+    if (images > 3) {
+        return {
+            tone: 'warn',
+            title: 'Many image references',
+            body: '4+ images only work with multimodal models (e.g. Seedance). Models with a 3-image limit are hidden so you don’t waste credits.',
         };
     }
 
@@ -120,7 +140,7 @@ export function describeMediaGuidance(counts: MediaCounts, compatibleCount: numb
         return {
             tone: 'info',
             title: 'Multi-image references',
-            body: 'Multiple images work with Seedance and Veo reference models. Other models are hidden.',
+            body: 'We’ll keep models that can use multiple images. Prefer a simple motion prompt — avoid exact cut timing or long character sequences.',
         };
     }
 
@@ -128,7 +148,7 @@ export function describeMediaGuidance(counts: MediaCounts, compatibleCount: numb
         return {
             tone: 'info',
             title: 'First-frame image',
-            body: 'With one image, models that support image-to-video will use it as the opening frame. Describe the motion in your prompt.',
+            body: 'With one image, compatible models use it as the opening frame. Describe the motion in your prompt.',
         };
     }
 

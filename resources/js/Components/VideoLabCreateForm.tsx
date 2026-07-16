@@ -17,6 +17,7 @@ import {
     supportsMediaMix,
     type MediaCounts,
 } from '@/lib/videoMediaCaps';
+import { pickBestVideoModel, shouldAutoSwitchVideoModel } from '@/lib/videoModelSelection';
 import {
     loadDraftMediaFiles,
     matchLabModel,
@@ -179,6 +180,9 @@ export default function VideoLabCreateForm({
         });
     }, [media]);
     const [switchNotice, setSwitchNotice] = useState<string | null>(null);
+    /** When true, respect manual model pick until media mix changes enough to unlock. */
+    const userModelLocked = useRef(false);
+    const lastMediaKey = useRef('');
     const [guidanceDismissed, setGuidanceDismissed] = useState(false);
     const [mediaNotice, setMediaNotice] = useState<string | null>(null);
     const [draftNotice, setDraftNotice] = useState<string | null>(null);
@@ -210,10 +214,15 @@ export default function VideoLabCreateForm({
         [media],
     );
 
-    const modelsForPicker = useMemo(
-        () => allModels.filter((m) => supportsMediaMix(m, mediaCounts)),
-        [allModels, mediaCounts],
-    );
+    const modelsForPicker = useMemo(() => {
+        const compatible = allModels.filter((m) => supportsMediaMix(m, mediaCounts));
+        // Rank safest / best-fit models first in the picker.
+        return [...compatible].sort((a, b) => {
+            const sa = pickBestVideoModel([a], mediaCounts, prompt)?.score ?? 0;
+            const sb = pickBestVideoModel([b], mediaCounts, prompt)?.score ?? 0;
+            return sb - sa;
+        });
+    }, [allModels, mediaCounts, prompt]);
 
     const selectedModelRecord = useMemo(
         () => allModels.find((m) => m.name === selectedModel),
@@ -316,16 +325,39 @@ export default function VideoLabCreateForm({
         setDuration((current) => pickDurationForOptions(durationOptions, current));
     }, [durationOptions]);
 
-    // Auto-switch away from incompatible models when media mix changes
+    // Unlock auto-routing when the media mix shape changes (user added/removed refs).
+    useEffect(() => {
+        const key = `${mediaCounts.images}:${mediaCounts.videos}:${mediaCounts.audios}`;
+        if (lastMediaKey.current && lastMediaKey.current !== key) {
+            userModelLocked.current = false;
+        }
+        lastMediaKey.current = key;
+    }, [mediaCounts.images, mediaCounts.videos, mediaCounts.audios]);
+
+    // Auto-switch to a safer model for this media + prompt (hides incompatible in picker).
     useEffect(() => {
         if (modelsForPicker.length === 0) return;
-        const stillOk = modelsForPicker.some((m) => m.name === selectedModel);
-        if (stillOk) return;
-        const next = modelsForPicker[0];
-        setSelectedBrand(next.brandName);
-        setSelectedModel(next.name);
-        setSwitchNotice(`Switched to ${formatModelName(next.name)} — your previous model doesn’t support these references.`);
-    }, [modelsForPicker, selectedModel]);
+
+        const best = pickBestVideoModel(modelsForPicker, mediaCounts, prompt);
+        if (!best) return;
+
+        const decision = shouldAutoSwitchVideoModel(
+            selectedModelRecord,
+            best,
+            mediaCounts,
+            prompt,
+            userModelLocked.current,
+        );
+
+        if (!decision.switch) return;
+        if (best.model.name === selectedModel && best.model.brandName === selectedBrand) return;
+
+        setSelectedBrand(best.model.brandName);
+        setSelectedModel(best.model.name);
+        setSwitchNotice(
+            decision.reason.replace(best.model.name, formatModelName(best.model.name)),
+        );
+    }, [modelsForPicker, mediaCounts, prompt, selectedModel, selectedBrand, selectedModelRecord]);
 
     // Auto-hide switch banner; clear immediately when all refs are removed
     useEffect(() => {
@@ -334,7 +366,7 @@ export default function VideoLabCreateForm({
             setSwitchNotice(null);
             return;
         }
-        const t = window.setTimeout(() => setSwitchNotice(null), 4500);
+        const t = window.setTimeout(() => setSwitchNotice(null), 5500);
         return () => window.clearTimeout(t);
     }, [switchNotice, mediaCounts]);
 
@@ -442,6 +474,7 @@ export default function VideoLabCreateForm({
     }, [draft?.id]);
 
     const chooseModel = (m: { name: string; brandName: string }) => {
+        userModelLocked.current = true;
         setSelectedBrand(m.brandName);
         setSelectedModel(m.name);
         setSwitchNotice(null);
@@ -1183,7 +1216,7 @@ export default function VideoLabCreateForm({
                                 <h2 className="text-lg font-semibold tracking-tight text-white">{t('selectModel')}</h2>
                                 <p className="mt-1 text-[13px] text-zinc-500">
                                     {mediaTotal(mediaCounts) > 0
-                                        ? `Showing models that support your media (${modelsForPicker.length})`
+                                        ? `Safe models for your media (${modelsForPicker.length}) — others hidden`
                                         : t('selectModelSub')}
                                 </p>
                             </div>
