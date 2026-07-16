@@ -17,7 +17,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class VideoGenerationController extends Controller
 {
@@ -33,21 +35,76 @@ class VideoGenerationController extends Controller
         AssetPromptReferences $promptReferences,
         FalWalletCostTracker $walletCost,
     ): JsonResponse {
-        $data = $request->validate([
-            'prompt' => ['required', 'string', 'min:2', 'max:2000'],
-            'endpoint_id' => ['nullable', 'string', 'max:191'],
-            'aspect' => ['nullable', 'string', Rule::in(['16:9', '9:16', '1:1', '4:3', '3:4'])],
-            'resolution' => ['nullable', 'string', Rule::in(['720p', '1080p', '4K', '4k'])],
-            'duration' => ['nullable'],
-            'audio' => ['nullable', 'boolean'],
-            'speed' => ['nullable', 'string', Rule::in(['fast', 'pro'])],
-            'images' => ['nullable', 'array', 'max:9'],
-            'images.*' => ['file', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:30720'],
-            'videos' => ['nullable', 'array', 'max:3'],
-            'videos.*' => ['file', 'mimetypes:video/mp4,video/quicktime,video/webm', 'max:51200'],
-            'audios' => ['nullable', 'array', 'max:3'],
-            'audios.*' => ['file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave', 'max:15360'],
-        ]);
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+        if ($contentLength > 0 && $request->all() === [] && $request->allFiles() === []) {
+            return response()->json([
+                'message' => 'Upload blocked by server size limit. With many images + a video, upload each file under ~35MB, or the app will upload references one-by-one before generate.',
+            ], 422);
+        }
+
+        foreach (['images', 'videos', 'audios'] as $field) {
+            $files = $request->file($field);
+            if (! is_array($files)) {
+                continue;
+            }
+            foreach ($files as $index => $file) {
+                if ($file instanceof UploadedFile && ! $file->isValid()) {
+                    $code = $file->getError();
+                    Log::warning('Video generate PHP upload error', [
+                        'field' => $field,
+                        'index' => $index,
+                        'upload_error' => $code,
+                        'upload_message' => $file->getErrorMessage(),
+                        'name' => $file->getClientOriginalName(),
+                        'size_client' => $file->getSize(),
+                        'content_length' => $contentLength,
+                    ]);
+
+                    return response()->json([
+                        'message' => $this->uploadErrorMessage($code, $file->getClientOriginalName(), $field),
+                        'upload_error' => $code,
+                        'field' => "{$field}.{$index}",
+                    ], 422);
+                }
+            }
+        }
+
+        try {
+            $data = $request->validate([
+                'prompt' => ['required', 'string', 'min:2', 'max:2000'],
+                'endpoint_id' => ['nullable', 'string', 'max:191'],
+                'aspect' => ['nullable', 'string', Rule::in(['16:9', '9:16', '1:1', '4:3', '3:4'])],
+                'resolution' => ['nullable', 'string', Rule::in(['720p', '1080p', '4K', '4k'])],
+                'duration' => ['nullable'],
+                'audio' => ['nullable', 'boolean'],
+                'speed' => ['nullable', 'string', Rule::in(['fast', 'pro'])],
+                'images' => ['nullable', 'array', 'max:9'],
+                'images.*' => ['file', 'max:30720'],
+                'videos' => ['nullable', 'array', 'max:3'],
+                'videos.*' => ['file', 'max:51200'],
+                'audios' => ['nullable', 'array', 'max:3'],
+                'audios.*' => ['file', 'max:15360'],
+                // Preferred path: pre-uploaded fal CDN URLs (avoids huge multipart).
+                'image_urls' => ['nullable', 'array', 'max:9'],
+                'image_urls.*' => ['string', 'max:2048'],
+                'video_urls' => ['nullable', 'array', 'max:3'],
+                'video_urls.*' => ['string', 'max:2048'],
+                'audio_urls' => ['nullable', 'array', 'max:3'],
+                'audio_urls.*' => ['string', 'max:2048'],
+            ]);
+        } catch (ValidationException $e) {
+            $first = collect($e->errors())->flatten()->first();
+            Log::warning('Video generate validation failed', [
+                'errors' => $e->errors(),
+                'content_length' => $contentLength,
+                'file_keys' => array_keys($request->allFiles()),
+            ]);
+
+            return response()->json([
+                'message' => is_string($first) && $first !== '' ? $first : 'Invalid video request.',
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         if (! $fal->configured()) {
             return response()->json(['message' => 'Video service is not configured.'], 503);
@@ -76,10 +133,14 @@ class VideoGenerationController extends Controller
         $videoFiles = $this->normalizeFiles($request->file('videos'));
         $audioFiles = $this->normalizeFiles($request->file('audios'));
 
+        $preImageUrls = $this->normalizeUrlList($data['image_urls'] ?? []);
+        $preVideoUrls = $this->normalizeUrlList($data['video_urls'] ?? []);
+        $preAudioUrls = $this->normalizeUrlList($data['audio_urls'] ?? []);
+
         $counts = [
-            'images' => count($imageFiles),
-            'videos' => count($videoFiles),
-            'audios' => count($audioFiles),
+            'images' => count($imageFiles) + count($preImageUrls),
+            'videos' => count($videoFiles) + count($preVideoUrls),
+            'audios' => count($audioFiles) + count($preAudioUrls),
         ];
 
         if ($counts['audios'] > 0 && ($counts['images'] + $counts['videos']) === 0) {
@@ -116,6 +177,16 @@ class VideoGenerationController extends Controller
             report($e);
 
             return response()->json(['message' => __('messages.upload_failed')], 502);
+        }
+
+        foreach ($preImageUrls as $url) {
+            $inputAssets[] = ['url' => $url, 'fal_url' => $url, 'type' => 'image', 'role' => 'reference'];
+        }
+        foreach ($preVideoUrls as $url) {
+            $inputAssets[] = ['url' => $url, 'fal_url' => $url, 'type' => 'video', 'role' => 'reference'];
+        }
+        foreach ($preAudioUrls as $url) {
+            $inputAssets[] = ['url' => $url, 'fal_url' => $url, 'type' => 'audio', 'role' => 'reference'];
         }
 
         $imageUrls = [];
@@ -409,6 +480,68 @@ class VideoGenerationController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<int, mixed>|null  $urls
+     * @return list<string>
+     */
+    private function normalizeUrlList(mixed $urls): array
+    {
+        if (! is_array($urls)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($urls as $url) {
+            if (! is_string($url)) {
+                continue;
+            }
+            $url = trim($url);
+            if ($url === '' || ! $this->isAllowedFalMediaUrl($url)) {
+                continue;
+            }
+            $out[] = $url;
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    private function isAllowedFalMediaUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https') {
+            return false;
+        }
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if ($host === '') {
+            return false;
+        }
+
+        return $host === 'fal.media'
+            || str_ends_with($host, '.fal.media')
+            || $host === 'v3.fal.media'
+            || $host === 'v3b.fal.media';
+    }
+
+    private function uploadErrorMessage(int $code, ?string $name, string $field): string
+    {
+        $label = $name ? "“{$name}”" : 'A media file';
+        $kind = match ($field) {
+            'videos' => 'video',
+            'audios' => 'audio',
+            default => 'image',
+        };
+
+        return match ($code) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => "{$label} is too large for the server (PHP upload limit). Compress the {$kind} or keep each file under ~35MB. With many references, the app uploads them one-by-one.",
+            UPLOAD_ERR_PARTIAL => "{$label} was only partially uploaded. Try again (stable connection / smaller file).",
+            UPLOAD_ERR_NO_FILE => "No {$kind} file was received.",
+            UPLOAD_ERR_NO_TMP_DIR => 'Server temp folder is missing (upload_tmp_dir).',
+            UPLOAD_ERR_CANT_WRITE => 'Server could not save the upload to disk.',
+            UPLOAD_ERR_EXTENSION => "A PHP extension blocked this {$kind} upload.",
+            default => "{$label} failed to upload (PHP error code {$code}).",
+        };
     }
 
     /**

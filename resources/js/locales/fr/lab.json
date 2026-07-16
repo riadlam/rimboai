@@ -10,6 +10,7 @@
   "generate": "Générer",
   "generating": "Génération…",
   "starting": "Démarrage…",
+  "uploadingRefs": "Téléversement des références {{current}}/{{total}}…",
   "inQueue": "En file d'attente",
   "completed": "Terminé",
   "failed": "Échoué",

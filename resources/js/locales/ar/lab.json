@@ -10,6 +10,7 @@
   "generate": "توليد",
   "generating": "جاري التوليد…",
   "starting": "جاري البدء…",
+  "uploadingRefs": "جارٍ رفع المراجع {{current}}/{{total}}…",
   "inQueue": "في قائمة الانتظار",
   "completed": "مكتمل",
   "failed": "فشل",

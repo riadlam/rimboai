@@ -720,6 +720,56 @@ export default function LabWorkspace({
             setImages((prev) => [placeholder, ...prev]);
 
             try {
+                const imageFiles = options?.imageFiles ?? [];
+                const videoFiles = options?.videoFiles ?? [];
+                const audioFiles = options?.audioFiles ?? [];
+                const totalUploads = imageFiles.length + videoFiles.length + audioFiles.length;
+
+                const uploadOne = async (file: File, index: number) => {
+                    setImages((prev) =>
+                        prev.map((i) =>
+                            i.batchId === batchId
+                                ? {
+                                      ...i,
+                                      progress: tLab('uploadingRefs', {
+                                          current: index + 1,
+                                          total: totalUploads,
+                                          defaultValue: `Uploading references ${index + 1}/${totalUploads}…`,
+                                      }),
+                                  }
+                                : i,
+                        ),
+                    );
+                    const formUpload = new FormData();
+                    formUpload.append('file', file);
+                    const uploaded = await apiPostForm<{ url: string; type: string }>('/lab/media/upload', formUpload);
+                    return uploaded;
+                };
+
+                const imageUrls: string[] = [];
+                const videoUrls: string[] = [];
+                const audioUrls: string[] = [];
+                let uploadIndex = 0;
+
+                for (const file of imageFiles) {
+                    const uploaded = await uploadOne(file, uploadIndex++);
+                    if (uploaded.url) imageUrls.push(uploaded.url);
+                }
+                for (const file of videoFiles) {
+                    const uploaded = await uploadOne(file, uploadIndex++);
+                    if (uploaded.url) videoUrls.push(uploaded.url);
+                }
+                for (const file of audioFiles) {
+                    const uploaded = await uploadOne(file, uploadIndex++);
+                    if (uploaded.url) audioUrls.push(uploaded.url);
+                }
+
+                setImages((prev) =>
+                    prev.map((i) =>
+                        i.batchId === batchId ? { ...i, progress: tLab('starting') } : i,
+                    ),
+                );
+
                 const form = new FormData();
                 form.append('prompt', text);
                 if (options?.endpointId) form.append('endpoint_id', options.endpointId);
@@ -728,9 +778,9 @@ export default function LabWorkspace({
                 form.append('duration', String(options?.duration ?? 5));
                 form.append('audio', options?.audio === false ? '0' : '1');
 
-                options?.imageFiles?.forEach((file) => form.append('images[]', file));
-                options?.videoFiles?.forEach((file) => form.append('videos[]', file));
-                options?.audioFiles?.forEach((file) => form.append('audios[]', file));
+                imageUrls.forEach((url) => form.append('image_urls[]', url));
+                videoUrls.forEach((url) => form.append('video_urls[]', url));
+                audioUrls.forEach((url) => form.append('audio_urls[]', url));
 
                 const data = await apiPostForm<CreationResponse>('/lab/video/generate', form);
                 syncTokenBalance(data.token_balance);

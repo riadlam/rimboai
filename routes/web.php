@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImageGenerationController;
 use App\Http\Controllers\LabAssetFetchController;
 use App\Http\Controllers\LabCreationsController;
+use App\Http\Controllers\LabMediaUploadController;
 use App\Http\Controllers\VideoGenerationController;
 use App\Http\Controllers\MusicGenerationController;
 use App\Http\Controllers\TrendsController;
@@ -93,6 +94,9 @@ Route::middleware('auth')->group(function () {
         ->name('lab.image.status');
 
     // Text-to-video generation (server-side fal queue proxy)
+    Route::post('/lab/media/upload', [LabMediaUploadController::class, 'store'])
+        ->middleware('throttle:60,1')
+        ->name('lab.media.upload');
     Route::post('/lab/video/generate', [VideoGenerationController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('lab.video.generate');

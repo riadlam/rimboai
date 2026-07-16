@@ -10,6 +10,7 @@
   "generate": "Generate",
   "generating": "Generating…",
   "starting": "Starting…",
+  "uploadingRefs": "Uploading references {{current}}/{{total}}…",
   "inQueue": "In queue",
   "completed": "Completed",
   "failed": "Failed",
