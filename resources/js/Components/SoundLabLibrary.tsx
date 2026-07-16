@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import MusicLabPreviewModal from '@/Components/MusicLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
-import { labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
+import { labCompletingRampMs, labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 import { musicPalette } from '@/lib/musicPalette';
 
 export type LabTrack = {
@@ -32,10 +32,12 @@ type Props = {
     tracks?: LabTrack[];
     onToggleFavorite?: (id: string) => void;
     onDelete?: (ids: string[]) => void;
+    onRevealComplete?: (id: string) => void;
     generating?: boolean;
 };
 
-function isBuildingStatus(status?: LabTrack['status']) {
+function isBuildingStatus(status?: LabTrack['status'], completing?: boolean) {
+    if (completing) return true;
     return status !== undefined && status !== 'completed' && status !== 'failed' && status !== 'cancelled';
 }
 
@@ -59,6 +61,7 @@ export default function SoundLabLibrary({
     tracks = [],
     onToggleFavorite,
     onDelete,
+    onRevealComplete,
     generating = false,
 }: Props) {
     const { t } = useTranslation('lab');
@@ -91,12 +94,12 @@ export default function SoundLabLibrary({
     }, [tracks, search, favoritesOnly, timeFilter, typeFilter]);
 
     const previewable = useMemo(
-        () => filtered.filter((t) => !isBuildingStatus(t.status) && t.status !== 'failed' && t.status !== 'cancelled'),
+        () => filtered.filter((t) => !isBuildingStatus(t.status, t.completing) && t.status !== 'failed' && t.status !== 'cancelled'),
         [filtered],
     );
     const preview = previewIndex !== null ? previewable[previewIndex] ?? null : null;
     const hasTracks = tracks.length > 0;
-    const hasBuilding = tracks.some((t) => isBuildingStatus(t.status));
+    const hasBuilding = tracks.some((t) => isBuildingStatus(t.status, t.completing));
     const libraryFilterCount = (timeFilter !== 'all' ? 1 : 0) + (typeFilter !== 'all' ? 1 : 0);
     const activeFilterCount = libraryFilterCount + (favoritesOnly ? 1 : 0) + (search.trim() ? 1 : 0);
 
@@ -442,7 +445,7 @@ export default function SoundLabLibrary({
                             </div>
                         ) : (
                             filtered.map((track, index) => {
-                                if (isBuildingStatus(track.status)) {
+                                if (isBuildingStatus(track.status, track.completing)) {
                                     return (
                                         <MusicBuildingCard
                                             key={track.id}
@@ -455,11 +458,12 @@ export default function SoundLabLibrary({
                                             startedAt={track.createdAt}
                                             completing={track.completing}
                                             instrumental={track.instrumental}
+                                            onRevealComplete={() => onRevealComplete?.(track.id)}
                                         />
                                     );
                                 }
 
-                                if (track.status === 'failed' || track.status === 'cancelled') {
+                                if (!track.completing && (track.status === 'failed' || track.status === 'cancelled')) {
                                     return (
                                         <LabFailedCard
                                             key={track.id}
@@ -641,26 +645,29 @@ function useMusicCardProgress(
     serverProgressPercent?: number | null,
 ) {
     const [pct, setPct] = useState(() =>
-        labEffectiveProgressPercent({ serverPercent: serverProgressPercent, status, queuePosition, startedAt, completing }),
+        labEffectiveProgressPercent({ serverPercent: serverProgressPercent, status, queuePosition, startedAt, completing: false }),
     );
+    const pctRef = useRef(pct);
+    pctRef.current = pct;
 
     useEffect(() => {
+        if (completing) return;
         const tick = () => {
             const next = labEffectiveProgressPercent({
                 serverPercent: serverProgressPercent,
                 status,
                 queuePosition,
                 startedAt,
-                completing,
+                completing: false,
             });
-            setPct((prev) => (completing || next >= prev ? next : prev));
+            setPct((prev) => (next >= prev ? next : prev));
         };
         tick();
         const id = window.setInterval(tick, 400);
         return () => window.clearInterval(id);
     }, [startedAt, status, queuePosition, completing, serverProgressPercent]);
 
-    return pct;
+    return { pct, setPct, pctRef };
 }
 
 function MusicBuildingCard({
@@ -673,6 +680,7 @@ function MusicBuildingCard({
     startedAt,
     completing = false,
     instrumental,
+    onRevealComplete,
 }: {
     title: string;
     stylePrompt: string;
@@ -683,8 +691,11 @@ function MusicBuildingCard({
     startedAt: number;
     completing?: boolean;
     instrumental: boolean;
+    onRevealComplete?: () => void;
 }) {
-    const pct = useMusicCardProgress(startedAt, status, queuePosition, completing, progressPercent);
+    const { pct, setPct, pctRef } = useMusicCardProgress(startedAt, status, queuePosition, completing, progressPercent);
+    const [fadeOut, setFadeOut] = useState(false);
+    const revealStarted = useRef(false);
     const phase = labPhaseLabel({
         status,
         queuePosition,
@@ -693,11 +704,36 @@ function MusicBuildingCard({
         kind: 'music',
     });
 
+    useEffect(() => {
+        if (!completing || revealStarted.current) return;
+        revealStarted.current = true;
+        const from = pctRef.current;
+        const duration = labCompletingRampMs(from);
+        const t0 = performance.now();
+        let raf = 0;
+
+        const tick = (now: number) => {
+            const t = Math.min(1, (now - t0) / duration);
+            const eased = 1 - Math.pow(1 - t, 2.2);
+            setPct(Math.round(from + (100 - from) * eased));
+            if (t < 1) {
+                raf = window.requestAnimationFrame(tick);
+            } else {
+                setPct(100);
+                setFadeOut(true);
+                window.setTimeout(() => onRevealComplete?.(), 380);
+            }
+        };
+        raf = window.requestAnimationFrame(tick);
+        return () => window.cancelAnimationFrame(raf);
+    }, [completing, onRevealComplete, pctRef, setPct]);
+
     return (
         <motion.div
             layout
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ opacity: fadeOut ? 0 : 1, y: fadeOut ? 4 : 0 }}
+            transition={{ duration: fadeOut ? 0.35 : 0.22 }}
             className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#15151c] to-[#0e0e13] p-3"
         >
             <div className="flex items-center gap-3">

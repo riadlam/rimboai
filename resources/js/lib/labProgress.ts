@@ -10,7 +10,11 @@ export function labProgressPercent(opts: {
     startedAt?: number;
     completing?: boolean;
 }): number {
-    if (opts.completing || opts.status === 'completed') return 100;
+    if (opts.completing) {
+        // UI ramps to 100 separately — don't jump the estimate to 100 instantly.
+        // Keep the last non-completing estimate as the floor via caller animation.
+    }
+    if (opts.status === 'completed') return 100;
     if (opts.status === 'failed' || opts.status === 'cancelled') return 0;
 
     if (opts.status === 'queued') {
@@ -57,6 +61,12 @@ export function labPhaseLabel(opts: {
     if (opts.kind === 'music') return 'Composing…';
     if (opts.kind === 'video') return 'Generating video…';
     return 'Generating…';
+}
+
+/** How long to ramp displayed % → 100 when the job finishes (farther = a bit longer, still snappy). */
+export function labCompletingRampMs(fromPercent: number): number {
+    const gap = Math.max(0, 100 - Math.min(100, Math.max(0, fromPercent)));
+    return Math.round(Math.min(1800, Math.max(700, 500 + gap * 12)));
 }
 
 /** Prefer server sync % when available; smooth upward between polls with local estimate. */

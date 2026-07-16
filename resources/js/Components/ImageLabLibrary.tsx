@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
 import VideoThumb from '@/Components/VideoThumb';
-import { labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
+import { labCompletingRampMs, labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 
 export type LabImage = {
     id: string;
@@ -45,6 +45,7 @@ type Props = {
     onReuseSettings?: (image: LabImage) => void;
     onUseResult?: (image: LabImage) => void;
     onUseLastFrame?: (image: LabImage) => void | Promise<void>;
+    onRevealComplete?: (id: string) => void;
     generating?: boolean;
 };
 
@@ -126,6 +127,7 @@ export default function ImageLabLibrary({
     onReuseSettings,
     onUseResult,
     onUseLastFrame,
+    onRevealComplete,
     generating = false,
 }: Props) {
     const { t } = useTranslation('lab');
@@ -570,11 +572,12 @@ export default function ImageLabLibrary({
                             {filtered.map((img, index) => {
                                 const isSelected = selected.includes(img.id);
                                 const isBuilding =
-                                    img.status !== undefined &&
-                                    img.status !== 'completed' &&
-                                    img.status !== 'failed' &&
-                                    img.status !== 'cancelled';
-                                const isFailed = img.status === 'failed' || img.status === 'cancelled';
+                                    img.completing === true ||
+                                    (img.status !== undefined &&
+                                        img.status !== 'completed' &&
+                                        img.status !== 'failed' &&
+                                        img.status !== 'cancelled');
+                                const isFailed = !img.completing && (img.status === 'failed' || img.status === 'cancelled');
                                 const isVideo =
                                     img.method === 'text-to-video' ||
                                     img.method === 'image-to-video' ||
@@ -597,6 +600,7 @@ export default function ImageLabLibrary({
                                             batchIndex={img.batchIndex ?? 0}
                                             completing={img.completing}
                                             method={img.method}
+                                            onRevealComplete={() => onRevealComplete?.(img.id)}
                                         />
                                     );
                                 }
@@ -839,26 +843,30 @@ function useLabCardProgress(
     serverProgressPercent?: number | null,
 ) {
     const [pct, setPct] = useState(() =>
-        labEffectiveProgressPercent({ serverPercent: serverProgressPercent, status, queuePosition, startedAt, completing }),
+        labEffectiveProgressPercent({ serverPercent: serverProgressPercent, status, queuePosition, startedAt, completing: false }),
     );
+    const pctRef = useRef(pct);
+    pctRef.current = pct;
 
+    // Normal crawl while building
     useEffect(() => {
+        if (completing) return;
         const tick = () => {
             const next = labEffectiveProgressPercent({
                 serverPercent: serverProgressPercent,
                 status,
                 queuePosition,
                 startedAt,
-                completing,
+                completing: false,
             });
-            setPct((prev) => (completing || next >= prev ? next : prev));
+            setPct((prev) => (next >= prev ? next : prev));
         };
         tick();
         const id = window.setInterval(tick, 400);
         return () => window.clearInterval(id);
     }, [startedAt, status, queuePosition, completing, serverProgressPercent]);
 
-    return pct;
+    return { pct, setPct, pctRef };
 }
 
 function BuildingCard({
@@ -871,6 +879,7 @@ function BuildingCard({
     batchIndex = 0,
     completing = false,
     method,
+    onRevealComplete,
 }: {
     prompt: string;
     status?: LabImage['status'];
@@ -881,9 +890,12 @@ function BuildingCard({
     batchIndex?: number;
     completing?: boolean;
     method?: LabImage['method'];
+    onRevealComplete?: () => void;
 }) {
     const isVideo = method === 'text-to-video' || method === 'image-to-video' || method === 'reference-to-video';
-    const pct = useLabCardProgress(startedAt, status, queuePosition, completing, progressPercent);
+    const { pct, setPct, pctRef } = useLabCardProgress(startedAt, status, queuePosition, completing, progressPercent);
+    const [fadeOut, setFadeOut] = useState(false);
+    const revealStarted = useRef(false);
     const phase = labPhaseLabel({
         status,
         queuePosition,
@@ -892,12 +904,36 @@ function BuildingCard({
         kind: isVideo ? 'video' : 'image',
     });
 
+    useEffect(() => {
+        if (!completing || revealStarted.current) return;
+        revealStarted.current = true;
+        const from = pctRef.current;
+        const duration = labCompletingRampMs(from);
+        const t0 = performance.now();
+        let raf = 0;
+
+        const tick = (now: number) => {
+            const t = Math.min(1, (now - t0) / duration);
+            const eased = 1 - Math.pow(1 - t, 2.2);
+            setPct(Math.round(from + (100 - from) * eased));
+            if (t < 1) {
+                raf = window.requestAnimationFrame(tick);
+            } else {
+                setPct(100);
+                setFadeOut(true);
+                window.setTimeout(() => onRevealComplete?.(), 380);
+            }
+        };
+        raf = window.requestAnimationFrame(tick);
+        return () => window.cancelAnimationFrame(raf);
+    }, [completing, onRevealComplete, pctRef, setPct]);
+
     return (
         <motion.div
             layout
             initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: batchIndex * 0.04, duration: 0.22 }}
+            animate={{ opacity: fadeOut ? 0 : 1, scale: fadeOut ? 0.98 : 1 }}
+            transition={{ delay: fadeOut ? 0 : batchIndex * 0.04, duration: fadeOut ? 0.35 : 0.22 }}
             className="relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-[#15151c] to-[#0c0c10] ring-1 ring-white/[0.07]"
             style={{ aspectRatio: '1 / 1' }}
         >

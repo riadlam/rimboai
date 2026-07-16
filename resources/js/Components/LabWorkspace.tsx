@@ -166,13 +166,22 @@ function mergeImageVideoCreationState(
                 if (!url) {
                     return { ...slot, status: 'failed' as const, completing: false, error: 'Output missing.' };
                 }
+                // Keep building UI; card ramps % → 100 then fades into the result.
+                if (slot.completing || slot.status === 'completed') {
+                    return {
+                        ...slot,
+                        src: url,
+                        status: 'completed' as const,
+                        modelName: creation.model_name ?? slot.modelName,
+                        error: null,
+                    };
+                }
                 return {
                     ...slot,
                     src: url,
-                    status: 'completed' as const,
-                    completing: false,
-                    progress: null,
-                    progressPercent: 100,
+                    status: 'in_progress' as const,
+                    completing: true,
+                    progress: 'Finishing…',
                     error: null,
                     modelName: creation.model_name ?? slot.modelName,
                 };
@@ -187,16 +196,27 @@ function mergeImageVideoCreationState(
         if (!videoUrl) {
             return [{ ...existing, status: 'failed' as const, error: 'Generation finished without a video.' }, ...rest];
         }
+        if (existing.completing || existing.status === 'completed') {
+            return [
+                {
+                    ...existing,
+                    src: creation.thumbnail_url || videoUrl,
+                    videoUrl,
+                    status: 'completed' as const,
+                    modelName: creation.model_name ?? existing.modelName,
+                    error: null,
+                },
+                ...rest,
+            ];
+        }
         return [
             {
                 ...existing,
-                id: `video-${creationId}`,
                 src: creation.thumbnail_url || videoUrl,
                 videoUrl,
-                status: 'completed' as const,
-                completing: false,
-                progress: null,
-                progressPercent: 100,
+                status: 'in_progress' as const,
+                completing: true,
+                progress: 'Finishing…',
                 error: null,
                 modelName: creation.model_name ?? existing.modelName,
             },
@@ -207,7 +227,7 @@ function mergeImageVideoCreationState(
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((i) =>
             i.creationId === creationId
-                ? { ...i, status: 'failed' as const, progress: null, error: creation.error ?? 'Generation failed.' }
+                ? { ...i, status: 'failed' as const, completing: false, progress: null, error: creation.error ?? 'Generation failed.' }
                 : i,
         );
     }
@@ -218,26 +238,33 @@ function mergeImageVideoCreationState(
 function mergeMusicCreationState(prev: LabTrack[], creationId: number, creation: CreationResponse): LabTrack[] {
     if (creation.status === 'completed') {
         const audioUrl = creation.audio_url || creation.preview_url;
-        return prev.map((track) =>
-            track.creationId === creationId
-                ? {
-                      ...track,
-                      status: 'completed' as const,
-                      audioUrl: audioUrl ?? track.audioUrl,
-                      cover: creation.cover_url || track.cover,
-                      progress: null,
-                      progressPercent: 100,
-                      error: null,
-                      completing: false,
-                  }
-                : track,
-        );
+        return prev.map((track) => {
+            if (track.creationId !== creationId) return track;
+            if (track.completing || track.status === 'completed') {
+                return {
+                    ...track,
+                    status: 'completed' as const,
+                    audioUrl: audioUrl ?? track.audioUrl,
+                    cover: creation.cover_url || track.cover,
+                    error: null,
+                };
+            }
+            return {
+                ...track,
+                audioUrl: audioUrl ?? track.audioUrl,
+                cover: creation.cover_url || track.cover,
+                status: 'in_progress' as const,
+                completing: true,
+                progress: 'Finishing…',
+                error: null,
+            };
+        });
     }
 
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((track) =>
             track.creationId === creationId
-                ? { ...track, status: 'failed', error: creation.error || 'Generation failed.', progress: creation.progress_message ?? 'Failed' }
+                ? { ...track, status: 'failed', completing: false, error: creation.error || 'Generation failed.', progress: creation.progress_message ?? 'Failed' }
                 : track,
         );
     }
@@ -486,6 +513,42 @@ function LabWorkspaceInner({
         },
         [pushError, toReuseSource],
     );
+
+    const handleImageRevealComplete = useCallback((id: string) => {
+        setImages((prev) =>
+            prev.map((img) =>
+                img.id === id
+                    ? {
+                          ...img,
+                          status: 'completed' as const,
+                          completing: false,
+                          progress: null,
+                          progressPercent: 100,
+                          id:
+                              img.videoUrl && !img.id.startsWith('video-') && img.creationId
+                                  ? `video-${img.creationId}`
+                                  : img.id,
+                      }
+                    : img,
+            ),
+        );
+    }, []);
+
+    const handleTrackRevealComplete = useCallback((id: string) => {
+        setTracks((prev) =>
+            prev.map((track) =>
+                track.id === id
+                    ? {
+                          ...track,
+                          status: 'completed' as const,
+                          completing: false,
+                          progress: null,
+                          progressPercent: 100,
+                      }
+                    : track,
+            ),
+        );
+    }, []);
 
     const failBatch = useCallback((batchId: string, error?: string | null) => {
         const message = error ?? 'Generation failed.';
@@ -1286,6 +1349,7 @@ function LabWorkspaceInner({
                                     generating={loading || musicGenerating}
                                     onToggleFavorite={toggleTrackFavorite}
                                     onDelete={deleteTracks}
+                                    onRevealComplete={handleTrackRevealComplete}
                                 />
                             ) : isVoiceLab ? (
                                 <VoiceLabLibrary
@@ -1303,6 +1367,7 @@ function LabWorkspaceInner({
                                     onReuseSettings={handleReuseSettings}
                                     onUseResult={handleUseResult}
                                     onUseLastFrame={handleUseLastFrame}
+                                    onRevealComplete={handleImageRevealComplete}
                                 />
                             )}
                         </div>
