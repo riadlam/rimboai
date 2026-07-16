@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import VoiceLabPreviewModal from '@/Components/VoiceLabPreviewModal';
+import LabFailedCard from '@/Components/LabFailedCard';
 import { musicPalette } from '@/lib/musicPalette';
 
 export type LabVoice = {
@@ -403,6 +404,18 @@ export default function VoiceLabLibrary({
                         ) : (
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                                 {filtered.map((item, index) => {
+                                    if (item.status === 'failed' || item.status === 'cancelled') {
+                                        return (
+                                            <LabFailedCard
+                                                key={item.id}
+                                                error={item.error}
+                                                prompt={item.title}
+                                                variant="tile"
+                                                onDismiss={() => onDelete?.([item.id])}
+                                            />
+                                        );
+                                    }
+
                                     const isPlaying = playingId === item.id;
                                     const isSelected = selected.includes(item.id);
                                     const thumb = musicPalette(item.id);

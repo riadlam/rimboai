@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
+import LabFailedCard from '@/Components/LabFailedCard';
 import VideoThumb from '@/Components/VideoThumb';
 import { labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 
@@ -598,8 +599,11 @@ export default function ImageLabLibrary({
 
                                 if (isFailed) {
                                     return (
-                                        <FailedCard
+                                        <LabFailedCard
                                             key={img.id}
+                                            error={img.error}
+                                            prompt={img.prompt}
+                                            variant="tile"
                                             onDismiss={() => onDelete?.([img.id])}
                                         />
                                     );
@@ -926,51 +930,6 @@ function BuildingCard({
                     animate={{ width: `${pct}%` }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                 />
-            </div>
-        </motion.div>
-    );
-}
-
-function FailedCard({
-    onDismiss,
-}: {
-    onDismiss?: () => void;
-}) {
-    return (
-        <motion.div
-            layout
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative flex w-full flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-[#121218]"
-            style={{ aspectRatio: '1 / 1' }}
-        >
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 p-2.5 text-center sm:gap-2 sm:p-3.5">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-white/50 ring-1 ring-white/10 sm:h-9 sm:w-9">
-                    <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                        <path strokeLinecap="round" d="M12 9v4" />
-                        <path strokeLinecap="round" d="M12 17h.01" />
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
-                        />
-                    </svg>
-                </div>
-                <div className="min-w-0 max-w-full space-y-0.5 px-0.5">
-                    <p className="text-[11px] font-semibold leading-tight text-white/70 sm:text-[12px]">Failed</p>
-                    <p className="line-clamp-2 text-[9px] leading-snug text-white/35 sm:text-[10px]">
-                        See notification for details
-                    </p>
-                </div>
-                {onDismiss && (
-                    <button
-                        type="button"
-                        onClick={onDismiss}
-                        className="mt-0.5 shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-white/65 transition hover:bg-white/[0.09] hover:text-white sm:rounded-lg sm:px-2.5 sm:py-1 sm:text-[11px]"
-                    >
-                        Dismiss
-                    </button>
-                )}
             </div>
         </motion.div>
     );
