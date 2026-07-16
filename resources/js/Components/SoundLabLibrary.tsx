@@ -737,24 +737,30 @@ function MusicFailedCard({
             layout
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-[#121218] p-3"
+            className="flex items-center gap-2.5 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#121218] p-2.5 sm:gap-3 sm:p-3"
         >
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/[0.04] text-white/40 ring-1 ring-white/10">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M12 9v4" />
-                    <path d="M12 17h.01" />
-                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.04] text-white/45 ring-1 ring-white/10 sm:h-14 sm:w-14">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                    <path strokeLinecap="round" d="M12 9v4" />
+                    <path strokeLinecap="round" d="M12 17h.01" />
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                    />
                 </svg>
             </div>
-            <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/60">Generation failed</p>
-                <p className="text-[11px] text-white/35">See notification for details</p>
+            <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="truncate text-[12px] font-semibold text-white/65 sm:text-[13px]">Failed</p>
+                <p className="line-clamp-2 text-[10px] leading-snug text-white/35 sm:text-[11px]">
+                    See notification for details
+                </p>
             </div>
             {onDismiss && (
                 <button
                     type="button"
                     onClick={onDismiss}
-                    className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+                    className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white sm:px-2.5 sm:text-[11px]"
                 >
                     Dismiss
                 </button>
