@@ -31,6 +31,23 @@ class FalVideoInputBuilder
             'audio' => true,
             'audio_field' => 'generate_audio',
         ],
+        'fal-ai/kling-video/o3/pro/reference-to-video' => [
+            'duration_format' => 'string',
+            'aspects' => ['16:9', '9:16', '1:1'],
+            'audio' => true,
+            'audio_field' => 'generate_audio',
+        ],
+        'fal-ai/kling-video/o3/standard/reference-to-video' => [
+            'duration_format' => 'string',
+            'aspects' => ['16:9', '9:16', '1:1'],
+            'audio' => true,
+            'audio_field' => 'generate_audio',
+        ],
+        'fal-ai/kling-video/o1/reference-to-video' => [
+            'duration_format' => 'string',
+            'aspects' => ['16:9', '9:16', '1:1'],
+            'audio' => false,
+        ],
                         'fal-ai/kling-video/v2.6/pro/text-to-video' => [
             'duration_format' => 'string',
             'aspects' => ['16:9', '9:16', '1:1'],
@@ -72,6 +89,18 @@ class FalVideoInputBuilder
             'duration_format' => 'int',
             'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
             'resolution' => true,
+        ],
+        'fal-ai/wan/v2.7/reference-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+            'resolution' => true,
+        ],
+        'fal-ai/pixverse/c1/reference-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+            'resolution' => true,
+            'audio' => true,
+            'audio_field' => 'generate_audio_switch',
         ],
         'bytedance/seedance-2.0/text-to-video' => [
             'duration_format' => 'string',
@@ -152,10 +181,31 @@ class FalVideoInputBuilder
         }
 
         if ($mode === 'reference-to-video') {
-            if ($imageUrls !== []) {
+            $id = strtolower($endpointId);
+            if (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video')) {
+                $limit = (str_contains($id, '/o1/') || str_contains($id, '/4k/')) ? 7 : 4;
+                $elements = $this->buildKlingElements(array_slice($imageUrls, 0, $limit));
+                if ($elements !== []) {
+                    $input['prompt'] = $this->withReferencePrefix($prompt, $this->referenceList('@Element', count($elements)));
+                    $input['elements'] = $elements;
+                }
+            } elseif (str_contains($id, 'wan/v2.7/reference-to-video')) {
+                if ($imageUrls !== []) {
+                    $input['reference_image_urls'] = array_slice($imageUrls, 0, 5);
+                }
+                if ($videoUrls !== []) {
+                    $input['reference_video_urls'] = array_slice($videoUrls, 0, 5);
+                }
+            } elseif (str_contains($id, 'pixverse/c1/reference-to-video')) {
+                $references = $this->buildPixVerseReferences(array_slice($imageUrls, 0, 5));
+                if ($references !== []) {
+                    $input['prompt'] = $this->withReferencePrefix($prompt, $this->referenceList('@ref', count($references)));
+                    $input['image_references'] = $references;
+                }
+            } elseif ($imageUrls !== []) {
                 $input['image_urls'] = array_slice($imageUrls, 0, 9);
             }
-            if ($videoUrls !== []) {
+            if ($videoUrls !== [] && ! str_contains($id, 'wan/v2.7/reference-to-video')) {
                 $input['video_urls'] = array_slice($videoUrls, 0, 3);
             }
             if ($audioUrls !== []) {
@@ -169,7 +219,7 @@ class FalVideoInputBuilder
             'duration_value' => is_string($durationValue) ? $durationValue : (string) $durationValue,
             'aspect_ratio' => $input['aspect_ratio'] ?? $aspect,
             'resolution' => $input['resolution'] ?? $resolution,
-            'with_audio' => (bool) ($input['generate_audio'] ?? false),
+            'with_audio' => (bool) (($input['generate_audio'] ?? false) || ($input['generate_audio_switch'] ?? false)),
         ];
     }
 
@@ -365,9 +415,79 @@ class FalVideoInputBuilder
             ];
         }
 
+        if (str_contains($id, 'wan/v2.7')) {
+            return [
+                'duration_format' => 'int',
+                'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+                'resolution' => true,
+            ];
+        }
+
+        if (str_contains($id, 'pixverse')) {
+            return [
+                'duration_format' => 'int',
+                'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+                'resolution' => true,
+                'audio' => true,
+                'audio_field' => 'generate_audio_switch',
+            ];
+        }
+
         return [
             'duration_format' => 'string',
             'aspects' => ['16:9', '9:16', '1:1'],
         ];
+    }
+
+    /**
+     * @param  list<string>  $imageUrls
+     * @return list<array{frontal_image_url: string}>
+     */
+    private function buildKlingElements(array $imageUrls): array
+    {
+        return array_values(array_map(
+            static fn (string $url): array => ['frontal_image_url' => $url],
+            $imageUrls,
+        ));
+    }
+
+    /**
+     * @param  list<string>  $imageUrls
+     * @return list<array{type: string, image_url: string, ref_name: string}>
+     */
+    private function buildPixVerseReferences(array $imageUrls): array
+    {
+        return array_values(array_map(
+            static fn (string $url, int $index): array => [
+                'type' => 'subject',
+                'image_url' => $url,
+                'ref_name' => 'ref'.($index + 1),
+            ],
+            $imageUrls,
+            array_keys($imageUrls),
+        ));
+    }
+
+    private function withReferencePrefix(string $prompt, string $references): string
+    {
+        if ($references === '' || str_contains($prompt, '@')) {
+            return $prompt;
+        }
+
+        return "Use {$references} as the provided visual references. {$prompt}";
+    }
+
+    private function referenceList(string $prefix, int $count): string
+    {
+        if ($count <= 0) {
+            return '';
+        }
+
+        $labels = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $labels[] = "{$prefix}{$i}";
+        }
+
+        return implode(', ', $labels);
     }
 }

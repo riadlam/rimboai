@@ -8,11 +8,13 @@ export type VideoModelPick = {
     reason: string;
 };
 
-function endpointFamily(endpointId: string | null | undefined): 'seedance' | 'veo' | 'kling' | 'other' {
+function endpointFamily(endpointId: string | null | undefined): 'seedance' | 'veo' | 'kling' | 'wan' | 'pixverse' | 'other' {
     const id = (endpointId || '').toLowerCase();
     if (id.includes('seedance')) return 'seedance';
     if (id.includes('veo')) return 'veo';
     if (id.includes('kling')) return 'kling';
+    if (id.includes('wan/')) return 'wan';
+    if (id.includes('pixverse')) return 'pixverse';
     return 'other';
 }
 
@@ -44,7 +46,7 @@ export function scoreVideoModel(model: BrandModel, counts: MediaCounts, prompt: 
     } else {
         // Reference / multimodal path
         if (counts.videos > 0 || counts.audios > 0) {
-            if (family === 'seedance') {
+            if (family === 'seedance' || family === 'wan') {
                 score += 80;
                 bits.push('multimodal');
             } else {
@@ -53,18 +55,35 @@ export function scoreVideoModel(model: BrandModel, counts: MediaCounts, prompt: 
         }
 
         if (counts.images >= 4) {
-            if (family === 'seedance') {
+            if (family === 'kling') {
+                score += 80;
+                bits.push('kling multi-ref');
+            } else if (family === 'wan') {
+                score += 70;
+                bits.push('wan multi-ref');
+            } else if (family === 'seedance') {
                 score += 70;
                 bits.push('many images');
+            } else if (family === 'pixverse') {
+                score += 40;
+                bits.push('pixverse refs');
             } else {
                 score -= 80;
             }
         } else if (counts.images >= 2) {
             if (risk.level >= 2) {
-                // Complex edit-style prompts are safer on Seedance
-                if (family === 'seedance') {
-                    score += 55;
-                    bits.push('complex prompt → multimodal');
+                if (family === 'kling') {
+                    score += 70;
+                    bits.push('kling refs');
+                } else if (family === 'wan') {
+                    score += 60;
+                    bits.push('wan refs');
+                } else if (family === 'pixverse') {
+                    score += 35;
+                    bits.push('pixverse refs');
+                } else if (family === 'seedance') {
+                    score += 20;
+                    bits.push('multi-image');
                 } else if (family === 'veo') {
                     score -= 25;
                     bits.push('veo risky for edit prompts');
@@ -72,6 +91,15 @@ export function scoreVideoModel(model: BrandModel, counts: MediaCounts, prompt: 
             } else if (counts.images <= 3 && family === 'veo') {
                 score += 35;
                 bits.push('veo 2–3 images');
+            } else if (family === 'kling') {
+                score += 45;
+                bits.push('kling refs');
+            } else if (family === 'wan') {
+                score += 40;
+                bits.push('wan refs');
+            } else if (family === 'pixverse') {
+                score += 25;
+                bits.push('pixverse refs');
             } else if (family === 'seedance') {
                 score += 25;
                 bits.push('seedance multi-image');
@@ -141,6 +169,11 @@ export function shouldAutoSwitchVideoModel(
         return { switch: false, reason: '' };
     }
 
+    const currentFamily = endpointFamily(current.endpoint_id);
+    if (['kling', 'wan', 'pixverse'].includes(currentFamily) && supportsMediaMix(current, counts)) {
+        return { switch: false, reason: '' };
+    }
+
     if (best.model.name === current.name && best.model.endpoint_id === current.endpoint_id) {
         return { switch: false, reason: '' };
     }
@@ -150,7 +183,7 @@ export function shouldAutoSwitchVideoModel(
     const risk = analyzeVideoPrompt(prompt);
     const heavyRefs = counts.images >= 4 || counts.videos > 0 || counts.audios > 0;
     const riskyVeo =
-        endpointFamily(current.endpoint_id) === 'veo' &&
+        currentFamily === 'veo' &&
         counts.images >= 2 &&
         risk.level >= 2;
 
@@ -165,13 +198,6 @@ export function shouldAutoSwitchVideoModel(
         return {
             switch: true,
             reason: `Switched to ${best.model.name} — your prompt looks like a multi-shot edit; this model handles that more reliably.`,
-        };
-    }
-
-    if (gap >= 45) {
-        return {
-            switch: true,
-            reason: `Switched to ${best.model.name} — better fit for this media and prompt.`,
         };
     }
 

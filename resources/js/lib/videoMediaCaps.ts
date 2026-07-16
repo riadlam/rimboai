@@ -132,7 +132,7 @@ export function describeMediaGuidance(counts: MediaCounts, compatibleCount: numb
         return {
             tone: 'warn',
             title: 'Many image references',
-            body: '4+ images only work with multimodal models (e.g. Seedance). Models with a 3-image limit are hidden so you don’t waste credits.',
+            body: '4+ images only work with multi-reference models. Lower-limit models are hidden so you don’t waste credits.',
         };
     }
 

@@ -85,7 +85,54 @@ class VideoModelCapabilities
             );
         }
 
-        // Kling family — first-frame I2V only
+        if ($id === 'fal-ai/kling-video/o1/reference-to-video') {
+            return $this->caps(
+                images: true,
+                videos: false,
+                audio: false,
+                firstFrame: false,
+                maxImages: 7,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: 'fal-ai/kling-video/o1/reference-to-video',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+            );
+        }
+
+        if ($id === 'fal-ai/kling-video/o3/4k/reference-to-video') {
+            return $this->caps(
+                images: true,
+                videos: false,
+                audio: false,
+                firstFrame: false,
+                maxImages: 7,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: 'fal-ai/kling-video/o3/4k/reference-to-video',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+            );
+        }
+
+        if (str_contains($id, 'kling-video/o3/') && str_contains($id, 'text-to-video')) {
+            $tier = str_contains($id, '/standard/') ? 'standard' : 'pro';
+
+            return $this->caps(
+                images: true,
+                videos: false,
+                audio: false,
+                firstFrame: true,
+                maxImages: 4,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: "fal-ai/kling-video/o3/{$tier}/reference-to-video",
+                firstFrameEndpoint: "fal-ai/kling-video/o3/{$tier}/image-to-video",
+                firstFrameParam: 'image_url',
+            );
+        }
+
+        // Kling family — first-frame I2V only unless overridden above
         if (str_contains($id, 'kling-video')) {
             $i2v = $this->klingI2vSibling($id);
 
@@ -103,12 +150,39 @@ class VideoModelCapabilities
             );
         }
 
-        // Sora / Wan / Grok — first-frame I2V
+        if (str_contains($id, 'wan/v2.7/text-to-video')) {
+            return $this->caps(
+                images: true,
+                videos: true,
+                audio: false,
+                firstFrame: true,
+                maxImages: 5,
+                maxVideos: 5,
+                maxAudios: 0,
+                reference: 'fal-ai/wan/v2.7/reference-to-video',
+                firstFrameEndpoint: 'fal-ai/wan/v2.7/image-to-video',
+                firstFrameParam: 'image_url',
+            );
+        }
+
+        if ($id === 'fal-ai/pixverse/c1/reference-to-video') {
+            return $this->caps(
+                images: true,
+                videos: false,
+                audio: false,
+                firstFrame: false,
+                maxImages: 5,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: 'fal-ai/pixverse/c1/reference-to-video',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+            );
+        }
+
+        // Sora / Grok — first-frame I2V
         if (str_contains($id, 'sora-2/text-to-video')) {
             return $this->caps(false, false, false, true, 1, 0, 0, null, 'fal-ai/sora-2/image-to-video', 'image_url');
-        }
-        if (str_contains($id, 'wan/') && str_contains($id, 'text-to-video')) {
-            return $this->caps(false, false, false, true, 1, 0, 0, null, 'fal-ai/wan/v2.7/image-to-video', 'image_url');
         }
         if (str_contains($id, 'grok-imagine-video/text-to-video')) {
             return $this->caps(false, false, false, true, 1, 0, 0, null, 'xai/grok-imagine-video/image-to-video', 'image_url');

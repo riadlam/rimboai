@@ -10,11 +10,7 @@ export function labProgressPercent(opts: {
     startedAt?: number;
     completing?: boolean;
 }): number {
-    if (opts.completing) {
-        // UI ramps to 100 separately — don't jump the estimate to 100 instantly.
-        // Keep the last non-completing estimate as the floor via caller animation.
-    }
-    if (opts.status === 'completed') return 100;
+    if (opts.completing || opts.status === 'completed') return 100;
     if (opts.status === 'failed' || opts.status === 'cancelled') return 0;
 
     if (opts.status === 'queued') {

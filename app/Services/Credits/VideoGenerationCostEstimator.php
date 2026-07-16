@@ -150,6 +150,18 @@ class VideoGenerationCostEstimator
         }
 
         $id = strtolower($endpointId);
+        if (str_contains($id, 'kling-video/o3/4k/reference-to-video')) {
+            return 1.0;
+        }
+        if (str_contains($id, 'kling-video/o3/pro/reference-to-video')) {
+            return 1.25;
+        }
+        if (str_contains($id, 'kling-video/o3/standard/reference-to-video')) {
+            return 4 / 3;
+        }
+        if (str_contains($id, 'pixverse/c1/reference-to-video')) {
+            return 1.3;
+        }
         if (str_contains($id, 'kling') && (str_contains($id, 'v3') || str_contains($id, '/o3/') || str_contains($id, 'v2.6'))) {
             return 1.5;
         }
@@ -161,6 +173,13 @@ class VideoGenerationCostEstimator
     {
         $id = strtolower($endpointId);
         if (! str_contains($id, 'veo')) {
+            if (str_contains($id, 'pixverse/c1/reference-to-video')) {
+                return match ($resolution) {
+                    '1080p' => 1.9,
+                    default => 1.0,
+                };
+            }
+
             return 1.0;
         }
 
