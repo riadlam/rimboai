@@ -301,7 +301,12 @@ function LabWorkspaceInner({
 
     const handleUseResult = useCallback(
         (img: LabImage) => {
-            setReuseDraft(buildUseResultDraft(toReuseSource(img)));
+            const draft = buildUseResultDraft(toReuseSource(img));
+            // Hard guarantee: Use Image never opens Variations / Remix refs.
+            if (draft.lab === 'image') {
+                draft.imageMode = 'create';
+            }
+            setReuseDraft(draft);
         },
         [toReuseSource],
     );

@@ -178,7 +178,13 @@ export default function ImageLabCreateForm({
             if (draft.resolution && ['1K', '2K', '4K'].includes(draft.resolution)) setResolution(draft.resolution);
             if (draft.quantity && draft.quantity >= 1) setQuantity(Math.min(4, draft.quantity));
 
-            const nextMode = draft.imageMode === 'variations' ? 'variations' : 'create';
+            // Use Image must land on Create Image — never Variations / Remix refs.
+            const nextMode =
+                draft.intent === 'use-result'
+                    ? 'create'
+                    : draft.imageMode === 'variations'
+                      ? 'variations'
+                      : 'create';
             setMode(nextMode);
 
             refsRef.current.forEach((r) => URL.revokeObjectURL(r.url));
@@ -200,6 +206,10 @@ export default function ImageLabCreateForm({
                     }));
                     refsRef.current = next;
                     setRefs(next);
+                    // Re-assert after async load — avoid stale mode flips.
+                    if (draft.intent === 'use-result') {
+                        setMode('create');
+                    }
 
                     if (loaded.failed > 0 && loaded.files.length === 0) {
                         setDraftNotice(t('settingsRestored'));
@@ -224,7 +234,12 @@ export default function ImageLabCreateForm({
                     setDraftNotice(t('settingsRestored'));
                 }
             } finally {
-                if (!cancelled) setDraftLoading(false);
+                if (!cancelled) {
+                    if (draft.intent === 'use-result') {
+                        setMode('create');
+                    }
+                    setDraftLoading(false);
+                }
             }
         };
 

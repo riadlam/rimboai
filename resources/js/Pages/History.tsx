@@ -438,6 +438,9 @@ function HistoryWorkspace() {
             intent === 'reuse-settings'
                 ? buildReuseSettingsDraft(toReuseSource(item))
                 : buildUseResultDraft(toReuseSource(item));
+        if (intent === 'use-result' && draft.lab === 'image') {
+            draft.imageMode = 'create';
+        }
         saveLabReuseDraft(draft);
         const labType = draft.lab === 'video' ? 'text-to-video' : 'text-to-image';
         router.visit(`/lab?type=${labType}`);
