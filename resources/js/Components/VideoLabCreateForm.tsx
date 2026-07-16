@@ -547,6 +547,17 @@ export default function VideoLabCreateForm({
         setSwitchNotice(null);
     };
 
+    const downloadMedia = (item: MediaItem) => {
+        const objectUrl = URL.createObjectURL(item.file);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = item.name || `${item.kind}-${item.id}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+    };
+
     const appendChip = (text: string) => {
         setPrompt((p) => {
             const t = p.trim();
@@ -738,6 +749,21 @@ export default function VideoLabCreateForm({
                                             <span className="absolute bottom-1 start-1 rounded bg-black/70 px-1 py-px text-[9px] font-semibold text-orange-200 backdrop-blur-sm">
                                                 {assetMentions[index]?.alias ?? m.kind}
                                             </span>
+                                            {m.kind === 'image' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => downloadMedia(m)}
+                                                    aria-label="Download image"
+                                                    title="Download"
+                                                    className="absolute end-1 bottom-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/75 text-white ring-1 ring-white/20 md:h-5 md:w-5 md:opacity-0 md:transition md:group-hover/thumb:opacity-100"
+                                                >
+                                                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                                        <path d="M12 4v10.5" />
+                                                        <path d="m8.5 11.5 3.5 3.5 3.5-3.5" />
+                                                        <path d="M5 17.5v.5A2 2 0 0 0 7 20h10a2 2 0 0 0 2-2v-.5" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => removeMedia(m.id)}
