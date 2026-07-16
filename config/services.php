@@ -37,6 +37,8 @@ return [
 
     'fal' => [
         'key' => env('FAL_KEY'),
+        // Platform/Admin API key for billing + usage (env key is literally admin_key).
+        'admin_key' => env('admin_key'),
     ],
 
     'telegram' => [

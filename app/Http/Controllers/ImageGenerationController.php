@@ -9,6 +9,7 @@ use App\Services\Credits\ImageGenerationCostEstimator;
 use App\Services\FalImageInputBuilder;
 use App\Services\FalPricingService;
 use App\Services\FalService;
+use App\Services\FalWalletCostTracker;
 use App\Services\ImageReferenceStorage;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ class ImageGenerationController extends Controller
         TokenService $tokens,
         FalPricingService $pricing,
         AssetPromptReferences $promptReferences,
+        FalWalletCostTracker $walletCost,
     ): JsonResponse {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
@@ -197,6 +199,7 @@ class ImageGenerationController extends Controller
         }
 
         try {
+            $walletCost->recordBalanceBefore($creation);
             $submit = $fal->submit($submitEndpoint, $falInput);
         } catch (\Throwable $e) {
             report($e);
@@ -222,18 +225,24 @@ class ImageGenerationController extends Controller
     /**
      * Return the current status of a creation, refreshing from fal if needed.
      */
-    public function status(Request $request, UserImageCreation $creation, FalService $fal): JsonResponse
+    public function status(Request $request, UserImageCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal);
+            $this->refresh($creation, $fal, $walletCost);
+        } elseif (
+            $creation->status === UserImageCreation::STATUS_COMPLETED
+            && $creation->cost_usd === null
+            && $creation->fal_request_id
+        ) {
+            $walletCost->maybeFillCostUsd($creation);
         }
 
         return response()->json($this->present($creation));
     }
 
-    private function refresh(UserImageCreation $creation, FalService $fal): void
+    private function refresh(UserImageCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): void
     {
         try {
             $status = $creation->fal_status_url
@@ -306,6 +315,8 @@ class ImageGenerationController extends Controller
             'error_message' => null,
             'error_type' => null,
         ])->save();
+
+        $walletCost->recordAfterCompletion($creation);
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Services\Credits\MusicGenerationCostEstimator;
 use App\Services\FalMusicInputBuilder;
 use App\Services\FalPricingService;
 use App\Services\FalService;
+use App\Services\FalWalletCostTracker;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,7 @@ class MusicGenerationController extends Controller
         TokenService $tokens,
         FalPricingService $pricing,
         AssetPromptReferences $promptReferences,
+        FalWalletCostTracker $walletCost,
     ): JsonResponse {
         // When PHP post_max_size is exceeded, $_POST/$_FILES are empty → fake 422s.
         $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
@@ -341,6 +343,7 @@ class MusicGenerationController extends Controller
         }
 
         try {
+            $walletCost->recordBalanceBefore($creation);
             $submit = $fal->submit($model->endpoint_id, $falInput);
         } catch (\Throwable $e) {
             report($e);
@@ -363,18 +366,24 @@ class MusicGenerationController extends Controller
         return response()->json($this->present($creation), 201);
     }
 
-    public function status(Request $request, UserMusicCreation $creation, FalService $fal): JsonResponse
+    public function status(Request $request, UserMusicCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal);
+            $this->refresh($creation, $fal, $walletCost);
+        } elseif (
+            $creation->status === UserMusicCreation::STATUS_COMPLETED
+            && $creation->cost_usd === null
+            && $creation->fal_request_id
+        ) {
+            $walletCost->maybeFillCostUsd($creation);
         }
 
         return response()->json($this->present($creation));
     }
 
-    private function refresh(UserMusicCreation $creation, FalService $fal): void
+    private function refresh(UserMusicCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): void
     {
         try {
             $status = $creation->fal_status_url
@@ -470,6 +479,8 @@ class MusicGenerationController extends Controller
             'error_message' => null,
             'error_type' => null,
         ])->save();
+
+        $walletCost->recordAfterCompletion($creation);
     }
 
     /**

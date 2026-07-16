@@ -9,6 +9,7 @@ use App\Services\Credits\VideoGenerationCostEstimator;
 use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalVideoInputBuilder;
+use App\Services\FalWalletCostTracker;
 use App\Services\MediaReferenceStorage;
 use App\Services\Tokens\TokenService;
 use App\Services\VideoModelCapabilities;
@@ -30,6 +31,7 @@ class VideoGenerationController extends Controller
         TokenService $tokens,
         FalPricingService $pricing,
         AssetPromptReferences $promptReferences,
+        FalWalletCostTracker $walletCost,
     ): JsonResponse {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
@@ -239,6 +241,7 @@ class VideoGenerationController extends Controller
         }
 
         try {
+            $walletCost->recordBalanceBefore($creation);
             $submit = $fal->submit($submitEndpoint, $falInput);
         } catch (\Throwable $e) {
             report($e);
@@ -261,12 +264,18 @@ class VideoGenerationController extends Controller
         return response()->json($this->present($creation), 201);
     }
 
-    public function status(Request $request, UserVideoCreation $creation, FalService $fal): JsonResponse
+    public function status(Request $request, UserVideoCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal);
+            $this->refresh($creation, $fal, $walletCost);
+        } elseif (
+            $creation->status === UserVideoCreation::STATUS_COMPLETED
+            && $creation->cost_usd === null
+            && $creation->fal_request_id
+        ) {
+            $walletCost->maybeFillCostUsd($creation);
         }
 
         return response()->json($this->present($creation));
@@ -289,7 +298,7 @@ class VideoGenerationController extends Controller
         return is_array($raw) ? array_values(array_filter($raw, fn ($f) => $f instanceof UploadedFile)) : [];
     }
 
-    private function refresh(UserVideoCreation $creation, FalService $fal): void
+    private function refresh(UserVideoCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): void
     {
         try {
             $status = $creation->fal_status_url
@@ -363,6 +372,8 @@ class VideoGenerationController extends Controller
             'error_message' => null,
             'error_type' => null,
         ])->save();
+
+        $walletCost->recordAfterCompletion($creation);
     }
 
     /**

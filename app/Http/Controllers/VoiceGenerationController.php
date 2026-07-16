@@ -8,6 +8,7 @@ use App\Services\Credits\VoiceGenerationCostEstimator;
 use App\Services\FalPricingService;
 use App\Services\FalService;
 use App\Services\FalVoiceInputBuilder;
+use App\Services\FalWalletCostTracker;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class VoiceGenerationController extends Controller
         VoiceGenerationCostEstimator $costEstimator,
         TokenService $tokens,
         FalPricingService $pricing,
+        FalWalletCostTracker $walletCost,
     ): JsonResponse {
         $data = $request->validate([
             'text' => ['required', 'string', 'min:1', 'max:70000'],
@@ -137,6 +139,7 @@ class VoiceGenerationController extends Controller
         }
 
         try {
+            $walletCost->recordBalanceBefore($creation);
             $submit = $fal->submit($model->endpoint_id, $falInput);
         } catch (\Throwable $e) {
             report($e);
@@ -159,18 +162,24 @@ class VoiceGenerationController extends Controller
         return response()->json($this->present($creation), 201);
     }
 
-    public function status(Request $request, UserVoiceCreation $creation, FalService $fal): JsonResponse
+    public function status(Request $request, UserVoiceCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): JsonResponse
     {
         abort_unless($creation->isOwnedBy($request->user()), 403);
 
         if (! $creation->isTerminal() && $creation->fal_request_id) {
-            $this->refresh($creation, $fal);
+            $this->refresh($creation, $fal, $walletCost);
+        } elseif (
+            $creation->status === UserVoiceCreation::STATUS_COMPLETED
+            && $creation->cost_usd === null
+            && $creation->fal_request_id
+        ) {
+            $walletCost->maybeFillCostUsd($creation);
         }
 
         return response()->json($this->present($creation));
     }
 
-    private function refresh(UserVoiceCreation $creation, FalService $fal): void
+    private function refresh(UserVoiceCreation $creation, FalService $fal, FalWalletCostTracker $walletCost): void
     {
         try {
             $status = $creation->fal_status_url
@@ -255,6 +264,8 @@ class VoiceGenerationController extends Controller
             'error_message' => null,
             'error_type' => null,
         ])->save();
+
+        $walletCost->recordAfterCompletion($creation);
     }
 
     /**
