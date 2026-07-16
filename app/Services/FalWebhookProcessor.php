@@ -21,7 +21,114 @@ class FalWebhookProcessor
     public function __construct(
         private readonly TokenService $tokens,
         private readonly FalWalletCostTracker $walletCost,
+        private readonly FalService $fal,
     ) {}
+
+    /**
+     * Pull latest state from fal queue URLs (used when a webhook was missed).
+     * Not a browser poll — one server-side check, e.g. on library refresh.
+     */
+    public function syncFromFal(string $type, Model $creation): void
+    {
+        if (method_exists($creation, 'isTerminal') && $creation->isTerminal()) {
+            return;
+        }
+
+        $statusUrl = $creation->getAttribute('fal_status_url');
+        if (! is_string($statusUrl) || $statusUrl === '') {
+            return;
+        }
+
+        try {
+            $status = $this->fal->statusByUrl($statusUrl);
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('fal.sync.status_failed', [
+                'type' => $type,
+                'creation_id' => $creation->getKey(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        $state = strtoupper((string) ($status['status'] ?? ''));
+
+        if ($state === 'IN_QUEUE') {
+            $creation->forceFill([
+                'status' => $creation::STATUS_QUEUED,
+                'queue_position' => $status['queue_position'] ?? null,
+                'progress_message' => 'In queue',
+            ])->save();
+            $this->broadcast($type, $creation->fresh() ?? $creation);
+
+            return;
+        }
+
+        if ($state === 'IN_PROGRESS') {
+            if (method_exists($creation, 'markInProgress')) {
+                $creation->markInProgress(null, $type === 'music' ? 'Composing…' : __('messages.generating'));
+            }
+            $this->broadcast($type, $creation->fresh() ?? $creation);
+
+            return;
+        }
+
+        if (in_array($state, ['FAILED', 'ERROR', 'CANCELLED'], true) || ! empty($status['error'])) {
+            $this->fail($type, $creation, [
+                'error' => (string) ($status['error'] ?? __('messages.generation_failed')),
+                'error_type' => $status['error_type'] ?? 'error',
+            ]);
+            $creation->refresh();
+            $this->broadcast($type, $creation);
+
+            return;
+        }
+
+        if ($state !== 'COMPLETED') {
+            return;
+        }
+
+        if (! empty($status['error'])) {
+            $this->fail($type, $creation, [
+                'error' => (string) $status['error'],
+                'error_type' => $status['error_type'] ?? 'error',
+            ]);
+            $creation->refresh();
+            $this->broadcast($type, $creation);
+
+            return;
+        }
+
+        $responseUrl = $creation->getAttribute('fal_response_url');
+        try {
+            $result = is_string($responseUrl) && $responseUrl !== ''
+                ? $this->fal->resultByUrl($responseUrl)
+                : [];
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('fal.sync.result_failed', [
+                'type' => $type,
+                'creation_id' => $creation->getKey(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        // Reuse webhook completion path (payload shape matches fal result JSON).
+        $this->handle([
+            'request_id' => (string) $creation->getAttribute('fal_request_id'),
+            'status' => 'OK',
+            'payload' => $result,
+        ]);
+
+        Log::info('fal.sync.completed_via_status', [
+            'type' => $type,
+            'creation_id' => $creation->getKey(),
+            'request_id' => $creation->getAttribute('fal_request_id'),
+        ]);
+    }
 
     /**
      * @param  array<string, mixed>  $payload

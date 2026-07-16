@@ -6,13 +6,15 @@ use App\Models\UserImageCreation;
 use App\Models\UserMusicCreation;
 use App\Models\UserVideoCreation;
 use App\Models\UserVoiceCreation;
+use App\Services\FalWebhookProcessor;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class LabCreationsController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, FalWebhookProcessor $processor): JsonResponse
     {
         $type = $request->validate([
             'type' => ['required', 'string', Rule::in([
@@ -25,6 +27,9 @@ class LabCreationsController extends Controller
         ])['type'];
 
         $userId = $request->user()->id;
+
+        // One-shot catch-up if fal webhook was missed (no browser polling loop).
+        $this->syncActiveCreations($userId, $type, $processor);
 
         return match ($type) {
             'text-to-image' => response()->json([
@@ -44,6 +49,38 @@ class LabCreationsController extends Controller
                 'voices' => $this->loadVoiceCreations($userId),
             ]),
         };
+    }
+
+    private function syncActiveCreations(int $userId, string $labType, FalWebhookProcessor $processor): void
+    {
+        [$type, $class] = match ($labType) {
+            'text-to-image' => ['image', UserImageCreation::class],
+            'text-to-video' => ['video', UserVideoCreation::class],
+            'text-to-music', 'text-to-sound' => ['music', UserMusicCreation::class],
+            'text-to-voice' => ['voice', UserVoiceCreation::class],
+            default => [null, null],
+        };
+
+        if ($type === null || $class === null) {
+            return;
+        }
+
+        /** @var \Illuminate\Support\Collection<int, Model> $active */
+        $active = $class::query()
+            ->where('user_id', $userId)
+            ->whereIn('status', [
+                $class::STATUS_PENDING,
+                $class::STATUS_QUEUED,
+                $class::STATUS_IN_PROGRESS,
+            ])
+            ->whereNotNull('fal_status_url')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        foreach ($active as $creation) {
+            $processor->syncFromFal($type, $creation);
+        }
     }
 
     /**
