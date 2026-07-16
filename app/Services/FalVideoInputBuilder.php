@@ -115,6 +115,9 @@ class FalVideoInputBuilder
             $profile,
         );
 
+        // Some fal routes are stricter than their advertised duration enum.
+        $durationSeconds = $this->constrainDurationForEndpoint($endpointId, $mode, $durationSeconds);
+
         $input = ['prompt' => $prompt];
 
         $durationValue = $this->formatDuration($durationSeconds, $profile['duration_format'] ?? 'string', $options['duration'] ?? null);
@@ -249,6 +252,22 @@ class FalVideoInputBuilder
         $n = (int) preg_replace('/\D+/', '', (string) $token);
 
         return $n > 0 ? $n : null;
+    }
+
+    /**
+     * fal's advertised duration enum for the shared veo3.x schema lists 4s/6s/8s, but the
+     * reference-to-video (ingredients) route only accepts 8s. Force it so we never submit an
+     * invalid duration (422) or bill for a duration fal will reject.
+     */
+    private function constrainDurationForEndpoint(string $endpointId, string $mode, int $seconds): int
+    {
+        $id = strtolower($endpointId);
+
+        if (str_contains($id, 'veo') && ($mode === 'reference-to-video' || str_contains($id, 'reference-to-video'))) {
+            return 8;
+        }
+
+        return $seconds;
     }
 
     /**

@@ -240,11 +240,19 @@ export default function VideoLabCreateForm({
     const selectedEnums = 'enums' in selectedMeta ? selectedMeta.enums : null;
     const selectedMaxDuration = 'max_duration' in selectedMeta ? selectedMeta.max_duration : null;
 
+    const routeMode = resolveMediaRouteMode(selectedModelRecord, mediaCounts);
+
     const durationOptions = useMemo(
-        () => buildDurationOptions(selectedEnums, selectedMaxDuration),
-        // Recompute only when the chosen model’s duration schema changes
+        () => {
+            // veo3.x reference-to-video only accepts 8s (fal enforces it despite the shared schema).
+            if (selectedEndpointId.toLowerCase().includes('veo') && routeMode === 'reference-to-video') {
+                return { values: [8], allowAuto: false, min: 8, max: 8 };
+            }
+            return buildDurationOptions(selectedEnums, selectedMaxDuration);
+        },
+        // Recompute only when the chosen model’s duration schema or resolved route changes
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [selectedEndpointId, JSON.stringify(selectedEnums), selectedMaxDuration],
+        [selectedEndpointId, JSON.stringify(selectedEnums), selectedMaxDuration, routeMode],
     );
 
     const durationStops = useMemo<DurationSelection[]>(
@@ -280,7 +288,6 @@ export default function VideoLabCreateForm({
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
-    const routeMode = resolveMediaRouteMode(selectedModelRecord, mediaCounts);
     const mediaGuidance = describeMediaGuidance(mediaCounts, modelsForPicker.length);
     const showInfoGuidance = Boolean(mediaGuidance && mediaGuidance.tone !== 'error' && !guidanceDismissed);
     const showErrorGuidance = Boolean(mediaGuidance && mediaGuidance.tone === 'error');
