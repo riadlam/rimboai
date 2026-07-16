@@ -109,10 +109,12 @@ class FalWebhookVerifier
      */
     private function publicKeys(): array
     {
+        // Cache base64url "x" strings only — MySQL CACHE_STORE rejects raw binary
+        // key bytes (utf8mb4 Incorrect string value).
         /** @var list<string>|null $cached */
         $cached = Cache::get(self::JWKS_CACHE_KEY);
         if (is_array($cached) && $cached !== []) {
-            return $cached;
+            return $this->decodeCachedPublicKeys($cached);
         }
 
         $response = Http::timeout(10)->acceptJson()->get(self::JWKS_URL);
@@ -125,23 +127,47 @@ class FalWebhookVerifier
             throw new RuntimeException('JWKS contained no keys');
         }
 
-        $keys = [];
+        $encoded = [];
         foreach ($keysJson as $keyInfo) {
-            if (! is_array($keyInfo) || ! is_string($keyInfo['x'] ?? null)) {
+            if (! is_array($keyInfo) || ! is_string($keyInfo['x'] ?? null) || $keyInfo['x'] === '') {
                 continue;
             }
             $decoded = $this->base64UrlDecode($keyInfo['x']);
+            if ($decoded !== null && strlen($decoded) === 32) {
+                $encoded[] = $keyInfo['x'];
+            }
+        }
+
+        if ($encoded === []) {
+            throw new RuntimeException('JWKS contained no usable ED25519 keys');
+        }
+
+        // Max 24h per fal docs; refresh sooner so key rotation is safe.
+        Cache::put(self::JWKS_CACHE_KEY, $encoded, now()->addHours(12));
+
+        return $this->decodeCachedPublicKeys($encoded);
+    }
+
+    /**
+     * @param  list<string>  $encoded
+     * @return list<string>
+     */
+    private function decodeCachedPublicKeys(array $encoded): array
+    {
+        $keys = [];
+        foreach ($encoded as $x) {
+            if (! is_string($x) || $x === '') {
+                continue;
+            }
+            $decoded = $this->base64UrlDecode($x);
             if ($decoded !== null && strlen($decoded) === 32) {
                 $keys[] = $decoded;
             }
         }
 
         if ($keys === []) {
-            throw new RuntimeException('JWKS contained no usable ED25519 keys');
+            throw new RuntimeException('Cached JWKS contained no usable ED25519 keys');
         }
-
-        // Max 24h per fal docs; refresh sooner so key rotation is safe.
-        Cache::put(self::JWKS_CACHE_KEY, $keys, now()->addHours(12));
 
         return $keys;
     }
