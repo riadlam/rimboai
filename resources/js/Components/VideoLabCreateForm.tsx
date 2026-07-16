@@ -784,7 +784,7 @@ export default function VideoLabCreateForm({
                     </AnimatePresence>
 
                     {/* Prompt card */}
-                    <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
+                    <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
                         <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
                             <div>
                                 <p className="text-sm font-semibold text-white">{t('prompt')}</p>
@@ -811,9 +811,10 @@ export default function VideoLabCreateForm({
                                 onChange={setPrompt}
                                 mentions={assetMentions}
                                 maxLength={1500}
+                                minRows={4}
+                                maxRows={16}
                                 placeholder={resolvedPlaceholder}
-                                rows={5}
-                                className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
+                                className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"
                             />
                             <div className="mt-1.5 flex items-center justify-between px-1">
                                 <span className={`text-[11px] ${prompt.length > 900 ? 'text-orange-300' : 'text-white/30'}`}>
@@ -1129,8 +1130,9 @@ export default function VideoLabCreateForm({
                                     onChange={setPrompt}
                                     mentions={assetMentions}
                                     maxLength={1500}
-                                    rows={12}
-                                    className="w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3.5 text-sm leading-relaxed text-white outline-none focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
+                                    minRows={10}
+                                    maxRows={24}
+                                    className="w-full rounded-xl border border-white/10 bg-black/40 p-3.5 text-[15px] leading-6 text-white outline-none focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"
                                     placeholder={resolvedPlaceholder}
                                 />
                             </div>

@@ -633,13 +633,14 @@ export default function SoundLabCreateForm({
                             mentions={assetMentions}
                             maxLength={maxPromptChars}
                             onWheel={(e) => e.stopPropagation()}
-                            rows={5}
+                            minRows={5}
+                            maxRows={12}
                             placeholder={
                                 needsSourceAudio
                                     ? 'Short style tags work best, e.g. rai, pop, emotional, ambient, female vocals'
                                     : t('music.stylePlaceholder')
                             }
-                            className="max-h-[220px] min-h-[140px] w-full resize-y overflow-y-auto rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 scrollbar-thin"
+                            className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 scrollbar-thin sm:text-sm sm:leading-relaxed"
                         />
                         <div className="flex flex-wrap gap-1.5">
                             {visibleStyles.map((chip) => (

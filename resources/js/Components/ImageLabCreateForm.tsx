@@ -570,7 +570,9 @@ export default function ImageLabCreateForm({
                                             : placeholder
                                     }
                                     rows={4}
-                                    className="w-full resize-none border-0 bg-transparent px-3.5 py-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:ring-0"
+                                    minRows={4}
+                                    maxRows={12}
+                                    className="w-full border-0 bg-transparent px-3.5 py-3 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:ring-0 sm:text-sm sm:leading-relaxed"
                                 />
 
                                 <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
