@@ -11,6 +11,7 @@
   "generating": "Generating…",
   "starting": "Starting…",
   "uploadingRefs": "Uploading references {{current}}/{{total}}…",
+  "pollPausedRefresh": "Still generating on the server — refresh the page to check status.",
   "inQueue": "In queue",
   "completed": "Completed",
   "failed": "Failed",

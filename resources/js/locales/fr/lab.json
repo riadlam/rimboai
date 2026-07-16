@@ -11,6 +11,7 @@
   "generating": "Génération…",
   "starting": "Démarrage…",
   "uploadingRefs": "Téléversement des références {{current}}/{{total}}…",
+  "pollPausedRefresh": "Toujours en cours sur le serveur — actualisez la page pour vérifier.",
   "inQueue": "En file d'attente",
   "completed": "Terminé",
   "failed": "Échoué",

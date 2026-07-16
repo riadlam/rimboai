@@ -11,6 +11,7 @@
   "generating": "جاري التوليد…",
   "starting": "جاري البدء…",
   "uploadingRefs": "جارٍ رفع المراجع {{current}}/{{total}}…",
+  "pollPausedRefresh": "ما زال التوليد على الخادم — حدّث الصفحة للتحقق من الحالة.",
   "inQueue": "في قائمة الانتظار",
   "completed": "مكتمل",
   "failed": "فشل",

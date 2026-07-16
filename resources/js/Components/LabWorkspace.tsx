@@ -205,6 +205,22 @@ function isActiveStatus(status?: CreationStatus) {
     return status !== undefined && status !== 'completed' && status !== 'failed' && status !== 'cancelled';
 }
 
+/** Back off polling so long fal jobs don't hammer /status or trip rate limits. */
+function nextStatusPollDelayMs(elapsedMs: number, kind: 'image' | 'video'): number {
+    if (kind === 'video') {
+        if (elapsedMs < 30_000) return 2_000;
+        if (elapsedMs < 2 * 60_000) return 4_000;
+        if (elapsedMs < 10 * 60_000) return 8_000;
+        return 15_000;
+    }
+    if (elapsedMs < 20_000) return 1_500;
+    if (elapsedMs < 2 * 60_000) return 4_000;
+    return 8_000;
+}
+
+const VIDEO_POLL_MAX_MS = 45 * 60_000;
+const IMAGE_POLL_MAX_MS = 15 * 60_000;
+
 export default function LabWorkspace({
     type = 'text-to-video',
     title,
@@ -324,12 +340,16 @@ export default function LabWorkspace({
     const pollImage = useCallback(
         (batchId: string, creationId: number, aspect: string, expectedCount: number) => {
             const started = Date.now();
+            let rateLimitUntil = 0;
 
             const tick = async () => {
                 let data: CreationResponse;
                 try {
                     data = await apiGet<CreationResponse>(`/lab/image/creations/${creationId}/status`);
-                } catch {
+                } catch (e) {
+                    if (e instanceof ApiError && e.status === 429) {
+                        rateLimitUntil = Date.now() + 25_000;
+                    }
                     scheduleNext();
                     return;
                 }
@@ -432,18 +452,32 @@ export default function LabWorkspace({
 
             const scheduleNext = () => {
                 const elapsed = Date.now() - started;
-                if (elapsed > 5 * 60 * 1000) {
+                if (elapsed > IMAGE_POLL_MAX_MS) {
                     delete pollTimers.current[batchId];
-                    failBatch(batchId, 'Generation timed out.');
+                    // Don't mark failed — server job may still complete; refresh resumes polling.
+                    setImages((prev) =>
+                        prev.map((i) =>
+                            i.batchId === batchId
+                                ? {
+                                      ...i,
+                                      progress: tLab('pollPausedRefresh', {
+                                          defaultValue:
+                                              'Still generating on the server — refresh the page to check status.',
+                                      }),
+                                  }
+                                : i,
+                        ),
+                    );
                     return;
                 }
-                const delay = elapsed < 5000 ? 1500 : 5000;
+                const backoff = Math.max(0, rateLimitUntil - Date.now());
+                const delay = Math.max(nextStatusPollDelayMs(elapsed, 'image'), backoff);
                 pollTimers.current[batchId] = window.setTimeout(tick, delay);
             };
 
             scheduleNext();
         },
-        [failBatch],
+        [failBatch, softReconcileStatus, tLab],
     );
 
     pollImageRef.current = pollImage;
@@ -451,12 +485,16 @@ export default function LabWorkspace({
     const pollVideo = useCallback(
         (batchId: string, creationId: number, aspect: string) => {
             const started = Date.now();
+            let rateLimitUntil = 0;
 
             const tick = async () => {
                 let data: CreationResponse;
                 try {
                     data = await apiGet<CreationResponse>(`/lab/video/creations/${creationId}/status`);
-                } catch {
+                } catch (e) {
+                    if (e instanceof ApiError && e.status === 429) {
+                        rateLimitUntil = Date.now() + 25_000;
+                    }
                     scheduleNext();
                     return;
                 }
@@ -521,18 +559,32 @@ export default function LabWorkspace({
 
             const scheduleNext = () => {
                 const elapsed = Date.now() - started;
-                if (elapsed > 10 * 60 * 1000) {
+                if (elapsed > VIDEO_POLL_MAX_MS) {
                     delete pollTimers.current[batchId];
-                    failBatch(batchId, 'Generation timed out.');
+                    // Soft stop only — fal may still finish; library refresh resumes active jobs.
+                    setImages((prev) =>
+                        prev.map((i) =>
+                            i.batchId === batchId
+                                ? {
+                                      ...i,
+                                      progress: tLab('pollPausedRefresh', {
+                                          defaultValue:
+                                              'Still generating on the server — refresh the page to check status.',
+                                      }),
+                                  }
+                                : i,
+                        ),
+                    );
                     return;
                 }
-                const delay = elapsed < 8000 ? 2000 : 5000;
+                const backoff = Math.max(0, rateLimitUntil - Date.now());
+                const delay = Math.max(nextStatusPollDelayMs(elapsed, 'video'), backoff);
                 pollTimers.current[batchId] = window.setTimeout(tick, delay);
             };
 
             scheduleNext();
         },
-        [failBatch],
+        [failBatch, softReconcileStatus, tLab],
     );
 
     pollVideoRef.current = pollVideo;

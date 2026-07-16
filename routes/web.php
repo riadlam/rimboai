@@ -101,7 +101,7 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:20,1')
         ->name('lab.video.generate');
     Route::get('/lab/video/creations/{creation}/status', [VideoGenerationController::class, 'status'])
-        ->middleware('throttle:180,1')
+        ->middleware('throttle:300,1')
         ->name('lab.video.status');
 
     // Text-to-voice generation (server-side fal queue proxy)
