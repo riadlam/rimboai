@@ -22,6 +22,7 @@ class FalWebhookProcessor
     public function __construct(
         private readonly TokenService $tokens,
         private readonly FalWalletCostTracker $walletCost,
+        private readonly FalFailureRefundDecider $failureRefund,
         private readonly FalService $fal,
     ) {}
 
@@ -96,6 +97,7 @@ class FalWebhookProcessor
                 'error_type' => $status['error_type'] ?? 'error',
             ]);
             $creation->refresh();
+            $this->finalizeFailure($type, $creation);
             $this->broadcast($type, $creation);
 
             return;
@@ -111,6 +113,7 @@ class FalWebhookProcessor
                 'error_type' => $status['error_type'] ?? 'error',
             ]);
             $creation->refresh();
+            $this->finalizeFailure($type, $creation);
             $this->broadcast($type, $creation);
 
             return;
@@ -254,7 +257,23 @@ class FalWebhookProcessor
                     'error' => $e->getMessage(),
                 ]);
             }
+        } elseif ((string) $creation->getAttribute('status') === 'failed') {
+            try {
+                $this->finalizeFailure($type, $creation);
+            } catch (\Throwable $e) {
+                report($e);
+                Log::warning('fal.webhook.failure_finalize_failed', [
+                    'type' => $type,
+                    'creation_id' => $creation->getKey(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
+    }
+
+    private function finalizeFailure(string $type, Model $creation): void
+    {
+        $this->failureRefund->finalize($type, $creation, false);
     }
 
     /**
@@ -292,12 +311,6 @@ class FalWebhookProcessor
 
         if (method_exists($creation, 'markFailed')) {
             $creation->markFailed($message, $errorType);
-        }
-
-        /** @var User|null $user */
-        $user = User::query()->find($creation->getAttribute('user_id'));
-        if ($user !== null) {
-            $this->tokens->refund($user, $creation, $type, 'fal_webhook_failed');
         }
 
         Log::info('fal.webhook.failed_creation', [

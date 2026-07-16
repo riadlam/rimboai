@@ -6,6 +6,7 @@ use App\Models\UserImageCreation;
 use App\Models\UserMusicCreation;
 use App\Models\UserVideoCreation;
 use App\Models\UserVoiceCreation;
+use App\Services\FalFailureRefundDecider;
 use App\Services\FalWalletCostTracker;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -23,7 +24,7 @@ class ReconcileFalCreationCostJob implements ShouldQueue
         public int $attempt = 1,
     ) {}
 
-    public function handle(FalWalletCostTracker $tracker): void
+    public function handle(FalWalletCostTracker $tracker, FalFailureRefundDecider $refundDecider): void
     {
         $creation = match ($this->creationType) {
             'image' => UserImageCreation::query()->find($this->creationId),
@@ -37,13 +38,24 @@ class ReconcileFalCreationCostJob implements ShouldQueue
             return;
         }
 
-        $ok = $tracker->reconcile($creation);
+        $tracker->reconcile($creation);
+        $creation->refresh();
 
-        if ($ok && $tracker->isFullyReconciled($creation->fresh())) {
+        $exhausted = $this->attempt >= 5;
+
+        if ((string) $creation->getAttribute('status') === 'failed') {
+            $refundDecider->finalize($this->creationType, $creation, $exhausted);
+
+            if ($exhausted) {
+                return;
+            }
+        }
+
+        if ($tracker->isFullyReconciled($creation->fresh())) {
             return;
         }
 
-        if ($this->attempt >= 5) {
+        if ($exhausted) {
             Log::warning('fal wallet cost reconcile exhausted retries', [
                 'type' => $this->creationType,
                 'id' => $this->creationId,

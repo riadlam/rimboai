@@ -47,6 +47,55 @@ class FalWalletCostTracker
     }
 
     /**
+     * After a failed fal job: reconcile actual fal billing before deciding user refunds.
+     */
+    public function recordAfterFailure(Model $creation): void
+    {
+        $this->reconcile($creation);
+        $this->scheduleReconcileIfNeeded($creation);
+    }
+
+    /**
+     * True when fal billed this request (authoritative cost or wallet movement).
+     */
+    public function wasFalCharged(Model $creation): bool
+    {
+        $cost = $creation->getAttribute('cost_usd');
+        if ($cost !== null && is_numeric($cost) && (float) $cost > 0) {
+            return true;
+        }
+
+        $deducted = $creation->getAttribute('deducted_amount_from_main_wallet');
+        if ($deducted !== null && is_numeric($deducted) && (float) $deducted > 0) {
+            return true;
+        }
+
+        $before = $creation->getAttribute('fal_wallet_balance_before');
+        $after = $creation->getAttribute('fal_wallet_balance_after');
+        if ($before !== null && $after !== null && is_numeric($before) && is_numeric($after)) {
+            return (float) $after < (float) $before - 0.0000001;
+        }
+
+        return false;
+    }
+
+    /**
+     * Billing events can arrive seconds after ERROR; wait before refunding tokens.
+     */
+    public function billingMayStillArrive(Model $creation): bool
+    {
+        if ($this->wasFalCharged($creation)) {
+            return false;
+        }
+
+        if (! $creation->getAttribute('fal_request_id')) {
+            return false;
+        }
+
+        return $creation->getAttribute('cost_usd') === null;
+    }
+
+    /**
      * Retry filling cost / wallet when billing events lag behind completion.
      * Does not schedule jobs (status polls call this; completion path schedules).
      */
