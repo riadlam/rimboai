@@ -635,15 +635,23 @@ export default function ImageLabLibrary({
                                             className="absolute inset-0 overflow-hidden"
                                             onClick={() => (selectMode ? toggleSelect(img.id) : openPreview(img.id))}
                                         >
-                                            {/* Soft fill so fixed square never looks empty/cropped */}
+                                            {/* Soft fill — image blur only when we have a real still (never a second video load). */}
                                             {isVideo ? (
-                                                <VideoThumb
-                                                    aria-hidden
-                                                    src={mediaSrc}
-                                                    poster={posterSrc}
-                                                    playOnHover={false}
-                                                    className="absolute inset-0 size-full scale-110 object-cover object-center opacity-40 blur-xl"
-                                                />
+                                                posterSrc ? (
+                                                    <img
+                                                        aria-hidden
+                                                        src={posterSrc}
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                        className="absolute inset-0 size-full scale-110 object-cover object-center opacity-40 blur-xl"
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        aria-hidden
+                                                        className="absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950"
+                                                    />
+                                                )
                                             ) : (
                                                 <img
                                                     aria-hidden
@@ -658,6 +666,7 @@ export default function ImageLabLibrary({
                                                 <VideoThumb
                                                     src={mediaSrc}
                                                     poster={posterSrc}
+                                                    seekTo={0.15}
                                                     className="absolute inset-0 size-full object-contain object-center"
                                                 />
                                             ) : (
