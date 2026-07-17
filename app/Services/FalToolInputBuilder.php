@@ -481,8 +481,9 @@ class FalToolInputBuilder
     }
 
     /**
-     * Video to Anime: style-transfer that must keep the same characters.
-     * High Wan 2.2 "strength" rewrites identity from the prompt — we avoid that.
+     * Video to Anime: style-transfer on the source clip.
+     * Wan 2.7 edit-video already keeps the shot — keep the prompt short (style only).
+     * Wan 2.2 v2v needs low strength so it does not invent a new character.
      *
      * @param  array<string, mixed>  $defaults
      * @param  array<string, mixed>  $settings
@@ -491,19 +492,13 @@ class FalToolInputBuilder
     private function buildAnime(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
         $detail = trim((string) ($settings['prompt'] ?? ''));
-        // Explicit identity lock — without this, v2v invents a new anime character.
-        $prompt = 'Restyle this exact same video as anime. Keep the identical people, '
-            .'faces, bodies, hair, clothing, poses, camera angle, framing, and scene layout. '
-            .'Only change the rendering style to anime: clean line art, cel shading, '
-            .'vibrant colors, expressive animation. Do not replace or redesign any character.';
+        // Match Fal's edit-video style-transfer pattern: short style instruction only.
+        $prompt = 'Transform the video into anime style. Clean line art, cel shading, vibrant colors.';
         if ($detail !== '') {
-            $prompt .= ' Extra style notes (do not change identity): '.$detail;
+            $prompt .= ' '.$detail;
         }
 
-        $negative = 'different person, different face, new character, identity swap, '
-            .'redesigned character, random anime OC, face morph';
-
-        // Wan 2.7 edit-video — instruction style transfer (best for keep-the-same-shot).
+        // Wan 2.7 edit-video — instruction style transfer on the existing footage.
         if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
             $input = array_merge($defaults, [
                 'video_url' => $videoUrl,
@@ -517,8 +512,8 @@ class FalToolInputBuilder
             ]);
         }
 
-        // Wan 2.2 / Kling fallback — keep strength LOW so source identity wins.
-        // Docs: 1.0 = fully prompt-based (destroys face), 0.0 = identical to input.
+        // Wan 2.2 / Kling fallback — low strength so the source identity wins.
+        // Docs: 1.0 = fully prompt-based (new character), 0.0 = identical to input.
         $strength = $this->clamp01($settings['strength'] ?? ($defaults['strength'] ?? 0.35)) ?? 0.35;
         $strength = min($strength, 0.5);
 
@@ -534,13 +529,12 @@ class FalToolInputBuilder
             'video_url' => $videoUrl,
             'prompt' => $prompt,
             'strength' => $strength,
-            'negative_prompt' => $negative,
             'aspect_ratio' => $defaults['aspect_ratio'] ?? 'auto',
             'enable_prompt_expansion' => false,
         ]);
 
         return $this->onlyKeys($input, [
-            'video_url', 'prompt', 'negative_prompt', 'resolution', 'acceleration',
+            'video_url', 'prompt', 'resolution', 'acceleration',
             'aspect_ratio', 'enable_safety_checker', 'enable_prompt_expansion', 'strength',
         ]);
     }
