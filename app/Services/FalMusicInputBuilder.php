@@ -93,6 +93,18 @@ class FalMusicInputBuilder
             return $input;
         }
 
+        if (str_contains($id, 'minimax-music') && str_contains($id, '/cover')) {
+            $input = [
+                'prompt' => mb_substr($prompt, 0, 300),
+                'audio_url' => $audioUrl,
+            ];
+            if ($lyrics !== '') {
+                $input['lyrics'] = mb_substr($lyrics, 0, 1000);
+            }
+
+            return $input;
+        }
+
         if (str_contains($id, 'minimax-music')) {
             $input = [
                 'prompt' => $prompt,

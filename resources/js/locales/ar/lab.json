@@ -114,7 +114,18 @@
     "textToConvert": "النص للتحويل",
     "voiceControls": "تحكمات الصوت",
     "needText": "أضف نصاً للتوليد",
-    "needVoice": "اختر صوتاً"
+    "needVoice": "اختر صوتاً",
+    "modePreset": "صوت جاهز",
+    "modePresetHint": "اختر صوتاً جاهزاً",
+    "modeClone": "استنساخ صوت",
+    "modeCloneHint": "من عينتك",
+    "sampleAudio": "عينة الصوت",
+    "cloneBadge": "استنساخ صوت",
+    "uploadSampleHint": "ارفع عينة واضحة 5–30 ثانية (MP3/WAV) للصوت الذي تريد استنساخه، ثم اكتب ما يجب أن يقوله.",
+    "chooseSample": "اختر عينة صوت",
+    "dropSample": "أسقط أو تصفح · MP3، WAV…",
+    "needSample": "ارفع عينة صوت",
+    "clonedVoice": "صوت مستنسخ"
   },
   "music": {
     "title": "موسيقى",
@@ -141,6 +152,9 @@
     "examples": "أمثلة",
     "autoEnhance": "تحسين تلقائي · رصيد واحد",
     "uploadTrackHint": "ارفع مقطوعة، ثم اختر ريمكس (أسلوب جديد) أو تعديل الكلمات (إبقاء الإيقاع وإعادة كتابة الغناء).",
+    "referenceTrack": "مقطوعة مرجعية",
+    "coverBadge": "كفر موسيقي",
+    "uploadCoverHint": "ارفع أغنية مرجعية (حوالي 6ث–6د). صف أسلوب الكفر الجديد — الكلمات اختيارية لإعادة كتابة الغناء.",
     "lyrics": "الكلمات",
     "lyricsPlaceholder": "اكتب كلماتك…",
     "needStyle": "أضف أسلوباً للتوليد"

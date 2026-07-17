@@ -114,7 +114,18 @@
     "textToConvert": "Text to convert",
     "voiceControls": "Voice Controls",
     "needText": "Add text to generate",
-    "needVoice": "Select a voice"
+    "needVoice": "Select a voice",
+    "modePreset": "Preset Voice",
+    "modePresetHint": "Pick a stock voice",
+    "modeClone": "Clone Voice",
+    "modeCloneHint": "From your sample",
+    "sampleAudio": "Voice sample",
+    "cloneBadge": "Voice clone",
+    "uploadSampleHint": "Upload a clear 5–30s MP3/WAV of the voice you want to clone, then type what it should say.",
+    "chooseSample": "Choose voice sample",
+    "dropSample": "Drop or browse · MP3, WAV…",
+    "needSample": "Upload a voice sample",
+    "clonedVoice": "Cloned voice"
   },
   "music": {
     "title": "Music",
@@ -141,6 +152,9 @@
     "examples": "Examples",
     "autoEnhance": "Auto-enhance · 1 credit",
     "uploadTrackHint": "Upload a track, then choose Remix (new style) or Lyrics edit (keep beat, rewrite vocals).",
+    "referenceTrack": "Reference track",
+    "coverBadge": "Music cover",
+    "uploadCoverHint": "Upload a reference song (about 6s–6m). Describe the new cover style — optional lyrics rewrite the vocals.",
     "lyrics": "Lyrics",
     "lyricsPlaceholder": "Write your lyrics…",
     "needStyle": "Add a style to generate"

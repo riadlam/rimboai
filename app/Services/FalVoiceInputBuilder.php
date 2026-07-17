@@ -10,11 +10,13 @@ class FalVoiceInputBuilder
     /**
      * @param  array{
      *   text: string,
-     *   voice: string,
+     *   voice?: string|null,
+     *   audio_url?: string|null,
      *   stability?: int|float|null,
      *   clarity?: int|float|null,
      *   style?: int|float|null,
      *   speed?: int|float|null,
+     *   exaggeration?: int|float|null,
      * }  $options
      * @return array<string, mixed>
      */
@@ -23,7 +25,32 @@ class FalVoiceInputBuilder
         $id = strtolower($endpointId);
         $text = trim((string) ($options['text'] ?? ''));
         $voice = (string) ($options['voice'] ?? '');
+        $audioUrl = trim((string) ($options['audio_url'] ?? ''));
         $caps = $this->controlCapabilities($endpointId);
+
+        if (str_contains($id, 'minimax/voice-clone') || str_ends_with($id, '/voice-clone')) {
+            $input = [
+                'audio_url' => $audioUrl,
+                'text' => $text !== '' ? $text : 'Hello, this is a preview of your cloned voice!',
+                'model' => 'speech-02-hd',
+            ];
+
+            return $input;
+        }
+
+        if (str_contains($id, 'chatterbox') && str_contains($id, 'text-to-speech')) {
+            $input = [
+                'text' => $text,
+            ];
+            if ($audioUrl !== '') {
+                $input['audio_url'] = $audioUrl;
+            }
+            if ($caps['style']) {
+                $input['exaggeration'] = $this->map01($options['style'] ?? $options['exaggeration'] ?? 25);
+            }
+
+            return $input;
+        }
 
         if (str_contains($id, 'minimax')) {
             $voiceSetting = ['voice_id' => $voice];
@@ -67,11 +94,31 @@ class FalVoiceInputBuilder
     }
 
     /**
-     * @return array{stability: bool, clarity: bool, style: bool, speed: bool}
+     * @return array{stability: bool, clarity: bool, style: bool, speed: bool, requires_sample_audio: bool}
      */
     public function controlCapabilities(string $endpointId): array
     {
         $id = strtolower($endpointId);
+
+        if (str_contains($id, 'minimax/voice-clone') || str_ends_with($id, '/voice-clone')) {
+            return [
+                'stability' => false,
+                'clarity' => false,
+                'style' => false,
+                'speed' => false,
+                'requires_sample_audio' => true,
+            ];
+        }
+
+        if (str_contains($id, 'chatterbox')) {
+            return [
+                'stability' => false,
+                'clarity' => false,
+                'style' => true,
+                'speed' => false,
+                'requires_sample_audio' => true,
+            ];
+        }
 
         if (str_contains($id, 'elevenlabs') || str_contains($id, 'eleven')) {
             return [
@@ -79,6 +126,7 @@ class FalVoiceInputBuilder
                 'clarity' => true,
                 'style' => true,
                 'speed' => true,
+                'requires_sample_audio' => false,
             ];
         }
 
@@ -88,6 +136,7 @@ class FalVoiceInputBuilder
                 'clarity' => false,
                 'style' => false,
                 'speed' => true,
+                'requires_sample_audio' => false,
             ];
         }
 
@@ -97,7 +146,13 @@ class FalVoiceInputBuilder
             'clarity' => false,
             'style' => false,
             'speed' => false,
+            'requires_sample_audio' => false,
         ];
+    }
+
+    public function requiresSampleAudio(string $endpointId): bool
+    {
+        return $this->controlCapabilities($endpointId)['requires_sample_audio'];
     }
 
     private function map01(int|float|null $ui): float

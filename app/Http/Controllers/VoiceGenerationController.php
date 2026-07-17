@@ -14,7 +14,10 @@ use App\Services\LabCreationPresenter;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class VoiceGenerationController extends Controller
 {
@@ -31,12 +34,17 @@ class VoiceGenerationController extends Controller
         $data = $request->validate([
             'text' => ['required', 'string', 'min:1', 'max:70000'],
             'endpoint_id' => ['required', 'string', 'max:191'],
-            'voice' => ['required', 'string', 'max:191'],
+            'voice' => ['nullable', 'string', 'max:191'],
             'voice_name' => ['nullable', 'string', 'max:191'],
             'stability' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'clarity' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'style' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'speed' => ['nullable', 'numeric', 'min:50', 'max:150'],
+            'audio_url' => ['nullable', 'string', 'max:2048'],
+            'audio_base64' => ['nullable', 'string'],
+            'audio_filename' => ['nullable', 'string', 'max:191'],
+            'audio_mime' => ['nullable', 'string', 'max:191'],
+            'audio' => ['nullable', 'file', 'max:20480'],
         ]);
 
         if (! $fal->configured()) {
@@ -52,28 +60,52 @@ class VoiceGenerationController extends Controller
             return response()->json(['message' => __('messages.model_unavailable')], 422);
         }
 
-        $voiceKey = trim($data['voice']);
-        $voiceRow = DB::table('text_to_voice_voices')
-            ->where('text_to_voice_model_id', $model->id)
-            ->where('voice_key', $voiceKey)
-            ->first();
+        $requiresSample = $inputBuilder->requiresSampleAudio((string) $model->endpoint_id)
+            || (Schema::hasColumn('text_to_voice_models', 'supports_audio') && (bool) ($model->supports_audio ?? false));
 
-        if (! $voiceRow) {
-            // Still allow if catalog enums list includes it
-            $enums = is_string($model->enums ?? null) ? json_decode($model->enums, true) : ($model->enums ?? null);
-            $allowed = is_array($enums) && in_array($voiceKey, $enums, true);
-            if (! $allowed) {
-                return response()->json(['message' => __('messages.model_unavailable')], 422);
+        $audioUrl = null;
+        $inputAssets = null;
+        if ($requiresSample) {
+            $audioUrl = $this->resolveSampleAudioUrl($request, $data, $fal);
+            if ($audioUrl === null || $audioUrl === '') {
+                return response()->json([
+                    'message' => 'Upload an MP3 or WAV voice sample (about 5–30 seconds) to clone.',
+                ], 422);
             }
+            $inputAssets = [['url' => $audioUrl, 'kind' => 'audio', 'role' => 'voice-sample']];
+        }
+
+        $voiceKey = trim((string) ($data['voice'] ?? ''));
+        $voiceRow = null;
+        if (! $requiresSample) {
+            if ($voiceKey === '') {
+                return response()->json(['message' => 'Select a voice to continue.'], 422);
+            }
+
+            $voiceRow = DB::table('text_to_voice_voices')
+                ->where('text_to_voice_model_id', $model->id)
+                ->where('voice_key', $voiceKey)
+                ->first();
+
+            if (! $voiceRow) {
+                $enums = is_string($model->enums ?? null) ? json_decode($model->enums, true) : ($model->enums ?? null);
+                $allowed = is_array($enums) && in_array($voiceKey, $enums, true);
+                if (! $allowed) {
+                    return response()->json(['message' => __('messages.model_unavailable')], 422);
+                }
+            }
+        } else {
+            $voiceKey = $voiceKey !== '' ? $voiceKey : 'cloned-sample';
         }
 
         $voiceName = $data['voice_name']
             ?? ($voiceRow->name ?? null)
-            ?? $voiceKey;
+            ?? ($requiresSample ? 'Cloned voice' : $voiceKey);
 
         $falInput = $inputBuilder->build($model->endpoint_id, [
             'text' => $data['text'],
             'voice' => $voiceKey,
+            'audio_url' => $audioUrl,
             'stability' => $data['stability'] ?? null,
             'clarity' => $data['clarity'] ?? null,
             'style' => $data['style'] ?? null,
@@ -110,19 +142,21 @@ class VoiceGenerationController extends Controller
                 'voice',
                 fn () => UserVoiceCreation::create([
                     'user_id' => $request->user()->id,
-                    'mode' => 'text-to-voice',
+                    'mode' => $requiresSample ? 'voice-clone' : 'text-to-voice',
                     'endpoint_id' => $model->endpoint_id,
                     'model_name' => $model->name,
                     'prompt' => $data['text'],
                     'voice_id' => $voiceKey,
                     'voice_name' => $voiceName,
-                    'use_custom_voice' => false,
+                    'use_custom_voice' => $requiresSample,
+                    'input_assets' => $inputAssets,
                     'settings' => [
                         'stability' => isset($data['stability']) ? (float) $data['stability'] : null,
                         'clarity' => isset($data['clarity']) ? (float) $data['clarity'] : null,
                         'style' => isset($data['style']) ? (float) $data['style'] : null,
                         'speed' => isset($data['speed']) ? (float) $data['speed'] : null,
                         'controls' => $inputBuilder->controlCapabilities($model->endpoint_id),
+                        'audio_url' => $audioUrl,
                         'fal_input' => $falInput,
                         'fal_endpoint' => $model->endpoint_id,
                         'fal_cost_usd' => $cost['fal_cost_usd'],
@@ -292,6 +326,63 @@ class VoiceGenerationController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveSampleAudioUrl(Request $request, array $data, FalService $fal): ?string
+    {
+        $audioUrl = trim((string) ($data['audio_url'] ?? ''));
+        if ($audioUrl !== '') {
+            return $audioUrl;
+        }
+
+        $audioBase64 = trim((string) ($data['audio_base64'] ?? ''));
+        if ($audioBase64 !== '') {
+            $decoded = base64_decode($audioBase64, true);
+            if ($decoded === false || $decoded === '') {
+                return null;
+            }
+            if (strlen($decoded) > 20 * 1024 * 1024) {
+                return null;
+            }
+
+            $filename = trim((string) ($data['audio_filename'] ?? 'voice-sample.mp3'));
+            if ($filename === '' || ! preg_match('/\.(mp3|wav|flac|ogg|m4a|aac|mpeg|mpga)$/i', $filename)) {
+                $filename = 'voice-sample.mp3';
+            }
+            $mime = trim((string) ($data['audio_mime'] ?? ''));
+            if ($mime === '' || $mime === 'application/octet-stream') {
+                $mime = null;
+            }
+
+            try {
+                return $fal->uploadBytesToCdn($decoded, $filename, $mime);
+            } catch (\Throwable $e) {
+                report($e);
+                Log::error('Voice clone sample upload failed', [
+                    'error' => $e->getMessage(),
+                    'filename' => $filename,
+                ]);
+
+                return null;
+            }
+        }
+
+        /** @var UploadedFile|null $audioFile */
+        $audioFile = $request->file('audio');
+        if (! $audioFile instanceof UploadedFile || ! $audioFile->isValid()) {
+            return null;
+        }
+
+        try {
+            return $fal->uploadFileToCdn($audioFile);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**

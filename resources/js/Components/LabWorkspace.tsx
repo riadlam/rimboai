@@ -1105,7 +1105,8 @@ function LabWorkspaceInner({
     const startVoiceGenerate = useCallback(
         async (text: string, options?: VoiceGenerateOptions) => {
             const trimmed = text.trim();
-            if (!trimmed || !options?.endpointId || !options.voice) return;
+            if (!trimmed || !options?.endpointId) return;
+            if (!options.audioFile && !options.voice) return;
 
             const localId = `voice-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const startedAt = Date.now();
@@ -1115,7 +1116,7 @@ function LabWorkspaceInner({
                 id: localId,
                 title,
                 text: trimmed,
-                voice: options.voiceName || options.voice,
+                voice: options.voiceName || options.voice || 'Cloned voice',
                 favorite: false,
                 createdAt: startedAt,
                 model: options.model,
@@ -1127,16 +1128,42 @@ function LabWorkspaceInner({
             setLoading(true);
 
             try {
-                const data = await apiPost<CreationResponse>('/lab/voice/generate', {
-                    text: trimmed,
-                    endpoint_id: options.endpointId,
-                    voice: options.voice,
-                    voice_name: options.voiceName,
-                    stability: options.stability,
-                    clarity: options.clarity,
-                    style: options.styleExaggeration,
-                    speed: options.speed,
-                });
+                let data: CreationResponse;
+                if (options.audioFile) {
+                    if (options.audioFile.size > 20 * 1024 * 1024) {
+                        throw new Error('Audio file is too large. Please use an MP3 under 20MB.');
+                    }
+
+                    const audioBase64 = await fileToBase64(options.audioFile);
+                    const audioName = /\.(mp3|wav|flac|ogg|m4a|aac|mpeg|mpga)$/i.test(options.audioFile.name || '')
+                        ? options.audioFile.name
+                        : `sample.${(options.audioFile.type || '').includes('wav') ? 'wav' : 'mp3'}`;
+
+                    data = await apiPost<CreationResponse>('/lab/voice/generate', {
+                        text: trimmed,
+                        endpoint_id: options.endpointId,
+                        voice: options.voice || 'cloned-sample',
+                        voice_name: options.voiceName || 'Cloned voice',
+                        stability: options.stability,
+                        clarity: options.clarity,
+                        style: options.styleExaggeration,
+                        speed: options.speed,
+                        audio_base64: audioBase64,
+                        audio_filename: audioName,
+                        audio_mime: options.audioFile.type || 'audio/mpeg',
+                    });
+                } else {
+                    data = await apiPost<CreationResponse>('/lab/voice/generate', {
+                        text: trimmed,
+                        endpoint_id: options.endpointId,
+                        voice: options.voice,
+                        voice_name: options.voiceName,
+                        stability: options.stability,
+                        clarity: options.clarity,
+                        style: options.styleExaggeration,
+                        speed: options.speed,
+                    });
+                }
                 syncTokenBalance(data.token_balance);
 
                 setVoices((prev) =>

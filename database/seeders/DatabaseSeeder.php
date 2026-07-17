@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             InnovationSeeder::class,
             VideoReferenceModelSeeder::class,
+            VoiceCloneModelSeeder::class,
         ]);
     }
 }

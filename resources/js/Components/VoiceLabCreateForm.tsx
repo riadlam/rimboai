@@ -16,6 +16,7 @@ export type VoiceGenerateOptions = {
     clarity: number;
     styleExaggeration: number;
     speed: number;
+    audioFile?: File | null;
 };
 
 type Props = {
@@ -141,6 +142,9 @@ function pickDefaultVoice(voices: VoiceOption[], brandVoices: BrandVoice[]): Voi
     return voices[0];
 }
 
+const createTabGlow =
+    'linear-gradient(135deg, rgba(255,106,69,0.95) 0%, rgba(255,87,51,0.9) 45%, rgba(214,58,24,0.95) 100%)';
+
 function voiceControlCapabilities(endpointId?: string | null): {
     stability: boolean;
     clarity: boolean;
@@ -148,6 +152,12 @@ function voiceControlCapabilities(endpointId?: string | null): {
     speed: boolean;
 } {
     const id = (endpointId || '').toLowerCase();
+    if (id.includes('voice-clone')) {
+        return { stability: false, clarity: false, style: false, speed: false };
+    }
+    if (id.includes('chatterbox')) {
+        return { stability: false, clarity: false, style: true, speed: false };
+    }
     if (id.includes('elevenlabs') || id.includes('/eleven') || id.includes('eleven-v') || id.includes('turbo-v')) {
         return { stability: true, clarity: true, style: true, speed: true };
     }
@@ -155,6 +165,14 @@ function voiceControlCapabilities(endpointId?: string | null): {
         return { stability: false, clarity: false, style: false, speed: true };
     }
     return { stability: false, clarity: false, style: false, speed: false };
+}
+
+function formatAudioMeta(file: File, durationLabel: string | null): string {
+    const size =
+        file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+    return `${size}${durationLabel ? ` · ${durationLabel}` : ''} · ready`;
 }
 
 export default function VoiceLabCreateForm({
@@ -181,7 +199,11 @@ export default function VoiceLabCreateForm({
     const [speed, setSpeed] = useState(100);
     const [selectedBrand, setSelectedBrand] = useState(brands[0]?.name || 'ElevenLabs');
     const [selectedModel, setSelectedModel] = useState(brands[0]?.models[0]?.name || 'Eleven Multilingual v2');
+    const [mode, setMode] = useState<'preset' | 'clone'>('preset');
+    const [sampleAudio, setSampleAudio] = useState<File | null>(null);
+    const [sampleDurationSec, setSampleDurationSec] = useState<number | null>(null);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+    const audioInputRef = useRef<HTMLInputElement>(null);
 
     const allModels = useMemo(
         (): LabPickerModel[] =>
@@ -195,10 +217,17 @@ export default function VoiceLabCreateForm({
         [brands],
     );
 
+    const cloneModels = useMemo(() => allModels.filter((m) => m.supports_audio === true), [allModels]);
+    const presetModels = useMemo(() => allModels.filter((m) => m.supports_audio !== true), [allModels]);
+    const hasCloneModels = cloneModels.length > 0;
+    const pickerModels = mode === 'clone' ? cloneModels : presetModels.length > 0 ? presetModels : allModels;
+
     const selectedModelRecord = useMemo(
-        () => allModels.find((m) => m.name === selectedModel) || allModels[0] || null,
-        [allModels, selectedModel],
+        () => pickerModels.find((m) => m.name === selectedModel) || pickerModels[0] || allModels[0] || null,
+        [pickerModels, allModels, selectedModel],
     );
+
+    const needsSampleAudio = Boolean(selectedModelRecord?.supports_audio);
 
     const modelBrandVoices = selectedModelRecord?.voices;
     const modelVoices = useMemo(
@@ -250,7 +279,15 @@ export default function VoiceLabCreateForm({
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
-    const canGenerate = Boolean(text.trim()) && Boolean(selectedVoice?.voice_key) && hasEnoughTokens;
+    const sampleDurationLabel =
+        sampleDurationSec != null && Number.isFinite(sampleDurationSec)
+            ? `${Math.max(1, Math.round(sampleDurationSec))}s`
+            : null;
+
+    const canGenerate =
+        Boolean(text.trim()) &&
+        hasEnoughTokens &&
+        (needsSampleAudio ? Boolean(sampleAudio) : Boolean(selectedVoice?.voice_key));
 
     const stopPreview = () => {
         if (previewAudioRef.current) {
@@ -267,6 +304,49 @@ export default function VoiceLabCreateForm({
             setSelectedModel(brands[0].models[0]?.name || 'Eleven Multilingual v2');
         }
     }, [brands, selectedBrand]);
+
+    useEffect(() => {
+        if (!hasCloneModels && mode === 'clone') {
+            setMode('preset');
+        }
+    }, [hasCloneModels, mode]);
+
+    useEffect(() => {
+        const pool = mode === 'clone' ? cloneModels : presetModels.length > 0 ? presetModels : allModels;
+        if (pool.length === 0) return;
+        if (!pool.some((m) => m.name === selectedModel)) {
+            const next = pool[0];
+            setSelectedBrand(next.brandName);
+            setSelectedModel(next.name);
+        }
+    }, [mode, cloneModels, presetModels, allModels, selectedModel]);
+
+    useEffect(() => {
+        setSampleAudio(null);
+        setSampleDurationSec(null);
+        if (audioInputRef.current) audioInputRef.current.value = '';
+    }, [selectedModelRecord?.endpoint_id, needsSampleAudio]);
+
+    useEffect(() => {
+        if (!sampleAudio) {
+            setSampleDurationSec(null);
+            return;
+        }
+        const url = URL.createObjectURL(sampleAudio);
+        const audio = new Audio(url);
+        const onMeta = () => {
+            if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                setSampleDurationSec(audio.duration);
+            }
+            URL.revokeObjectURL(url);
+        };
+        audio.addEventListener('loadedmetadata', onMeta);
+        audio.addEventListener('error', () => URL.revokeObjectURL(url));
+        return () => {
+            audio.removeEventListener('loadedmetadata', onMeta);
+            URL.revokeObjectURL(url);
+        };
+    }, [sampleAudio]);
 
     useEffect(() => {
         const next = pickDefaultVoice(modelVoices, modelBrandVoices ?? []);
@@ -355,8 +435,167 @@ export default function VoiceLabCreateForm({
                 />
             </div>
 
+            {hasCloneModels && (
+                <div className="px-3 pb-1 pt-2.5">
+                    <div className="flex gap-1.5 rounded-xl border border-white/[0.06] bg-black/30 p-1.5">
+                        {(
+                            [
+                                { id: 'preset' as const, label: t('voice.modePreset'), hint: t('voice.modePresetHint') },
+                                { id: 'clone' as const, label: t('voice.modeClone'), hint: t('voice.modeCloneHint') },
+                            ]
+                        ).map((tab) => {
+                            const active = mode === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setMode(tab.id)}
+                                    className={`relative flex flex-1 items-center justify-center gap-2.5 overflow-hidden rounded-xl px-2.5 py-2.5 transition-all ${
+                                        active ? 'text-white' : 'text-white/45 hover:text-white/80'
+                                    }`}
+                                    style={active ? { background: createTabGlow } : undefined}
+                                >
+                                    {active && (
+                                        <span className="absolute inset-0 rounded-xl ring-1 ring-inset ring-orange-400/20" />
+                                    )}
+                                    <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? 'bg-white/10' : 'bg-white/[0.04]'}`}>
+                                        {tab.id === 'preset' ? (
+                                            <svg className={`h-4 w-4 ${active ? 'text-orange-300' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" />
+                                                <path d="M16 9a5 5 0 0 1 0 6" />
+                                            </svg>
+                                        ) : (
+                                            <svg className={`h-4 w-4 ${active ? 'text-orange-300' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path d="M12 16V4" />
+                                                <path d="m7 9 5-5 5 5" />
+                                                <path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" />
+                                            </svg>
+                                        )}
+                                    </span>
+                                    <span className="relative min-w-0 text-start">
+                                        <span className="block text-[12px] font-semibold leading-tight">{tab.label}</span>
+                                        <span className={`mt-0.5 block text-[10px] ${active ? 'text-white/75' : 'text-white/30'}`}>{tab.hint}</span>
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             <div className="relative overflow-x-hidden p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:scrollbar-thin">
                 <div className="space-y-4">
+                    {needsSampleAudio && (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <label className="text-sm font-medium text-white">
+                                    {t('voice.sampleAudio')} <span className="text-[#FF5733]">*</span>
+                                </label>
+                                <span className="rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
+                                    {t('voice.cloneBadge')}
+                                </span>
+                            </div>
+                            <p className="text-[12px] leading-relaxed text-white/45">{t('voice.uploadSampleHint')}</p>
+
+                            <input
+                                ref={audioInputRef}
+                                type="file"
+                                accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac"
+                                className="hidden"
+                                onChange={(e) => setSampleAudio(e.target.files?.[0] ?? null)}
+                            />
+
+                            <div className="relative">
+                                <motion.button
+                                    type="button"
+                                    onClick={() => audioInputRef.current?.click()}
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const file = e.dataTransfer.files?.[0];
+                                        if (file && (file.type.startsWith('audio/') || /\.(mp3|wav|flac|ogg|m4a|aac)$/i.test(file.name))) {
+                                            setSampleAudio(file);
+                                        }
+                                    }}
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.985 }}
+                                    className={`group relative w-full overflow-hidden rounded-2xl border text-start transition ${
+                                        sampleAudio
+                                            ? 'border-orange-400/35 bg-gradient-to-br from-[#FF5733]/12 via-black to-black'
+                                            : 'border-dashed border-white/15 bg-black hover:border-orange-400/40'
+                                    }`}
+                                >
+                                    <motion.div
+                                        aria-hidden
+                                        className="pointer-events-none absolute -left-1/3 -top-1/2 h-[140%] w-[60%] bg-gradient-to-r from-transparent via-white/[0.07] to-transparent"
+                                        animate={{ x: ['0%', '220%'] }}
+                                        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 }}
+                                    />
+                                    <div className="relative flex items-center gap-3.5 px-3.5 py-3.5">
+                                        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FF5733]/15 ring-1 ring-[#FF5733]/30">
+                                            <motion.span
+                                                aria-hidden
+                                                className="absolute inset-0 rounded-xl bg-[#FF5733]/20"
+                                                animate={{ opacity: [0.35, 0.75, 0.35], scale: [0.92, 1.05, 0.92] }}
+                                                transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                                            />
+                                            {sampleAudio ? (
+                                                <svg className="relative h-5 w-5 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                                                    <path d="M9 18V5l12-2v13" />
+                                                    <circle cx="6" cy="18" r="3" />
+                                                    <circle cx="18" cy="16" r="3" />
+                                                </svg>
+                                            ) : (
+                                                <svg className="relative h-5 w-5 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                                                    <path d="M12 16V4" />
+                                                    <path d="m7 9 5-5 5 5" />
+                                                    <path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                        <span className="min-w-0 flex-1 pe-6">
+                                            <span className="block truncate text-[13px] font-semibold tracking-tight text-white">
+                                                {sampleAudio ? `@audio1 · ${sampleAudio.name}` : t('voice.chooseSample')}
+                                            </span>
+                                            <span className="mt-0.5 block text-[11px] text-white/45">
+                                                {sampleAudio ? formatAudioMeta(sampleAudio, sampleDurationLabel) : t('voice.dropSample')}
+                                            </span>
+                                        </span>
+                                        <span
+                                            className={`shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${
+                                                sampleAudio
+                                                    ? 'border border-white/10 bg-white/[0.06] text-white/80 group-hover:bg-white/10'
+                                                    : 'bg-[#FF5733] text-white shadow-[0_8px_20px_rgba(255,87,51,0.35)]'
+                                            }`}
+                                        >
+                                            {sampleAudio ? t('change') : t('upload')}
+                                        </span>
+                                    </div>
+                                </motion.button>
+                                {sampleAudio && (
+                                    <button
+                                        type="button"
+                                        aria-label={t('remove')}
+                                        title={t('remove')}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setSampleAudio(null);
+                                            if (audioInputRef.current) audioInputRef.current.value = '';
+                                        }}
+                                        className="absolute end-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-sm text-white ring-1 ring-white/20 transition hover:bg-red-500/80 md:h-6 md:w-6 md:text-xs"
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Text */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -393,7 +632,8 @@ export default function VoiceLabCreateForm({
                         </div>
                     </div>
 
-                    {/* Select Voice */}
+                    {/* Select Voice — preset models only */}
+                    {!needsSampleAudio && (
                     <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-zinc-200">
                             <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -457,6 +697,7 @@ export default function VoiceLabCreateForm({
                             </svg>
                         </button>
                     </div>
+                    )}
 
                     {/* Voice Controls — only for models whose fal schema supports them */}
                     {hasAnyVoiceControls && (
@@ -524,10 +765,16 @@ export default function VoiceLabCreateForm({
                 <div className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-[#0a0a0f] to-transparent" />
                 <div className="mb-2.5 flex items-center justify-between gap-2 px-0.5">
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        {selectedVoice && (
+                        {needsSampleAudio ? (
                             <span className="max-w-[140px] truncate rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                                {selectedVoice.name.split(' - ')[0]}
+                                {sampleAudio ? sampleAudio.name : t('voice.cloneBadge')}
                             </span>
+                        ) : (
+                            selectedVoice && (
+                                <span className="max-w-[140px] truncate rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
+                                    {selectedVoice.name.split(' - ')[0]}
+                                </span>
+                            )
                         )}
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] tabular-nums text-white/65">
                             {text.trim().length.toLocaleString()} chars
@@ -551,14 +798,15 @@ export default function VoiceLabCreateForm({
                     disabled={loading || !canGenerate}
                     onClick={() =>
                         onGenerate?.(text, {
-                            voice: selectedVoice?.voice_key || '',
-                            voiceName: selectedVoice?.name || '',
+                            voice: needsSampleAudio ? 'cloned-sample' : selectedVoice?.voice_key || '',
+                            voiceName: needsSampleAudio ? t('voice.clonedVoice') : selectedVoice?.name || '',
                             model: selectedModel,
                             endpointId: selectedModelRecord?.endpoint_id || '',
                             stability,
                             clarity,
                             styleExaggeration,
                             speed,
+                            audioFile: needsSampleAudio ? sampleAudio : null,
                         })
                     }
                     className="relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
@@ -580,7 +828,9 @@ export default function VoiceLabCreateForm({
                         <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
                     ) : !text.trim() ? (
                         <span className="relative text-white/90">{t('voice.needText')}</span>
-                    ) : !selectedVoice?.voice_key ? (
+                    ) : needsSampleAudio && !sampleAudio ? (
+                        <span className="relative text-white/90">{t('voice.needSample')}</span>
+                    ) : !needsSampleAudio && !selectedVoice?.voice_key ? (
                         <span className="relative text-white/90">{t('voice.needVoice')}</span>
                     ) : (
                         <>
@@ -601,7 +851,7 @@ export default function VoiceLabCreateForm({
 
             <LabModelPickerModal
                 open={modelOpen}
-                models={allModels}
+                models={pickerModels}
                 selectedName={selectedModel}
                 onClose={() => setModelOpen(false)}
                 title={t('selectModel')}
@@ -610,6 +860,7 @@ export default function VoiceLabCreateForm({
                 onSelect={(m) => {
                     setSelectedBrand(m.brandName);
                     setSelectedModel(m.name);
+                    setMode(m.supports_audio ? 'clone' : 'preset');
                     setModelOpen(false);
                 }}
             />

@@ -174,6 +174,9 @@ export default function SoundLabCreateForm({
     const canUseVocals = Boolean(selectedModelRecord?.supports_vocals);
     const canUseLyrics = Boolean(selectedModelRecord?.supports_lyrics);
     const needsSourceAudio = Boolean(selectedModelRecord?.supports_audio);
+    const endpointLower = (selectedModelRecord?.endpoint_id || '').toLowerCase();
+    const isAceAudioEdit = needsSourceAudio && endpointLower.includes('ace-step');
+    const isMusicCover = needsSourceAudio && (endpointLower.includes('/cover') || endpointLower.includes('music/cover'));
     const supportsDurationControl = Boolean(selectedModelRecord?.supports_duration_control);
     const minDuration = Math.max(1, selectedModelRecord?.min_duration_seconds ?? 1);
     const maxDuration = Math.max(minDuration, selectedModelRecord?.max_duration ?? 180);
@@ -407,14 +410,15 @@ export default function SoundLabCreateForm({
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-2">
                                 <label className="text-sm font-medium text-white">
-                                    Source Audio <span className="text-[#FF5733]">*</span>
+                                    {isMusicCover ? t('music.referenceTrack') : 'Source Audio'}{' '}
+                                    <span className="text-[#FF5733]">*</span>
                                 </label>
                                 <span className="rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
-                                    Audio edit
+                                    {isMusicCover ? t('music.coverBadge') : 'Audio edit'}
                                 </span>
                             </div>
                             <p className="text-[12px] leading-relaxed text-white/45">
-                                {t('music.uploadTrackHint')}
+                                {isMusicCover ? t('music.uploadCoverHint') : t('music.uploadTrackHint')}
                             </p>
 
                             <input
@@ -523,6 +527,7 @@ export default function SoundLabCreateForm({
                                 </p>
                             )}
 
+                            {isAceAudioEdit && (
                             <div className="space-y-1.5">
                                 <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">{t('music.editMode')}</span>
                                 <div className="relative grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black p-1">
@@ -568,8 +573,10 @@ export default function SoundLabCreateForm({
                                         : 'Lyrics edit — only for rewriting words on a track that already has singing. It will not add vocals onto an instrumental bed.'}
                                 </p>
                             </div>
+                            )}
 
                             {/* Soft gender hint via style tags — ACE has no dedicated gender API field */}
+                            {isAceAudioEdit && (
                             <div className="space-y-1.5">
                                 <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/35">{t('music.vocalGender')}</span>
                                 <div className="grid grid-cols-2 gap-2">
@@ -603,6 +610,7 @@ export default function SoundLabCreateForm({
                                     Applied when lyrics are set — steers voice via style tags (ACE has no gender switch).
                                 </p>
                             </div>
+                            )}
                         </div>
                     )}
 
@@ -893,7 +901,7 @@ export default function SoundLabCreateForm({
                                     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                 </svg>
                                 {t('music.lyrics')}
-                                {needsSourceAudio && (
+                                {needsSourceAudio && isAceAudioEdit && (
                                     <span className="rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
                                         {vocalGender === 'male' ? t('music.male') : t('music.female')}
                                     </span>
@@ -903,7 +911,7 @@ export default function SoundLabCreateForm({
                                         {vocalGender === 'male' ? t('music.male') : t('music.female')}
                                     </span>
                                 )}
-                                {needsSourceAudio && (
+                                {needsSourceAudio && isAceAudioEdit && (
                                     <span
                                         className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
                                             lyrics.trim()
@@ -938,11 +946,13 @@ export default function SoundLabCreateForm({
                                 >
                                     <div className="space-y-3 border-t border-white/10 px-3.5 pb-3.5 pt-3">
                                         <p className="text-[12px] leading-relaxed text-white/45">
-                                            {needsSourceAudio
-                                                ? editMode === 'remix'
+                                            {isMusicCover
+                                                ? 'Optional — leave blank to keep the reference vocal vibe, or paste new lyrics for the cover.'
+                                                : needsSourceAudio
+                                                  ? editMode === 'remix'
                                                     ? 'Paste the source lyrics (or new ones). Leaving this empty usually produces an instrumental remix — fal does not copy singing from the file alone.'
                                                     : 'Write the new lyrics to sing. Structure tags help shape verses and chorus.'
-                                                : 'Write your own lyrics, or leave blank and the model will invent them. Tap structure tags to shape the song.'}
+                                                  : 'Write your own lyrics, or leave blank and the model will invent them. Tap structure tags to shape the song.'}
                                         </p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {LYRIC_TAGS.map((tag) => (
@@ -970,9 +980,11 @@ export default function SoundLabCreateForm({
                                             />
                                             <div className="flex items-center justify-between border-t border-white/10 bg-black px-3 py-2">
                                                 <span className="text-[11px] text-white/40">
-                                                    {needsSourceAudio
-                                                        ? `${editMode === 'remix' ? 'Remix' : 'Lyrics edit'} · paste lyrics for singing`
-                                                        : `${vocalGender === 'male' ? t('music.male') : t('music.female')} vocal · tags help song structure`}
+                                                    {isMusicCover
+                                                        ? 'Cover · optional lyrics rewrite'
+                                                        : needsSourceAudio
+                                                          ? `${editMode === 'remix' ? 'Remix' : 'Lyrics edit'} · paste lyrics for singing`
+                                                          : `${vocalGender === 'male' ? t('music.male') : t('music.female')} vocal · tags help song structure`}
                                                 </span>
                                                 <span
                                                     className={`text-[11px] tabular-nums ${
@@ -1006,11 +1018,13 @@ export default function SoundLabCreateForm({
                             {selectedModelRecord?.name || selectedModel}
                         </span>
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                            {needsSourceAudio
-                                ? `${editMode === 'lyrics' ? t('music.lyricsEdit') : t('music.remix')} · ${vocalGender === 'male' ? t('music.male') : t('music.female')}`
-                                : instrumental || !canUseVocals
-                                  ? t('music.instrumental')
-                                  : `${t('music.withVocals')} · ${vocalGender === 'male' ? t('music.male') : t('music.female')}`}
+                            {isMusicCover
+                                ? t('music.coverBadge')
+                                : needsSourceAudio
+                                  ? `${editMode === 'lyrics' ? t('music.lyricsEdit') : t('music.remix')} · ${vocalGender === 'male' ? t('music.male') : t('music.female')}`
+                                  : instrumental || !canUseVocals
+                                    ? t('music.instrumental')
+                                    : `${t('music.withVocals')} · ${vocalGender === 'male' ? t('music.male') : t('music.female')}`}
                         </span>
                         {autoEnhance && (
                             <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
@@ -1058,7 +1072,7 @@ export default function SoundLabCreateForm({
                             endpointId: selectedModelRecord?.endpoint_id || '',
                             vocalGender,
                             audioFile: needsSourceAudio ? sourceAudio : null,
-                            editMode: needsSourceAudio ? editMode : undefined,
+                            editMode: isAceAudioEdit ? editMode : undefined,
                             durationSeconds: needsSourceAudio
                                 ? sourceDurationSec
                                 : supportsDurationControl

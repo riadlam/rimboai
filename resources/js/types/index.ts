@@ -49,7 +49,10 @@ export type BrandModel = {
     sort?: number;
     /** Whether this model supports remixing from source images (variations mode) */
     supports_variations?: boolean;
-    /** Video lab: native soundtrack toggle (generate_audio) */
+    /**
+     * Sample/reference audio input:
+     * Voice = clone from sample · Music = ACE edit / cover · Video = generate soundtrack
+     */
     supports_audio?: boolean;
     /** Music lab: can generate singing vocals */
     supports_vocals?: boolean;
