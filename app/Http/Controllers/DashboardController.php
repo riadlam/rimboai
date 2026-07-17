@@ -242,6 +242,9 @@ class DashboardController extends Controller
         $hasTags = in_array('tags', $columns, true);
         $hasSort = in_array('sort', $columns, true);
         $hasSupportsAudio = in_array('supports_audio', $columns, true);
+        $hasSupportsFirstFrame = in_array('supports_first_frame', $columns, true);
+        $hasSupportsLastFrame = in_array('supports_last_frame', $columns, true);
+        $hasFlfEndpoint = in_array('first_last_frame_endpoint_id', $columns, true);
         $hasSupportsVocals = in_array('supports_vocals', $columns, true);
         $hasSupportsLyrics = in_array('supports_lyrics', $columns, true);
         $hasSupportsInstrumental = in_array('supports_instrumental', $columns, true);
@@ -285,6 +288,9 @@ class DashboardController extends Controller
                 $hasTags,
                 $hasSort,
                 $hasSupportsAudio,
+                $hasSupportsFirstFrame,
+                $hasSupportsLastFrame,
+                $hasFlfEndpoint,
                 $hasSupportsVocals,
                 $hasSupportsLyrics,
                 $hasSupportsInstrumental,
@@ -326,6 +332,9 @@ class DashboardController extends Controller
                         $hasImageUrl,
                         $hasTags,
                         $hasSupportsAudio,
+                        $hasSupportsFirstFrame,
+                        $hasSupportsLastFrame,
+                        $hasFlfEndpoint,
                         $hasSupportsVocals,
                         $hasSupportsLyrics,
                         $hasSupportsInstrumental,
@@ -435,13 +444,13 @@ class DashboardController extends Controller
                         if ($isVideoCatalog && $videoCaps !== null && $endpointId !== '') {
                             $caps = $videoCaps->for($endpointId);
                             // Prefer DB flags when present (admin / seeder source of truth for FLF).
-                            if (Schema::hasColumn($modelsTable, 'supports_last_frame') && isset($m->supports_last_frame)) {
+                            if ($hasSupportsLastFrame && isset($m->supports_last_frame)) {
                                 $caps['supports_last_frame'] = (bool) $m->supports_last_frame || $caps['supports_last_frame'];
                             }
-                            if (Schema::hasColumn($modelsTable, 'supports_first_frame') && isset($m->supports_first_frame) && (bool) $m->supports_first_frame) {
+                            if ($hasSupportsFirstFrame && isset($m->supports_first_frame) && (bool) $m->supports_first_frame) {
                                 $caps['supports_first_frame'] = true;
                             }
-                            if (Schema::hasColumn($modelsTable, 'first_last_frame_endpoint_id')
+                            if ($hasFlfEndpoint
                                 && is_string($m->first_last_frame_endpoint_id ?? null)
                                 && $m->first_last_frame_endpoint_id !== '') {
                                 $caps['first_last_frame_endpoint_id'] = $m->first_last_frame_endpoint_id;
