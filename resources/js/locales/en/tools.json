@@ -52,6 +52,13 @@
       "silence": "Silence",
       "remap": "Remap"
     },
+    "syncModesHelp": {
+      "cut_off": "Cuts the longer track to match the shorter one. Best for clean timing.",
+      "loop": "Repeats the shorter audio until it fills the video length.",
+      "bounce": "Plays audio forward then backward to fill the video.",
+      "silence": "Pads the shorter audio with silence to match the video.",
+      "remap": "Stretches or squeezes audio to match video length. Avoid big gaps."
+    },
     "background": "Background",
     "backgrounds": {
       "transparent": "Transparent",

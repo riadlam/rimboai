@@ -704,11 +704,24 @@ function ControlField({
 }) {
     const { t } = useTranslation('tools');
     const label = control.label_key ? t(`detail.${control.label_key}`) : control.key;
+    const [helpOpen, setHelpOpen] = useState<string | null>(null);
+    const helpRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!helpOpen) return;
+        const onPointerDown = (e: MouseEvent) => {
+            if (helpRef.current && !helpRef.current.contains(e.target as Node)) {
+                setHelpOpen(null);
+            }
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        return () => document.removeEventListener('mousedown', onPointerDown);
+    }, [helpOpen]);
 
     if (control.type === 'choice') {
         const options = control.options ?? [];
         return (
-            <section className="space-y-2">
+            <section className="space-y-2" ref={helpRef}>
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
                 <div className={`grid gap-2 ${options.length <= 3 ? 'grid-cols-3' : options.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                     {options.map((option) => {
@@ -718,19 +731,61 @@ function ControlField({
                             : control.suffix
                               ? `${option}${control.suffix}`
                               : option;
+                        const helpKey = control.option_label_prefix
+                            ? `detail.${control.option_label_prefix}Help.${option}`
+                            : '';
+                        const help = helpKey ? t(helpKey, { defaultValue: '' }) : '';
+                        const showHelp = Boolean(help && help !== helpKey);
+
                         return (
-                            <button
+                            <div
                                 key={option}
-                                type="button"
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => onChange(option)}
-                                className={`rounded-xl border px-2 py-2.5 text-[12px] font-medium transition ${
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        onChange(option);
+                                    }
+                                }}
+                                className={`group/opt relative cursor-pointer rounded-xl border px-2 pb-2.5 pt-2.5 text-center text-[12px] font-medium transition ${
                                     active
                                         ? 'border-[#FF5733]/50 bg-gradient-to-b from-[#FF5733]/25 to-[#FF5733]/10 text-white'
                                         : 'border-white/[0.07] bg-white/[0.03] text-white/55 hover:border-white/15 hover:text-white/80'
                                 }`}
                             >
-                                {text}
-                            </button>
+                                {showHelp && (
+                                    <span className="absolute end-1 top-1 z-20">
+                                        <button
+                                            type="button"
+                                            aria-label={help}
+                                            aria-expanded={helpOpen === option}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setHelpOpen((cur) => (cur === option ? null : option));
+                                            }}
+                                            className={`flex h-4 w-4 items-center justify-center rounded-full border text-[9px] font-bold leading-none transition sm:h-[15px] sm:w-[15px] ${
+                                                helpOpen === option
+                                                    ? 'border-[#FF5733]/60 bg-[#FF5733]/25 text-[#FFB39F]'
+                                                    : 'border-white/20 bg-black/35 text-white/55 opacity-80 hover:border-white/35 hover:text-white group-hover/opt:opacity-100'
+                                            }`}
+                                        >
+                                            !
+                                        </button>
+                                        <span
+                                            className={`pointer-events-none absolute end-0 top-[calc(100%+6px)] z-30 w-[min(14rem,70vw)] rounded-lg border border-white/12 bg-[#12121a] px-2.5 py-2 text-start text-[11px] font-normal normal-case leading-snug text-white/75 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.85)] transition ${
+                                                helpOpen === option
+                                                    ? 'visible opacity-100'
+                                                    : 'invisible opacity-0 group-hover/opt:visible group-hover/opt:opacity-100'
+                                            }`}
+                                        >
+                                            {help}
+                                        </span>
+                                    </span>
+                                )}
+                                <span className={showHelp ? 'px-2' : undefined}>{text}</span>
+                            </div>
                         );
                     })}
                 </div>
