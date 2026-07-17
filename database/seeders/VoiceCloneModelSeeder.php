@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * Seeds:
  *   - fal-ai/minimax/voice-clone
- *   - fal-ai/chatterbox/text-to-speech
+ *   - fal-ai/chatterbox/text-to-speech (English / long ASCII text)
+ *   - fal-ai/chatterbox/text-to-speech/multilingual (Arabic + 20+ languages)
  *   - fal-ai/minimax-music/cover
  *
  * Safe to re-run (updateOrInsert by endpoint_id).
@@ -27,7 +28,7 @@ class VoiceCloneModelSeeder extends Seeder
     {
         $this->seedVoiceModels();
         $this->seedMusicCover();
-        $this->command?->info('VoiceCloneModelSeeder: MiniMax Voice Clone, Chatterbox multilingual, MiniMax Music Cover are active.');
+        $this->command?->info('VoiceCloneModelSeeder: MiniMax Voice Clone, Chatterbox EN + multilingual, MiniMax Music Cover are active.');
     }
 
     private function seedVoiceModels(): void
@@ -68,14 +69,26 @@ class VoiceCloneModelSeeder extends Seeder
                 'tags' => ['voice-clone', 'sample-audio', 'popular', 'multilingual'],
             ],
             [
+                // Shown in the model picker as the Chatterbox entry; language dropdown switches endpoint.
                 'endpoint_id' => 'fal-ai/chatterbox/text-to-speech/multilingual',
                 'name' => 'Chatterbox Voice Clone',
-                'description' => 'Zero-shot voice cloning from a short reference clip. Multilingual (Arabic, French, English, and more) — max 300 characters per request.',
+                'description' => 'Zero-shot voice cloning. Pick a language — English uses the long-text endpoint; other languages use multilingual (max 300 chars).',
                 'category' => 'Chatterbox',
                 'sort' => 10,
                 'unit' => '1000 characters',
                 'unit_price' => 0.025,
                 'tags' => ['voice-clone', 'sample-audio', 'expressive', 'popular', 'multilingual', 'arabic'],
+            ],
+            [
+                // Sibling endpoint selected via language = English (hidden from picker when multilingual exists).
+                'endpoint_id' => 'fal-ai/chatterbox/text-to-speech',
+                'name' => 'Chatterbox Voice Clone English',
+                'description' => 'English/ASCII Chatterbox clone — up to 5000 characters. Selected automatically when language is English.',
+                'category' => 'Chatterbox',
+                'sort' => 11,
+                'unit' => '1000 characters',
+                'unit_price' => 0.025,
+                'tags' => ['voice-clone', 'sample-audio', 'expressive', 'english-only'],
             ],
         ];
 
@@ -102,16 +115,6 @@ class VoiceCloneModelSeeder extends Seeder
                 ['endpoint_id' => $model['endpoint_id']],
                 $values,
             );
-        }
-
-        // English-only Chatterbox rejects Arabic/non-ASCII — retire it in favor of multilingual.
-        if (Schema::hasColumn('text_to_voice_models', 'status')) {
-            DB::table('text_to_voice_models')
-                ->where('endpoint_id', 'fal-ai/chatterbox/text-to-speech')
-                ->update([
-                    'status' => 'inactive',
-                    'updated_at' => $now,
-                ]);
         }
     }
 

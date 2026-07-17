@@ -49,6 +49,57 @@ export function isMiniMaxVoiceClone(endpointId?: string | null): boolean {
     return id.includes('minimax/voice-clone') || id.endsWith('/voice-clone');
 }
 
+export const CHATTERBOX_EN_ENDPOINT = 'fal-ai/chatterbox/text-to-speech';
+export const CHATTERBOX_MULTI_ENDPOINT = 'fal-ai/chatterbox/text-to-speech/multilingual';
+export const CHATTERBOX_EN_MAX_CHARS = 5000;
+export const CHATTERBOX_MULTI_MAX_CHARS = 300;
+
+/** Languages supported by Chatterbox multilingual (fal enum). English uses the longer ASCII endpoint. */
+export const CHATTERBOX_LANGUAGES = [
+    { id: 'english', labelKey: 'voice.langEnglish' },
+    { id: 'arabic', labelKey: 'voice.langArabic' },
+    { id: 'french', labelKey: 'voice.langFrench' },
+    { id: 'spanish', labelKey: 'voice.langSpanish' },
+    { id: 'german', labelKey: 'voice.langGerman' },
+    { id: 'italian', labelKey: 'voice.langItalian' },
+    { id: 'portuguese', labelKey: 'voice.langPortuguese' },
+    { id: 'turkish', labelKey: 'voice.langTurkish' },
+    { id: 'russian', labelKey: 'voice.langRussian' },
+    { id: 'chinese', labelKey: 'voice.langChinese' },
+    { id: 'japanese', labelKey: 'voice.langJapanese' },
+    { id: 'korean', labelKey: 'voice.langKorean' },
+    { id: 'hindi', labelKey: 'voice.langHindi' },
+    { id: 'hebrew', labelKey: 'voice.langHebrew' },
+    { id: 'dutch', labelKey: 'voice.langDutch' },
+    { id: 'polish', labelKey: 'voice.langPolish' },
+] as const;
+
+export type ChatterboxLanguageId = (typeof CHATTERBOX_LANGUAGES)[number]['id'];
+
+export function isChatterboxCloneModel(
+    model: Pick<VoiceModelPricing, 'endpoint_id'> | null | undefined,
+): boolean {
+    const id = String(model?.endpoint_id ?? '').toLowerCase();
+    return id.includes('chatterbox') && id.includes('text-to-speech');
+}
+
+export function isChatterboxEnglishEndpoint(endpointId?: string | null): boolean {
+    const id = String(endpointId ?? '').toLowerCase();
+    return id.includes('chatterbox') && id.includes('text-to-speech') && !id.includes('multilingual');
+}
+
+/** English → longer ASCII endpoint; all other langs → multilingual. */
+export function chatterboxEndpointForLanguage(language: string): string {
+    return language === 'english' ? CHATTERBOX_EN_ENDPOINT : CHATTERBOX_MULTI_ENDPOINT;
+}
+
+export function chatterboxMaxChars(endpointId?: string | null): number {
+    const id = String(endpointId ?? '').toLowerCase();
+    if (id.includes('chatterbox') && id.includes('multilingual')) return CHATTERBOX_MULTI_MAX_CHARS;
+    if (id.includes('chatterbox') && id.includes('text-to-speech')) return CHATTERBOX_EN_MAX_CHARS;
+    return 70000;
+}
+
 /** MiniMax needs ≥10s; Chatterbox works with shorter clips. */
 export function minVoiceSampleSeconds(endpointId?: string | null): number {
     return isMiniMaxVoiceClone(endpointId) ? 10 : 3;

@@ -1148,6 +1148,7 @@ function LabWorkspaceInner({
                         clarity: options.clarity,
                         style: options.styleExaggeration,
                         speed: options.speed,
+                        language: options.language || undefined,
                         audio_base64: audioBase64,
                         audio_filename: audioName,
                         audio_mime: options.audioFile.type || 'audio/mpeg',
@@ -1162,6 +1163,7 @@ function LabWorkspaceInner({
                         clarity: options.clarity,
                         style: options.styleExaggeration,
                         speed: options.speed,
+                        language: options.language || undefined,
                     });
                 }
                 syncTokenBalance(data.token_balance);

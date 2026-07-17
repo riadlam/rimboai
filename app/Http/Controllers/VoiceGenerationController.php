@@ -45,6 +45,7 @@ class VoiceGenerationController extends Controller
             'audio_filename' => ['nullable', 'string', 'max:191'],
             'audio_mime' => ['nullable', 'string', 'max:191'],
             'audio' => ['nullable', 'file', 'max:20480'],
+            'language' => ['nullable', 'string', 'max:64'],
         ]);
 
         if (! $fal->configured()) {
@@ -110,6 +111,7 @@ class VoiceGenerationController extends Controller
             'clarity' => $data['clarity'] ?? null,
             'style' => $data['style'] ?? null,
             'speed' => $data['speed'] ?? null,
+            'language' => $data['language'] ?? null,
         ]);
 
         $billing = $pricing->resolve((string) $model->endpoint_id);
@@ -157,6 +159,7 @@ class VoiceGenerationController extends Controller
                         'speed' => isset($data['speed']) ? (float) $data['speed'] : null,
                         'controls' => $inputBuilder->controlCapabilities($model->endpoint_id),
                         'audio_url' => $audioUrl,
+                        'language' => $data['language'] ?? null,
                         'fal_input' => $falInput,
                         'fal_endpoint' => $model->endpoint_id,
                         'fal_cost_usd' => $cost['fal_cost_usd'],

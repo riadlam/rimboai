@@ -3,7 +3,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Brand, BrandVoice } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
-import { estimateVoiceCredits, formatVoiceSampleDuration, isMiniMaxVoiceClone, isVoiceCloneModel, minVoiceSampleSeconds, readVoiceSampleDuration } from '@/lib/voiceCredits';
+import {
+    CHATTERBOX_LANGUAGES,
+    chatterboxEndpointForLanguage,
+    chatterboxMaxChars,
+    estimateVoiceCredits,
+    formatVoiceSampleDuration,
+    isChatterboxCloneModel,
+    isChatterboxEnglishEndpoint,
+    isMiniMaxVoiceClone,
+    isVoiceCloneModel,
+    minVoiceSampleSeconds,
+    readVoiceSampleDuration,
+    type ChatterboxLanguageId,
+} from '@/lib/voiceCredits';
 import { publicAsset } from '@/lib/publicAsset';
 import { LabModelPickerModal, LabModelPickerTrigger, type LabPickerModel } from '@/Components/LabModelPicker';
 
@@ -17,6 +30,7 @@ export type VoiceGenerateOptions = {
     styleExaggeration: number;
     speed: number;
     audioFile?: File | null;
+    language?: string | null;
 };
 
 type Props = {
@@ -28,7 +42,6 @@ type Props = {
 };
 
 const MAX_CHARS = 70000;
-const CHATTERBOX_MULTILINGUAL_MAX_CHARS = 300;
 
 const QUICK_PROMPTS = [
     {
@@ -184,7 +197,7 @@ export default function VoiceLabCreateForm({
     creditsConfig,
     tokenBalance = 0,
 }: Props) {
-    const { t } = useTranslation('lab');
+    const { t, i18n } = useTranslation('lab');
     const [text, setText] = useState('');
     const [modelOpen, setModelOpen] = useState(false);
     const [voiceOpen, setVoiceOpen] = useState(false);
@@ -204,6 +217,9 @@ export default function VoiceLabCreateForm({
     const [mode, setMode] = useState<'preset' | 'clone'>('preset');
     const [sampleAudio, setSampleAudio] = useState<File | null>(null);
     const [sampleDurationSec, setSampleDurationSec] = useState<number | null>(null);
+    const [chatterboxLanguage, setChatterboxLanguage] = useState<ChatterboxLanguageId>(() =>
+        (i18n.language || '').toLowerCase().startsWith('ar') ? 'arabic' : 'english',
+    );
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
@@ -219,7 +235,21 @@ export default function VoiceLabCreateForm({
         [brands],
     );
 
-    const cloneModels = useMemo(() => allModels.filter((m) => isVoiceCloneModel(m)), [allModels]);
+    const hasChatterboxMulti = useMemo(
+        () => allModels.some((m) => (m.endpoint_id || '').toLowerCase().includes('chatterbox') && (m.endpoint_id || '').toLowerCase().includes('multilingual')),
+        [allModels],
+    );
+
+    // Hide English sibling from picker when multilingual exists — language dropdown switches endpoint.
+    const cloneModels = useMemo(
+        () =>
+            allModels.filter((m) => {
+                if (!isVoiceCloneModel(m)) return false;
+                if (hasChatterboxMulti && isChatterboxEnglishEndpoint(m.endpoint_id)) return false;
+                return true;
+            }),
+        [allModels, hasChatterboxMulti],
+    );
     const presetModels = useMemo(() => allModels.filter((m) => !isVoiceCloneModel(m)), [allModels]);
     const hasCloneModels = cloneModels.length > 0;
     const pickerModels = mode === 'clone' ? cloneModels : presetModels.length > 0 ? presetModels : allModels;
@@ -229,13 +259,25 @@ export default function VoiceLabCreateForm({
         [pickerModels, allModels, selectedModel],
     );
 
+    const isChatterboxClone = isChatterboxCloneModel(selectedModelRecord);
+    const effectiveEndpointId = useMemo(() => {
+        if (!isChatterboxClone) return selectedModelRecord?.endpoint_id || '';
+        return chatterboxEndpointForLanguage(chatterboxLanguage);
+    }, [isChatterboxClone, chatterboxLanguage, selectedModelRecord?.endpoint_id]);
+
+    const billingModelRecord = useMemo(() => {
+        if (!isChatterboxClone) return selectedModelRecord;
+        return allModels.find((m) => (m.endpoint_id || '') === effectiveEndpointId) || selectedModelRecord;
+    }, [isChatterboxClone, allModels, effectiveEndpointId, selectedModelRecord]);
+
     const needsSampleAudio = isVoiceCloneModel(selectedModelRecord);
-    const minSampleSeconds = minVoiceSampleSeconds(selectedModelRecord?.endpoint_id);
+    const minSampleSeconds = minVoiceSampleSeconds(billingModelRecord?.endpoint_id || selectedModelRecord?.endpoint_id);
     const isMiniMaxClone = isMiniMaxVoiceClone(selectedModelRecord?.endpoint_id);
-    const maxChars = (selectedModelRecord?.endpoint_id || '').toLowerCase().includes('chatterbox')
-        && (selectedModelRecord?.endpoint_id || '').toLowerCase().includes('multilingual')
-        ? CHATTERBOX_MULTILINGUAL_MAX_CHARS
+    const maxChars = isChatterboxClone
+        ? chatterboxMaxChars(effectiveEndpointId)
         : MAX_CHARS;
+    const englishAsciiOnly = isChatterboxClone && chatterboxLanguage === 'english';
+    const textHasNonAscii = englishAsciiOnly && /[^\x00-\x7F]/.test(text);
 
     const modelBrandVoices = selectedModelRecord?.voices;
     const modelVoices = useMemo(
@@ -274,20 +316,20 @@ export default function VoiceLabCreateForm({
     }, [modelVoices, voiceSearch, voiceCategory, voiceLanguage, favoriteIds, supportsLanguageFilter]);
 
     const controlCaps = useMemo(
-        () => voiceControlCapabilities(selectedModelRecord?.endpoint_id),
-        [selectedModelRecord?.endpoint_id],
+        () => voiceControlCapabilities(billingModelRecord?.endpoint_id || selectedModelRecord?.endpoint_id),
+        [billingModelRecord?.endpoint_id, selectedModelRecord?.endpoint_id],
     );
     const hasAnyVoiceControls =
         controlCaps.stability || controlCaps.clarity || controlCaps.style || controlCaps.speed;
 
     const creditEstimate = useMemo(() => {
         return estimateVoiceCredits(
-            selectedModelRecord,
+            billingModelRecord,
             Math.max(1, text.trim().length),
             creditsConfig,
             { sampleSeconds: sampleDurationSec },
         );
-    }, [selectedModelRecord, text, creditsConfig, sampleDurationSec]);
+    }, [billingModelRecord, text, creditsConfig, sampleDurationSec]);
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
@@ -304,6 +346,7 @@ export default function VoiceLabCreateForm({
     const canGenerate =
         Boolean(text.trim()) &&
         hasEnoughTokens &&
+        !textHasNonAscii &&
         (needsSampleAudio
             ? Boolean(sampleAudio) && !sampleTooShort && !sampleAnalyzing
             : Boolean(selectedVoice?.voice_key));
@@ -347,8 +390,11 @@ export default function VoiceLabCreateForm({
         if (needsSampleAudio) {
             setMode('clone');
         }
+    }, [selectedModelRecord?.endpoint_id, needsSampleAudio]);
+
+    useEffect(() => {
         setText((prev) => (prev.length > maxChars ? prev.slice(0, maxChars) : prev));
-    }, [selectedModelRecord?.endpoint_id, needsSampleAudio, maxChars]);
+    }, [maxChars]);
 
     useEffect(() => {
         if (!sampleAudio) {
@@ -630,6 +676,42 @@ export default function VoiceLabCreateForm({
                                         : t('voice.sampleReadyChatterbox', { duration: sampleDurationLabel })}
                                 </p>
                             )}
+
+                            {isChatterboxClone && (
+                                <div className="space-y-1.5">
+                                    <label htmlFor="chatterbox-language" className="text-sm font-medium text-zinc-200">
+                                        {t('voice.outputLanguage')} <span className="text-[#FF5733]">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <select
+                                            id="chatterbox-language"
+                                            value={chatterboxLanguage}
+                                            onChange={(e) => setChatterboxLanguage(e.target.value as ChatterboxLanguageId)}
+                                            className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/40 pe-10 ps-3 text-sm font-medium text-white outline-none transition hover:border-orange-400/35 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
+                                        >
+                                            {CHATTERBOX_LANGUAGES.map((lang) => (
+                                                <option key={lang.id} value={lang.id} className="bg-zinc-950 text-white">
+                                                    {t(lang.labelKey)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <svg
+                                            className="pointer-events-none absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                        >
+                                            <path d="m6 9 6 6 6-6" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-[11px] leading-relaxed text-white/40">
+                                        {chatterboxLanguage === 'english'
+                                            ? t('voice.chatterboxEnglishHint', { max: maxChars })
+                                            : t('voice.chatterboxMultiHint', { max: maxChars, lang: t(CHATTERBOX_LANGUAGES.find((l) => l.id === chatterboxLanguage)?.labelKey || 'voice.langArabic') })}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -650,6 +732,11 @@ export default function VoiceLabCreateForm({
                             placeholder={t('voice.placeholder')}
                             className="min-h-[120px] w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                         />
+                        {textHasNonAscii && (
+                            <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+                                {t('voice.englishAsciiOnly')}
+                            </p>
+                        )}
                     </div>
 
                     {/* Quick prompts */}
@@ -821,8 +908,13 @@ export default function VoiceLabCreateForm({
                             )
                         )}
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] tabular-nums text-white/65">
-                            {text.trim().length.toLocaleString()} chars
+                            {text.trim().length.toLocaleString()} / {maxChars.toLocaleString()}
                         </span>
+                        {isChatterboxClone && (
+                            <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] capitalize text-white/65">
+                                {t(CHATTERBOX_LANGUAGES.find((l) => l.id === chatterboxLanguage)?.labelKey || 'voice.langEnglish')}
+                            </span>
+                        )}
                     </div>
                     <span className="inline-flex shrink-0 flex-col items-end gap-0.5 text-[11px] font-medium tabular-nums text-orange-200/90">
                         {creditCost > 0 ? (
@@ -851,13 +943,14 @@ export default function VoiceLabCreateForm({
                         onGenerate?.(text, {
                             voice: needsSampleAudio ? 'cloned-sample' : selectedVoice?.voice_key || '',
                             voiceName: needsSampleAudio ? t('voice.clonedVoice') : selectedVoice?.name || '',
-                            model: selectedModel,
-                            endpointId: selectedModelRecord?.endpoint_id || '',
+                            model: billingModelRecord?.name || selectedModel,
+                            endpointId: effectiveEndpointId || selectedModelRecord?.endpoint_id || '',
                             stability,
                             clarity,
                             styleExaggeration,
                             speed,
                             audioFile: needsSampleAudio ? sampleAudio : null,
+                            language: isChatterboxClone ? chatterboxLanguage : null,
                         })
                     }
                     className="relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
@@ -879,6 +972,8 @@ export default function VoiceLabCreateForm({
                         <span className="relative text-white/90">{t('notEnoughTokens', { balance: tokenBalance })}</span>
                     ) : !text.trim() ? (
                         <span className="relative text-white/90">{t('voice.needText')}</span>
+                    ) : textHasNonAscii ? (
+                        <span className="relative text-white/90">{t('voice.switchLanguageOrAscii')}</span>
                     ) : needsSampleAudio && !sampleAudio ? (
                         <span className="relative text-white/90">{t('voice.needSample')}</span>
                     ) : sampleAnalyzing ? (

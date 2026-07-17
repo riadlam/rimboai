@@ -17,6 +17,7 @@ class FalVoiceInputBuilder
      *   style?: int|float|null,
      *   speed?: int|float|null,
      *   exaggeration?: int|float|null,
+     *   language?: string|null,
      * }  $options
      * @return array<string, mixed>
      */
