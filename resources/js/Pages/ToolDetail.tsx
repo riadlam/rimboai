@@ -247,6 +247,7 @@ export default function ToolDetail({ tool, workspace, creditsConfig, tokenBalanc
                                     onRevealComplete={onRevealComplete}
                                 />
                             ) : libraryReady ? (
+                                <>
                                     <div aria-hidden className="pointer-events-none absolute inset-0">
                                         <div className="absolute left-1/2 top-1/3 h-80 w-80 -translate-x-1/2 rounded-full bg-[#FF5733]/12 blur-[120px]" />
                                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.035),transparent_55%)]" />
