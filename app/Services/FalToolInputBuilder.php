@@ -20,13 +20,15 @@ class FalToolInputBuilder
         $imageUrl = $urls['image'] ?? null;
         $audioUrl = $urls['audio'] ?? null;
 
-        if (! is_string($videoUrl) || $videoUrl === '') {
+        // Image → video tools don't take a video input; every other tool requires one.
+        $imageOnlyTools = ['animate-a-picture', 'motion-control'];
+        if (! in_array($toolSlug, $imageOnlyTools, true) && (! is_string($videoUrl) || $videoUrl === '')) {
             throw new \InvalidArgumentException('A video upload is required.');
         }
 
         $input = match ($toolSlug) {
             'video-upscaler' => $this->buildUpscaler($endpointId, $defaults, $settings, $videoUrl),
-            'video-enhancer' => $this->buildEnhancer($endpointId, $defaults, $settings, $videoUrl),
+            'video-enhancer', 'anime-video-enhancer' => $this->buildEnhancer($endpointId, $defaults, $settings, $videoUrl),
             'lip-sync' => $this->buildLipSync($defaults, $settings, $videoUrl, $audioUrl),
             'face-swap-video' => $this->buildFaceSwap($defaults, $settings, $videoUrl, $imageUrl),
             'video-background-remover' => $this->buildBgRemover($endpointId, $defaults, $settings, $videoUrl),
@@ -34,6 +36,13 @@ class FalToolInputBuilder
             'ai-video-extender' => $this->buildExtender($endpointId, $defaults, $settings, $videoUrl),
             'video-to-video' => $this->buildVideoToVideo($endpointId, $defaults, $settings, $videoUrl, $imageUrl),
             'denoise-video' => $this->buildDenoise($endpointId, $defaults, $settings, $videoUrl),
+            'animate-a-picture' => $this->buildImageToVideo($endpointId, $defaults, $settings, $imageUrl),
+            'motion-control' => $this->buildMotionControl($defaults, $settings, $imageUrl),
+            'ai-dance-generator' => $this->buildDanceMove($defaults, $settings, $videoUrl, $imageUrl),
+            'video-to-anime-ai' => $this->buildAnime($endpointId, $defaults, $settings, $videoUrl),
+            'ai-video-filters' => $this->buildFilters($endpointId, $defaults, $settings, $videoUrl),
+            'ai-video-editor' => $this->buildEditor($endpointId, $defaults, $settings, $videoUrl),
+            'ai-sound-effect-generator' => $this->buildSoundEffect($defaults, $settings, $videoUrl),
             default => throw new \InvalidArgumentException('This tool is not wired for generation yet.'),
         };
 
@@ -370,6 +379,214 @@ class FalToolInputBuilder
 
         return $this->onlyKeys($input, [
             'video_url', 'model', 'upscale_factor', 'noise', 'compression', 'halo', 'grain', 'recover_detail',
+        ]);
+    }
+
+    /**
+     * Image → video (animate-a-picture): Kling 2.1 std or Wan 2.7 i2v.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildImageToVideo(string $endpointId, array $defaults, array $settings, ?string $imageUrl): array
+    {
+        if (! is_string($imageUrl) || $imageUrl === '') {
+            throw new \InvalidArgumentException('An image is required to animate.');
+        }
+
+        $prompt = trim((string) ($settings['prompt'] ?? ''));
+        if ($prompt === '') {
+            $prompt = 'Animate this image with natural, smooth, cinematic motion.';
+        }
+        $duration = (string) ($settings['duration'] ?? $defaults['duration'] ?? '5');
+
+        if (str_contains($endpointId, 'wan/')) {
+            $input = array_merge($defaults, [
+                'image_url' => $imageUrl,
+                'prompt' => $prompt,
+                'duration' => (int) $duration,
+            ]);
+
+            return $this->onlyKeys($input, [
+                'image_url', 'prompt', 'duration', 'resolution', 'negative_prompt', 'enable_prompt_expansion',
+            ]);
+        }
+
+        // Kling 2.1 standard
+        $input = array_merge($defaults, [
+            'image_url' => $imageUrl,
+            'prompt' => $prompt,
+            'duration' => $duration,
+        ]);
+
+        return $this->onlyKeys($input, ['image_url', 'prompt', 'duration', 'cfg_scale', 'negative_prompt']);
+    }
+
+    /**
+     * Motion Control: PixVerse i2v with camera movement.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildMotionControl(array $defaults, array $settings, ?string $imageUrl): array
+    {
+        if (! is_string($imageUrl) || $imageUrl === '') {
+            throw new \InvalidArgumentException('An image is required for motion control.');
+        }
+
+        $input = array_merge($defaults, [
+            'image_url' => $imageUrl,
+            'duration' => (string) ($settings['duration'] ?? $defaults['duration'] ?? '5'),
+        ]);
+        if (! empty($settings['camera_movement'])) {
+            $input['camera_movement'] = (string) $settings['camera_movement'];
+        }
+        $prompt = trim((string) ($settings['prompt'] ?? ''));
+        if ($prompt !== '') {
+            $input['prompt'] = $prompt;
+        }
+
+        return $this->onlyKeys($input, [
+            'image_url', 'prompt', 'resolution', 'duration', 'camera_movement', 'style', 'seed',
+        ]);
+    }
+
+    /**
+     * AI Dance Generator: Wan Animate Move (character image + drive video).
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildDanceMove(array $defaults, array $settings, ?string $videoUrl, ?string $imageUrl): array
+    {
+        if (! is_string($imageUrl) || $imageUrl === '') {
+            throw new \InvalidArgumentException('A character image is required.');
+        }
+        if (! is_string($videoUrl) || $videoUrl === '') {
+            throw new \InvalidArgumentException('A reference dance video is required.');
+        }
+
+        $input = array_merge($defaults, [
+            'video_url' => $videoUrl,
+            'image_url' => $imageUrl,
+        ]);
+        if (! empty($settings['resolution'])) {
+            $input['resolution'] = (string) $settings['resolution'];
+        }
+
+        return $this->onlyKeys($input, ['video_url', 'image_url', 'resolution', 'use_turbo']);
+    }
+
+    /**
+     * Video to Anime: Wan 2.2 v2v with an anime-locked prompt.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildAnime(string $endpointId, array $defaults, array $settings, string $videoUrl): array
+    {
+        $detail = trim((string) ($settings['prompt'] ?? ''));
+        $prompt = 'anime style, cel shading, clean line art, vibrant colors, expressive animation';
+        if ($detail !== '') {
+            $prompt .= ', '.$detail;
+        }
+
+        return $this->buildWanRestyle($endpointId, $defaults, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+    }
+
+    /**
+     * AI Video Filters: Wan 2.2 v2v driven by a filter preset prompt.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildFilters(string $endpointId, array $defaults, array $settings, string $videoUrl): array
+    {
+        $filter = (string) ($settings['filter'] ?? 'cinematic');
+        $prompt = match ($filter) {
+            'vintage' => 'vintage retro film look, soft film grain, faded warm tones, nostalgic mood',
+            'noir' => 'black and white film noir, high contrast, deep moody shadows',
+            'vibrant' => 'vibrant highly saturated colors, punchy vivid contrast',
+            'warm' => 'warm golden-hour color grade, cozy amber tones',
+            'cold' => 'cool blue cinematic color grade, crisp cold tones',
+            default => 'cinematic color grading, filmic teal and orange, dramatic lighting',
+        };
+
+        return $this->buildWanRestyle($endpointId, $defaults, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+    }
+
+    /**
+     * AI Video Editor: prompt-driven Wan 2.2 v2v restyle.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildEditor(string $endpointId, array $defaults, array $settings, string $videoUrl): array
+    {
+        $prompt = trim((string) ($settings['prompt'] ?? ''));
+        if ($prompt === '') {
+            throw new \InvalidArgumentException('An edit prompt is required.');
+        }
+
+        return $this->buildWanRestyle($endpointId, $defaults, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+    }
+
+    /**
+     * Shared Wan 2.2 v2v / Kling O3 restyle payload.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @return array<string, mixed>
+     */
+    private function buildWanRestyle(string $endpointId, array $defaults, string $videoUrl, string $prompt, ?float $strength): array
+    {
+        if (str_contains($endpointId, 'kling-video')) {
+            $input = ['video_url' => $videoUrl, 'prompt' => $prompt];
+            if ($strength !== null) {
+                $input['strength'] = $strength;
+            }
+
+            return $this->onlyKeys($input, ['video_url', 'prompt', 'strength']);
+        }
+
+        $input = array_merge($defaults, ['video_url' => $videoUrl, 'prompt' => $prompt]);
+        if ($strength !== null) {
+            $input['strength'] = $strength;
+        }
+
+        return $this->onlyKeys($input, [
+            'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio', 'enable_safety_checker', 'strength',
+        ]);
+    }
+
+    /**
+     * AI Sound Effect Generator: MMAudio v2 (video + prompt → video with audio).
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildSoundEffect(array $defaults, array $settings, string $videoUrl): array
+    {
+        $prompt = trim((string) ($settings['prompt'] ?? ''));
+        if ($prompt === '') {
+            throw new \InvalidArgumentException('Describe the sound you want to generate.');
+        }
+
+        $duration = (float) ($settings['duration'] ?? $defaults['duration'] ?? 8);
+        $input = array_merge($defaults, [
+            'video_url' => $videoUrl,
+            'prompt' => $prompt,
+            'duration' => max(1.0, min(30.0, $duration)),
+        ]);
+
+        return $this->onlyKeys($input, [
+            'video_url', 'prompt', 'duration', 'num_steps', 'cfg_strength', 'negative_prompt', 'seed',
         ]);
     }
 

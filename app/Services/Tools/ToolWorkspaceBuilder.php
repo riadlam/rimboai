@@ -91,6 +91,15 @@ class ToolWorkspaceBuilder
             'video-to-video' => [
                 ['key' => 'video', 'accept' => 'video/*', 'required' => true, 'label_key' => 'upload'],
             ],
+            // Image → video tools take a single image input.
+            'animate-a-picture', 'motion-control' => [
+                ['key' => 'image', 'accept' => 'image/*', 'required' => true, 'label_key' => 'uploadImage'],
+            ],
+            // Dance generator: character image + a driving reference video.
+            'ai-dance-generator' => [
+                ['key' => 'image', 'accept' => 'image/*', 'required' => true, 'label_key' => 'uploadCharacter'],
+                ['key' => 'video', 'accept' => 'video/*', 'required' => true, 'label_key' => 'uploadDriveVideo'],
+            ],
             default => [
                 ['key' => 'video', 'accept' => 'video/*', 'required' => true, 'label_key' => 'upload'],
             ],
@@ -115,8 +124,8 @@ class ToolWorkspaceBuilder
                     'default' => $this->scaleDefault($defaults),
                 ],
             ],
-            // 2️⃣ Video Enhancer — single Strength slider (0 → 1)
-            'video-enhancer' => [
+            // 2️⃣ Video Enhancer / Anime Video Enhancer — single Strength slider (0 → 1)
+            'video-enhancer', 'anime-video-enhancer' => [
                 [
                     'type' => 'slider',
                     'key' => 'strength',
@@ -124,7 +133,7 @@ class ToolWorkspaceBuilder
                     'min' => 0,
                     'max' => 1,
                     'step' => 0.05,
-                    'default' => (float) ($defaults['noise_scale'] ?? 0.5),
+                    'default' => (float) ($defaults['noise_scale'] ?? $defaults['recover_detail'] ?? 0.5),
                 ],
             ],
             // 3️⃣ Lip Sync AI — Sync Mode
@@ -237,6 +246,144 @@ class ToolWorkspaceBuilder
                     'default' => (float) ($defaults['noise'] ?? $defaults['noise_scale'] ?? 0.5),
                 ],
             ],
+
+            // Image to Animation — motion prompt + duration
+            'animate-a-picture' => [
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'motionPrompt',
+                    'placeholder_key' => 'motionPromptPlaceholder',
+                    'default' => '',
+                    'required' => true,
+                ],
+                [
+                    'type' => 'choice',
+                    'key' => 'duration',
+                    'label_key' => 'duration',
+                    'options' => $this->stringOptions($enums) ?: ['5', '10'],
+                    'default' => (string) ($defaults['duration'] ?? '5'),
+                    'suffix' => 's',
+                ],
+            ],
+
+            // AI Dance Generator — output resolution only
+            'ai-dance-generator' => [
+                [
+                    'type' => 'choice',
+                    'key' => 'resolution',
+                    'label_key' => 'resolution',
+                    'options' => $this->stringOptions($enums) ?: ['480p', '580p', '720p'],
+                    'default' => (string) ($defaults['resolution'] ?? '720p'),
+                ],
+            ],
+
+            // Video to Anime — strength + optional style detail prompt
+            'video-to-anime-ai' => [
+                [
+                    'type' => 'slider',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
+                    'min' => 0,
+                    'max' => 1,
+                    'step' => 0.05,
+                    'default' => (float) ($defaults['strength'] ?? 0.75),
+                ],
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'animeDetailPrompt',
+                    'placeholder_key' => 'animeDetailPlaceholder',
+                    'default' => '',
+                    'required' => false,
+                ],
+            ],
+
+            // AI Video Filters — filter preset + strength
+            'ai-video-filters' => [
+                [
+                    'type' => 'choice',
+                    'key' => 'filter',
+                    'label_key' => 'filter',
+                    'options' => ['cinematic', 'vintage', 'noir', 'vibrant', 'warm', 'cold'],
+                    'default' => 'cinematic',
+                    'option_label_prefix' => 'filters',
+                ],
+                [
+                    'type' => 'slider',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
+                    'min' => 0,
+                    'max' => 1,
+                    'step' => 0.05,
+                    'default' => (float) ($defaults['strength'] ?? 0.6),
+                ],
+            ],
+
+            // Motion Control — camera movement + duration
+            'motion-control' => [
+                [
+                    'type' => 'choice',
+                    'key' => 'camera_movement',
+                    'label_key' => 'cameraMovement',
+                    'options' => [
+                        'zoom_in', 'zoom_out', 'pan_left', 'pan_right',
+                        'horizontal_left', 'horizontal_right', 'vertical_up', 'vertical_down', 'crane_up',
+                    ],
+                    'default' => 'zoom_in',
+                    'option_label_prefix' => 'cameraMovements',
+                ],
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'motionPrompt',
+                    'placeholder_key' => 'motionPromptPlaceholder',
+                    'default' => '',
+                    'required' => false,
+                ],
+                [
+                    'type' => 'choice',
+                    'key' => 'duration',
+                    'label_key' => 'duration',
+                    'options' => $this->stringOptions($enums) ?: ['5', '8'],
+                    'default' => (string) ($defaults['duration'] ?? '5'),
+                    'suffix' => 's',
+                ],
+            ],
+
+            // AI Video Editor — edit prompt (required) + strength
+            'ai-video-editor' => [
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'editPrompt',
+                    'placeholder_key' => 'editPromptPlaceholder',
+                    'default' => '',
+                    'required' => true,
+                ],
+                [
+                    'type' => 'slider',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
+                    'min' => 0,
+                    'max' => 1,
+                    'step' => 0.05,
+                    'default' => (float) ($defaults['strength'] ?? 0.7),
+                ],
+            ],
+
+            // AI Sound Effect Generator — sound description prompt
+            'ai-sound-effect-generator' => [
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'soundPrompt',
+                    'placeholder_key' => 'soundPromptPlaceholder',
+                    'default' => '',
+                    'required' => true,
+                ],
+            ],
+
             default => [],
         };
     }

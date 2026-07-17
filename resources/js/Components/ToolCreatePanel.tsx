@@ -36,12 +36,20 @@ const GROUP_BY_SLUG: Record<string, 'enhance' | 'transform' | 'edit' | 'create'>
     'video-upscaler': 'enhance',
     'video-enhancer': 'enhance',
     'denoise-video': 'enhance',
+    'anime-video-enhancer': 'enhance',
     'lip-sync': 'transform',
     'face-swap-video': 'transform',
+    'video-to-anime-ai': 'transform',
+    'ai-dance-generator': 'transform',
     'video-background-remover': 'edit',
     'remove-subtitles-from-video': 'edit',
     'ai-video-extender': 'edit',
     'video-to-video': 'edit',
+    'ai-video-editor': 'edit',
+    'ai-video-filters': 'edit',
+    'animate-a-picture': 'create',
+    'motion-control': 'create',
+    'ai-sound-effect-generator': 'create',
 };
 
 export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenBalance, onResultVideo }: Props) {
@@ -130,18 +138,20 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
     );
 
     const videoDuration = slots.video?.duration ?? null;
-    const extendDuration =
+    const hasDurationControl = workspace.controls.some((c) => c.key === 'duration');
+    const selectedDuration =
         typeof values.duration === 'string' || typeof values.duration === 'number'
             ? Number(values.duration)
             : null;
 
     const billDuration = useMemo(() => {
-        if (slug === 'ai-video-extender' && extendDuration && extendDuration > 0) {
-            return extendDuration;
+        // Tools with an explicit duration control (extender, image→video, motion…) bill on it.
+        if (hasDurationControl && selectedDuration && selectedDuration > 0) {
+            return selectedDuration;
         }
         if (videoDuration && videoDuration > 0) return videoDuration;
         return workspace.billing?.ref_duration_seconds ?? 5;
-    }, [slug, extendDuration, videoDuration, workspace.billing?.ref_duration_seconds]);
+    }, [hasDurationControl, selectedDuration, videoDuration, workspace.billing?.ref_duration_seconds]);
 
     const creditEstimate = useMemo(() => {
         return estimateToolCredits(
