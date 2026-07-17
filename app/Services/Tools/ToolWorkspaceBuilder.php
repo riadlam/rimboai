@@ -475,6 +475,22 @@ class ToolWorkspaceBuilder
      */
     public static function unitPriceByResolution(string $endpointId, string $unit): ?array
     {
+        // Wan 2.7 family — $0.10/s @ 720p, $0.15/s @ 1080p
+        // https://fal.ai/models/fal-ai/wan/v2.7/edit-video
+        // https://fal.ai/models/fal-ai/wan/v2.7/image-to-video
+        // https://fal.ai/models/fal-ai/wan/v2.7/text-to-video
+        if (
+            str_contains($endpointId, 'wan/v2.7/edit-video')
+            || str_contains($endpointId, 'wan/v2.7/image-to-video')
+            || str_contains($endpointId, 'wan/v2.7/text-to-video')
+            || str_contains($endpointId, 'wan/v2.7/reference-to-video')
+        ) {
+            return [
+                '720p' => 0.10,
+                '1080p' => 0.15,
+            ];
+        }
+
         // Wan Animate Move / Wan 2.2 v2v — billed per "video second" (16fps-normalized).
         // https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/move
         // https://fal.ai/models/fal-ai/wan/v2.2-a14b/video-to-video
@@ -506,6 +522,27 @@ class ToolWorkspaceBuilder
                 '540p' => 0.15,
                 '720p' => 0.20,
                 '1080p' => 0.40,
+            ];
+        }
+
+        // PixVerse Swap — flat per clip; price changes with resolution (5s base, doubles if longer).
+        // https://fal.ai/models/fal-ai/pixverse/swap
+        if (str_contains($endpointId, 'pixverse/swap') && $unit === 'video') {
+            return [
+                '360p' => 0.15,
+                '540p' => 0.15,
+                '720p' => 0.20,
+            ];
+        }
+
+        // PixVerse V6 Extend — per second by resolution.
+        // https://fal.ai/models/fal-ai/pixverse/v6/extend
+        if (str_contains($endpointId, 'pixverse/v6/extend')) {
+            return [
+                '360p' => 0.03,
+                '540p' => 0.03,
+                '720p' => 0.045,
+                '1080p' => 0.09,
             ];
         }
 
