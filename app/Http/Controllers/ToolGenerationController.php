@@ -41,15 +41,30 @@ class ToolGenerationController extends Controller
                 'tool_slug' => ['required', 'string', 'max:64'],
                 'duration_seconds' => ['nullable', 'numeric', 'min:0.5', 'max:600'],
                 'settings' => ['nullable', 'array'],
+                // 1️⃣ Upscaler
                 'settings.scale' => ['nullable', 'string', 'max:16'],
-                'settings.resolution' => ['nullable', 'string', 'max:16'],
+                // 2️⃣ Enhancer / 8️⃣ V2V / 9️⃣ Denoise
+                'settings.strength' => ['nullable', 'numeric', 'min:0', 'max:1'],
+                'settings.guidance_scale' => ['nullable', 'numeric', 'min:1', 'max:30'],
+                // 3️⃣ Lip Sync
                 'settings.sync_mode' => ['nullable', 'string', 'max:32'],
+                // 5️⃣ Background Remover
+                'settings.background' => ['nullable', 'string', 'max:16'],
+                'settings.preserve_audio' => ['nullable', 'boolean'],
+                // 6️⃣ Subtitle Remover
+                'settings.mask_prompt' => ['nullable', 'string', 'max:2000'],
+                'settings.clean_prompt' => ['nullable', 'string', 'max:2000'],
+                // 7️⃣ Extender
+                'settings.duration' => ['nullable'],
+                'settings.direction' => ['nullable', 'string', 'max:16'],
+                // Shared / prompt-driven
+                'settings.prompt' => ['nullable', 'string', 'max:2000'],
+                'settings.resolution' => ['nullable', 'string', 'max:16'],
+                // Legacy keys (kept for backward compatibility)
                 'settings.refine_edges' => ['nullable', 'boolean'],
                 'settings.subject_is_person' => ['nullable', 'boolean'],
                 'settings.output_codec' => ['nullable', 'string', 'max:16'],
-                'settings.duration' => ['nullable'],
                 'settings.mode' => ['nullable', 'string', 'max:16'],
-                'settings.prompt' => ['nullable', 'string', 'max:2000'],
                 'settings.noise' => ['nullable', 'numeric', 'min:0', 'max:1'],
                 'video_url' => ['nullable', 'string', 'max:2048'],
                 'image_url' => ['nullable', 'string', 'max:2048'],

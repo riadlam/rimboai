@@ -85,7 +85,7 @@ class ToolWorkspaceBuilder
                 ['key' => 'audio', 'accept' => 'audio/*', 'required' => true, 'label_key' => 'uploadAudio'],
             ],
             'face-swap-video' => [
-                ['key' => 'video', 'accept' => 'video/*', 'required' => true, 'label_key' => 'upload'],
+                ['key' => 'video', 'accept' => 'video/*', 'required' => true, 'label_key' => 'uploadTarget'],
                 ['key' => 'image', 'accept' => 'image/*', 'required' => true, 'label_key' => 'uploadFace'],
             ],
             'video-to-video' => [
@@ -105,69 +105,71 @@ class ToolWorkspaceBuilder
     private function controlsFor(string $slug, ?array $enums, array $defaults): array
     {
         return match ($slug) {
+            // 1️⃣ Video Upscaler — Scale 2× / 4×
             'video-upscaler' => [
                 [
                     'type' => 'choice',
                     'key' => 'scale',
                     'label_key' => 'scale',
-                    'options' => $this->stringOptions($enums) ?: ['2x', '4x'],
+                    'options' => $this->scaleOptions($enums),
                     'default' => $this->scaleDefault($defaults),
                 ],
             ],
+            // 2️⃣ Video Enhancer — single Strength slider (0 → 1)
             'video-enhancer' => [
                 [
-                    'type' => 'choice',
-                    'key' => 'resolution',
-                    'label_key' => 'resolution',
-                    'options' => $this->stringOptions($enums) ?: ['720p', '1080p'],
-                    'default' => (string) ($defaults['target_resolution'] ?? '1080p'),
+                    'type' => 'slider',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
+                    'min' => 0,
+                    'max' => 1,
+                    'step' => 0.05,
+                    'default' => (float) ($defaults['noise_scale'] ?? 0.5),
                 ],
             ],
+            // 3️⃣ Lip Sync AI — Sync Mode
             'lip-sync' => [
                 [
                     'type' => 'choice',
                     'key' => 'sync_mode',
                     'label_key' => 'syncMode',
-                    'options' => $this->stringOptions($enums) ?: ['cut_off', 'loop', 'silence'],
+                    'options' => $this->stringOptions($enums) ?: ['cut_off', 'loop', 'bounce', 'silence', 'remap'],
                     'default' => (string) ($defaults['sync_mode'] ?? 'cut_off'),
                     'option_label_prefix' => 'syncModes',
                 ],
             ],
-            'face-swap-video' => [
-                [
-                    'type' => 'choice',
-                    'key' => 'resolution',
-                    'label_key' => 'resolution',
-                    'options' => $this->stringOptions($enums) ?: ['540p', '720p'],
-                    'default' => (string) ($defaults['resolution'] ?? '720p'),
-                ],
-            ],
+            // 4️⃣ Face Swap Video — no resolution/quality controls (face index not supported by model)
+            'face-swap-video' => [],
+            // 5️⃣ Video Background Remover — Background + Preserve Audio
             'video-background-remover' => [
                 [
-                    'type' => 'toggle',
-                    'key' => 'refine_edges',
-                    'label_key' => 'refineEdges',
-                    'desc_key' => 'refineEdgesDesc',
-                    'default' => (bool) ($defaults['refine_foreground_edges'] ?? true),
-                ],
-                [
-                    'type' => 'toggle',
-                    'key' => 'subject_is_person',
-                    'label_key' => 'subjectPerson',
-                    'desc_key' => 'subjectPersonDesc',
-                    'default' => (bool) ($defaults['subject_is_person'] ?? true),
-                ],
-                [
                     'type' => 'choice',
-                    'key' => 'output_codec',
-                    'label_key' => 'outputCodec',
-                    'options' => $this->stringOptions($enums) ?: ['vp9', 'h264'],
-                    'default' => (string) ($defaults['output_codec'] ?? 'vp9'),
+                    'key' => 'background',
+                    'label_key' => 'background',
+                    'options' => ['transparent', 'white', 'black'],
+                    'default' => $this->backgroundDefault($defaults),
+                    'option_label_prefix' => 'backgrounds',
+                ],
+                [
+                    'type' => 'toggle',
+                    'key' => 'preserve_audio',
+                    'label_key' => 'preserveAudio',
+                    'desc_key' => 'preserveAudioDesc',
+                    'default' => (bool) ($defaults['preserve_audio'] ?? true),
                 ],
             ],
+            // 6️⃣ Video Subtitle Remover — prompt-driven
             'remove-subtitles-from-video' => [
-                // Prompt stays server-side in model defaults — no client text field.
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'subtitlePrompt',
+                    'placeholder_key' => 'subtitlePromptPlaceholder',
+                    'default' => (string) ($defaults['prompt'] ?? 'remove subtitles'),
+                    'required' => false,
+                ],
             ],
+            // 7️⃣ AI Video Extender — Duration + Direction + optional prompt
             'ai-video-extender' => [
                 [
                     'type' => 'choice',
@@ -179,11 +181,11 @@ class ToolWorkspaceBuilder
                 ],
                 [
                     'type' => 'choice',
-                    'key' => 'mode',
-                    'label_key' => 'extendMode',
-                    'options' => ['end', 'start'],
-                    'default' => (string) ($defaults['mode'] ?? 'end'),
-                    'option_label_prefix' => 'extendModes',
+                    'key' => 'direction',
+                    'label_key' => 'extendDirection',
+                    'options' => ['forward', 'backward'],
+                    'default' => $this->directionDefault($defaults),
+                    'option_label_prefix' => 'directions',
                 ],
                 [
                     'type' => 'textarea',
@@ -194,6 +196,7 @@ class ToolWorkspaceBuilder
                     'required' => false,
                 ],
             ],
+            // 8️⃣ Video To Video — prompt (required) + Strength + Guidance
             'video-to-video' => [
                 [
                     'type' => 'textarea',
@@ -204,22 +207,34 @@ class ToolWorkspaceBuilder
                     'required' => true,
                 ],
                 [
-                    'type' => 'choice',
-                    'key' => 'resolution',
-                    'label_key' => 'resolution',
-                    'options' => $this->stringOptions($enums) ?: ['480p', '720p'],
-                    'default' => (string) ($defaults['resolution'] ?? '720p'),
-                ],
-            ],
-            'denoise-video' => [
-                [
                     'type' => 'slider',
-                    'key' => 'noise',
-                    'label_key' => 'noiseStrength',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
                     'min' => 0,
                     'max' => 1,
                     'step' => 0.05,
-                    'default' => (float) ($defaults['noise'] ?? 0.5),
+                    'default' => (float) ($defaults['strength'] ?? 0.5),
+                ],
+                [
+                    'type' => 'slider',
+                    'key' => 'guidance_scale',
+                    'label_key' => 'guidanceScale',
+                    'min' => 1,
+                    'max' => 10,
+                    'step' => 0.5,
+                    'default' => (float) ($defaults['guidance_scale'] ?? 5),
+                ],
+            ],
+            // 9️⃣ Denoise Video — single Strength slider
+            'denoise-video' => [
+                [
+                    'type' => 'slider',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
+                    'min' => 0,
+                    'max' => 1,
+                    'step' => 0.05,
+                    'default' => (float) ($defaults['noise'] ?? $defaults['noise_scale'] ?? 0.5),
                 ],
             ],
             default => [],
@@ -259,6 +274,19 @@ class ToolWorkspaceBuilder
     }
 
     /**
+     * @param  list<mixed>|null  $enums
+     * @return list<string>
+     */
+    private function scaleOptions(?array $enums): array
+    {
+        $opts = $this->stringOptions($enums);
+        // Only expose 2×/4× per product spec, even if catalog lists more.
+        $filtered = array_values(array_filter($opts, static fn ($o) => in_array($o, ['2x', '4x'], true)));
+
+        return $filtered !== [] ? $filtered : ['2x', '4x'];
+    }
+
+    /**
      * @param  array<string, mixed>  $defaults
      */
     private function scaleDefault(array $defaults): string
@@ -268,12 +296,29 @@ class ToolWorkspaceBuilder
             if ($n >= 3.5) {
                 return '4x';
             }
-            if ($n >= 1.5) {
-                return '2x';
-            }
         }
 
         return '2x';
+    }
+
+    /**
+     * @param  array<string, mixed>  $defaults
+     */
+    private function backgroundDefault(array $defaults): string
+    {
+        $raw = strtolower((string) ($defaults['background_color'] ?? 'transparent'));
+
+        return in_array($raw, ['transparent', 'white', 'black'], true) ? $raw : 'transparent';
+    }
+
+    /**
+     * @param  array<string, mixed>  $defaults
+     */
+    private function directionDefault(array $defaults): string
+    {
+        $mode = (string) ($defaults['mode'] ?? 'end');
+
+        return $mode === 'start' ? 'backward' : 'forward';
     }
 
     /**

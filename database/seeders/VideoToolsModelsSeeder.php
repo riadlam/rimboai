@@ -77,6 +77,17 @@ class VideoToolsModelsSeeder extends Seeder
             );
         }
 
+        // Prune stale endpoints that are no longer part of the catalog
+        // (e.g. a tool's model was swapped for a better-fitting one).
+        $byTool = collect($rows)->groupBy('tool_slug');
+        foreach ($byTool as $toolSlug => $toolRows) {
+            $keepEndpoints = $toolRows->pluck('endpoint_id')->all();
+            DB::table('video_tools_models')
+                ->where('tool_slug', $toolSlug)
+                ->whereNotIn('endpoint_id', $keepEndpoints)
+                ->delete();
+        }
+
         $this->command?->info('Seeded '.count($rows).' video tool models ('.(count($rows) / 2).' tools × 2).');
         $this->command?->table(
             ['Tool', 'Model', 'Endpoint', 'Fal $ (ref)', 'Tokens'],
@@ -251,47 +262,49 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── Video Background Remover ────────────────────────────────────
+            // Bria is primary: it exposes the background color + preserve-audio
+            // controls the product spec requires. VEED is the transparent-only fallback.
             [
                 'sort' => 90,
                 'tool_slug' => 'video-background-remover',
                 'tool_name' => 'Video Background Remover',
-                'endpoint_id' => 'veed/video-background-removal',
-                'name' => 'VEED Background Removal',
-                'description' => 'VEED subject cutout with optional edge refine — people & objects, no green screen.',
-                'unit' => 'frames_30',
-                // Fal: $0.0225 / 30 frames (refine ON). 5s@30fps = 150 frames = 5 units
-                'unit_price' => 0.0225,
-                'ref_cost_usd' => 0.0225 * (($s * 30) / 30),
-                'max_duration' => 60,
-                'enums' => ['vp9', 'h264'],
-                'is_primary' => true,
-                'defaults' => [
-                    'refine_foreground_edges' => true,
-                    'subject_is_person' => true,
-                    'output_codec' => 'vp9',
-                ],
-                'tags' => ['background', 'veed', 'primary'],
-            ],
-            [
-                'sort' => 100,
-                'tool_slug' => 'video-background-remover',
-                'tool_name' => 'Video Background Remover',
                 'endpoint_id' => 'bria/video/background-removal',
                 'name' => 'Bria Background Removal',
-                'description' => 'Bria commercial-safe video matting with solid/transparent backgrounds.',
+                'description' => 'Bria commercial-safe video matting with transparent / white / black backgrounds and audio preservation.',
                 'unit' => 'seconds',
                 // Fal: $0.0042 / s
                 'unit_price' => 0.0042,
                 'ref_cost_usd' => 0.0042 * $s,
                 'max_duration' => 30,
                 'enums' => ['Transparent', 'Black', 'White'],
-                'is_primary' => false,
+                'is_primary' => true,
                 'defaults' => [
                     'background_color' => 'Transparent',
                     'preserve_audio' => true,
                     'output_container_and_codec' => 'webm_vp9',
                 ],
-                'tags' => ['background', 'bria', 'fallback'],
+                'tags' => ['background', 'bria', 'primary'],
+            ],
+            [
+                'sort' => 100,
+                'tool_slug' => 'video-background-remover',
+                'tool_name' => 'Video Background Remover',
+                'endpoint_id' => 'veed/video-background-removal',
+                'name' => 'VEED Background Removal',
+                'description' => 'VEED subject cutout with edge refine — transparent-only fallback path.',
+                'unit' => 'frames_30',
+                // Fal: $0.0225 / 30 frames (refine ON). 5s@30fps = 150 frames = 5 units
+                'unit_price' => 0.0225,
+                'ref_cost_usd' => 0.0225 * (($s * 30) / 30),
+                'max_duration' => 60,
+                'enums' => ['vp9', 'h264'],
+                'is_primary' => false,
+                'defaults' => [
+                    'refine_foreground_edges' => true,
+                    'subject_is_person' => true,
+                    'output_codec' => 'vp9',
+                ],
+                'tags' => ['background', 'veed', 'fallback'],
             ],
 
             // ── Video Subtitle Remover ──────────────────────────────────────
@@ -309,7 +322,7 @@ class VideoToolsModelsSeeder extends Seeder
                 'max_duration' => 5,
                 'enums' => null,
                 'is_primary' => true,
-                'defaults' => ['prompt' => 'subtitles, captions, on-screen text'],
+                'defaults' => ['prompt' => 'remove subtitles'],
                 'tags' => ['subtitle-remove', 'bria', 'erase', 'primary'],
             ],
             [
@@ -375,26 +388,29 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── Video To Video ──────────────────────────────────────────────
+            // Wan 2.2 v2v is primary: it natively exposes the Strength + Guidance
+            // controls the product spec requires (Strength 0→1, Guidance 1→10).
             [
                 'sort' => 150,
                 'tool_slug' => 'video-to-video',
                 'tool_name' => 'Video To Video',
-                'endpoint_id' => 'fal-ai/wan-vace-apps/video-edit',
-                'name' => 'Wan VACE Video Edit',
-                'description' => 'Natural-language video restyle/edit with optional reference images.',
+                'endpoint_id' => 'fal-ai/wan/v2.2-a14b/video-to-video',
+                'name' => 'Wan 2.2 Video to Video',
+                'description' => 'Prompt-driven video restyle with real strength & guidance controls.',
                 'unit' => 'seconds',
-                // Fal: $0.10 / s @ 720p
-                'unit_price' => 0.10,
-                'ref_cost_usd' => 0.10 * $s,
+                // Fal: $0.08 / video second @ 720p (16fps normalized)
+                'unit_price' => 0.08,
+                'ref_cost_usd' => 0.08 * $s,
                 'max_duration' => 30,
                 'enums' => ['480p', '580p', '720p'],
                 'is_primary' => true,
                 'defaults' => [
                     'resolution' => '720p',
-                    'video_type' => 'auto',
                     'acceleration' => 'regular',
+                    'strength' => 0.9,
+                    'guidance_scale' => 3.5,
                 ],
-                'tags' => ['v2v', 'wan', 'vace', 'primary'],
+                'tags' => ['v2v', 'wan', 'primary'],
             ],
             [
                 'sort' => 160,

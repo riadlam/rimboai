@@ -30,9 +30,9 @@ class FalToolInputBuilder
             'lip-sync' => $this->buildLipSync($defaults, $settings, $videoUrl, $audioUrl),
             'face-swap-video' => $this->buildFaceSwap($defaults, $settings, $videoUrl, $imageUrl),
             'video-background-remover' => $this->buildBgRemover($endpointId, $defaults, $settings, $videoUrl),
-            'remove-subtitles-from-video' => $this->buildSubtitleRemover($endpointId, $defaults, $videoUrl),
+            'remove-subtitles-from-video' => $this->buildSubtitleRemover($endpointId, $defaults, $settings, $videoUrl),
             'ai-video-extender' => $this->buildExtender($endpointId, $defaults, $settings, $videoUrl),
-            'video-to-video' => $this->buildVideoToVideo($endpointId, $defaults, $settings, $videoUrl),
+            'video-to-video' => $this->buildVideoToVideo($endpointId, $defaults, $settings, $videoUrl, $imageUrl),
             'denoise-video' => $this->buildDenoise($endpointId, $defaults, $settings, $videoUrl),
             default => throw new \InvalidArgumentException('This tool is not wired for generation yet.'),
         };
@@ -95,13 +95,16 @@ class FalToolInputBuilder
      */
     private function buildEnhancer(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
+        // Single "Strength" slider (0 → 1) maps to the model's restoration intensity.
+        $strength = $this->clamp01($settings['strength'] ?? null);
+
         if (str_contains($endpointId, 'seedvr')) {
             $input = array_merge($defaults, [
                 'video_url' => $videoUrl,
                 'upscale_mode' => $defaults['upscale_mode'] ?? 'target',
             ]);
-            if (! empty($settings['resolution'])) {
-                $input['target_resolution'] = (string) $settings['resolution'];
+            if ($strength !== null) {
+                $input['noise_scale'] = $strength;
             }
 
             return $this->onlyKeys($input, [
@@ -110,7 +113,16 @@ class FalToolInputBuilder
             ]);
         }
 
-        return $this->buildUpscaler($endpointId, $defaults, $settings, $videoUrl);
+        // Topaz-style fallback: map strength to detail recovery.
+        $input = array_merge($defaults, ['video_url' => $videoUrl]);
+        if ($strength !== null) {
+            $input['recover_detail'] = $strength;
+        }
+
+        return $this->onlyKeys($input, [
+            'video_url', 'model', 'upscale_factor', 'target_fps',
+            'compression', 'noise', 'halo', 'grain', 'recover_detail', 'H264_output',
+        ]);
     }
 
     /**
@@ -146,14 +158,12 @@ class FalToolInputBuilder
             throw new \InvalidArgumentException('A face image is required for face swap.');
         }
 
+        // No quality/resolution controls exposed — model handles output automatically.
         $input = array_merge($defaults, [
             'video_url' => $videoUrl,
             'image_url' => $imageUrl,
             'mode' => $defaults['mode'] ?? 'person',
         ]);
-        if (! empty($settings['resolution'])) {
-            $input['resolution'] = (string) $settings['resolution'];
-        }
 
         return $this->onlyKeys($input, [
             'video_url', 'image_url', 'mode', 'resolution', 'keyframe_id', 'seed', 'original_sound_switch',
@@ -167,26 +177,34 @@ class FalToolInputBuilder
      */
     private function buildBgRemover(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
+        $bg = strtolower((string) ($settings['background'] ?? 'transparent'));
+        $bg = in_array($bg, ['transparent', 'white', 'black'], true) ? $bg : 'transparent';
+        $preserveAudio = array_key_exists('preserve_audio', $settings)
+            ? (bool) $settings['preserve_audio']
+            : (bool) ($defaults['preserve_audio'] ?? true);
+
         if (str_contains($endpointId, 'bria/')) {
-            $input = array_merge($defaults, ['video_url' => $videoUrl]);
+            // Bria expects capitalized enum values.
+            $input = array_merge($defaults, [
+                'video_url' => $videoUrl,
+                'background_color' => ucfirst($bg),
+                'preserve_audio' => $preserveAudio,
+            ]);
+            // Transparent output needs an alpha-capable container/codec.
+            if ($bg === 'transparent') {
+                $input['output_container_and_codec'] = $defaults['output_container_and_codec'] ?? 'webm_vp9';
+            }
 
             return $this->onlyKeys($input, [
                 'video_url', 'background_color', 'preserve_audio', 'output_container_and_codec',
             ]);
         }
 
+        // VEED-style fallback: only supports transparent (alpha) output.
         $input = array_merge($defaults, [
             'video_url' => $videoUrl,
-            'refine_foreground_edges' => array_key_exists('refine_edges', $settings)
-                ? (bool) $settings['refine_edges']
-                : (bool) ($defaults['refine_foreground_edges'] ?? true),
-            'subject_is_person' => array_key_exists('subject_is_person', $settings)
-                ? (bool) $settings['subject_is_person']
-                : (bool) ($defaults['subject_is_person'] ?? true),
+            'output_codec' => $defaults['output_codec'] ?? 'vp9',
         ]);
-        if (! empty($settings['output_codec'])) {
-            $input['output_codec'] = (string) $settings['output_codec'];
-        }
 
         return $this->onlyKeys($input, [
             'video_url', 'output_codec', 'refine_foreground_edges', 'subject_is_person',
@@ -197,17 +215,33 @@ class FalToolInputBuilder
      * @param  array<string, mixed>  $defaults
      * @return array<string, mixed>
      */
-    private function buildSubtitleRemover(string $endpointId, array $defaults, string $videoUrl): array
+    private function buildSubtitleRemover(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
+        $prompt = trim((string) ($settings['prompt'] ?? ''));
+        if ($prompt === '') {
+            $prompt = (string) ($defaults['prompt'] ?? 'remove subtitles');
+        }
+        $maskPrompt = trim((string) ($settings['mask_prompt'] ?? ''));
+        $cleanPrompt = trim((string) ($settings['clean_prompt'] ?? ''));
+
         if (str_contains($endpointId, 'void-video-inpainting')) {
-            return $this->onlyKeys(array_merge($defaults, [
+            $input = array_merge($defaults, [
                 'video_url' => $videoUrl,
-            ]), ['video_url', 'prompt', 'mask_prompt', 'quad_mask_video_url']);
+                'prompt' => $prompt,
+            ]);
+            if ($maskPrompt !== '') {
+                $input['mask_prompt'] = $maskPrompt;
+            }
+            if ($cleanPrompt !== '') {
+                $input['clean_prompt'] = $cleanPrompt;
+            }
+
+            return $this->onlyKeys($input, ['video_url', 'prompt', 'mask_prompt', 'clean_prompt', 'quad_mask_video_url']);
         }
 
         return $this->onlyKeys(array_merge($defaults, [
             'video_url' => $videoUrl,
-            'prompt' => $defaults['prompt'] ?? 'subtitles, captions, on-screen text',
+            'prompt' => $prompt,
         ]), ['video_url', 'prompt']);
     }
 
@@ -219,7 +253,13 @@ class FalToolInputBuilder
     private function buildExtender(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
         $duration = (float) ($settings['duration'] ?? $defaults['duration'] ?? 5);
-        $mode = (string) ($settings['mode'] ?? $defaults['mode'] ?? 'end');
+        // Direction forward → append at end; backward → prepend at start.
+        $direction = (string) ($settings['direction'] ?? '');
+        $mode = match ($direction) {
+            'backward' => 'start',
+            'forward' => 'end',
+            default => (string) ($settings['mode'] ?? $defaults['mode'] ?? 'end'),
+        };
         $prompt = trim((string) ($settings['prompt'] ?? ''));
 
         if (str_contains($endpointId, 'pixverse')) {
@@ -229,9 +269,6 @@ class FalToolInputBuilder
             ]);
             if ($prompt !== '') {
                 $input['prompt'] = $prompt;
-            }
-            if (! empty($settings['resolution'])) {
-                $input['resolution'] = (string) $settings['resolution'];
             }
 
             return $this->onlyKeys($input, [
@@ -256,32 +293,48 @@ class FalToolInputBuilder
      * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
-    private function buildVideoToVideo(string $endpointId, array $defaults, array $settings, string $videoUrl): array
+    private function buildVideoToVideo(string $endpointId, array $defaults, array $settings, string $videoUrl, ?string $imageUrl): array
     {
         $prompt = trim((string) ($settings['prompt'] ?? ''));
         if ($prompt === '') {
             throw new \InvalidArgumentException('An edit prompt is required.');
         }
 
+        $strength = $this->clamp01($settings['strength'] ?? null);
+        // Wan 2.2 v2v guidance_scale is a 1–10 float.
+        $guidance = isset($settings['guidance_scale']) && is_numeric($settings['guidance_scale'])
+            ? max(1.0, min(10.0, (float) $settings['guidance_scale']))
+            : null;
+
         if (str_contains($endpointId, 'kling-video')) {
-            return $this->onlyKeys([
+            $input = [
                 'video_url' => $videoUrl,
                 'prompt' => $prompt,
-            ], ['video_url', 'prompt']);
+            ];
+            if ($strength !== null) {
+                $input['strength'] = $strength;
+            }
+            if ($guidance !== null) {
+                $input['cfg_scale'] = $guidance;
+            }
+
+            return $this->onlyKeys($input, ['video_url', 'prompt', 'strength', 'cfg_scale']);
         }
 
         $input = array_merge($defaults, [
             'video_url' => $videoUrl,
             'prompt' => $prompt,
         ]);
-        if (! empty($settings['resolution'])) {
-            $input['resolution'] = (string) $settings['resolution'];
+        if ($strength !== null) {
+            $input['strength'] = $strength;
+        }
+        if ($guidance !== null) {
+            $input['guidance_scale'] = $guidance;
         }
 
         return $this->onlyKeys($input, [
-            'video_url', 'prompt', 'video_type', 'resolution', 'acceleration',
-            'enable_auto_downsample', 'aspect_ratio', 'auto_downsample_min_fps',
-            'enable_safety_checker', 'image_urls',
+            'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio',
+            'enable_safety_checker', 'strength', 'guidance_scale',
         ]);
     }
 
@@ -292,10 +345,13 @@ class FalToolInputBuilder
      */
     private function buildDenoise(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
+        // Single "Strength" slider (0 → 1) maps to the model's denoise amount.
+        $strength = $this->clamp01($settings['strength'] ?? ($settings['noise'] ?? null));
+
         if (str_contains($endpointId, 'seedvr')) {
             $input = array_merge($defaults, ['video_url' => $videoUrl]);
-            if (array_key_exists('noise', $settings)) {
-                $input['noise_scale'] = (float) $settings['noise'];
+            if ($strength !== null) {
+                $input['noise_scale'] = $strength;
             }
 
             return $this->onlyKeys($input, [
@@ -308,13 +364,22 @@ class FalToolInputBuilder
             'video_url' => $videoUrl,
             'upscale_factor' => (float) ($defaults['upscale_factor'] ?? 1),
         ]);
-        if (array_key_exists('noise', $settings)) {
-            $input['noise'] = (float) $settings['noise'];
+        if ($strength !== null) {
+            $input['noise'] = $strength;
         }
 
         return $this->onlyKeys($input, [
             'video_url', 'model', 'upscale_factor', 'noise', 'compression', 'halo', 'grain', 'recover_detail',
         ]);
+    }
+
+    private function clamp01(mixed $value): ?float
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        return max(0.0, min(1.0, (float) $value));
     }
 
     private function scaleToFactor(mixed $scale): ?float

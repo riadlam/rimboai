@@ -283,8 +283,10 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
         }
     };
 
-    const advancedControls = workspace.controls.filter((c) => c.type === 'toggle' || c.type === 'slider');
-    const mainControls = workspace.controls.filter((c) => c.type !== 'toggle' && c.type !== 'slider');
+    // Toggles are the only "advanced" controls; sliders/choices/prompts stay inline
+    // so a tool's single Strength slider is never buried behind a collapse.
+    const advancedControls = workspace.controls.filter((c) => c.type === 'toggle');
+    const mainControls = workspace.controls.filter((c) => c.type !== 'toggle');
 
     return (
         <motion.aside
