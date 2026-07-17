@@ -136,6 +136,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/tools/generate', [ToolGenerationController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('tools.generate');
+    Route::get('/tools/creations', [ToolGenerationController::class, 'index'])
+        ->middleware('throttle:60,1')
+        ->name('tools.creations');
     Route::get('/tools/creations/{creation}/status', [ToolGenerationController::class, 'status'])
         ->middleware('throttle:300,1')
         ->name('tools.status');

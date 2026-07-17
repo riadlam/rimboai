@@ -24,12 +24,15 @@ type ToolCreationResponse = {
     credits?: number | null;
 };
 
+export type ToolCreationStatus = ToolCreationResponse;
+
 type Props = {
     tool: Tool;
     workspace: ToolWorkspace;
     creditsConfig: CreditsConfig;
     tokenBalance: number;
-    onResultVideo?: (url: string | null) => void;
+    onCreationStarted?: (data: ToolCreationStatus) => void;
+    onCreationUpdated?: (data: ToolCreationStatus) => void;
 };
 
 const GROUP_BY_SLUG: Record<string, 'enhance' | 'transform' | 'edit' | 'create'> = {
@@ -52,7 +55,14 @@ const GROUP_BY_SLUG: Record<string, 'enhance' | 'transform' | 'edit' | 'create'>
     'ai-sound-effect-generator': 'create',
 };
 
-export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenBalance, onResultVideo }: Props) {
+export default function ToolCreatePanel({
+    tool,
+    workspace,
+    creditsConfig,
+    tokenBalance,
+    onCreationStarted,
+    onCreationUpdated,
+}: Props) {
     const { t } = useTranslation('tools');
     const { props: pageProps } = usePage<PageProps>();
     const isGuest = pageProps.auth.user === null;
@@ -82,8 +92,7 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
         });
         setError(null);
         setStatusMessage(null);
-        onResultVideo?.(null);
-    }, [workspace.tool_slug, workspace.model_id, onResultVideo]);
+    }, [workspace.tool_slug, workspace.model_id]);
 
     useEffect(() => {
         return () => {
@@ -118,7 +127,7 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
                         setProgress(100);
                         setLoading(false);
                         setStatusMessage(t('detail.done'));
-                        if (data.video_url) onResultVideo?.(data.video_url);
+                        onCreationUpdated?.(data);
                         // Silent follow-up polls so Fal cost_usd / wallet-after can land
                         // after billing-events lag (same role as ReconcileFalCreationCostJob).
                         void reconcileWalletAfterComplete(creationId);
@@ -129,7 +138,11 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
                         setLoading(false);
                         setProgress(0);
                         setError(data.error || t('detail.failed'));
+                        onCreationUpdated?.(data);
+                        return;
                     }
+
+                    onCreationUpdated?.(data);
                 } catch (e) {
                     stopPolling();
                     setLoading(false);
@@ -137,7 +150,7 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
                 }
             }, 2500);
         },
-        [onResultVideo, stopPolling, t],
+        [onCreationUpdated, stopPolling, t],
     );
 
     const videoDuration = slots.video?.duration ?? null;
@@ -200,7 +213,6 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
         setStatusMessage(t('detail.uploading'));
         setLoading(true);
         setProgress(4);
-        onResultVideo?.(null);
 
         try {
             const urls: Record<string, string> = {};
@@ -235,6 +247,7 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
 
             setProgress(35);
             setStatusMessage(data.progress_message || t('detail.processing'));
+            onCreationStarted?.(data);
             pollStatus(data.id);
         } catch (e) {
             setLoading(false);
@@ -255,7 +268,7 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
     }, [
         billDuration,
         isGuest,
-        onResultVideo,
+        onCreationStarted,
         pollStatus,
         slots,
         stopPolling,

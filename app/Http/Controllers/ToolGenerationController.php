@@ -21,6 +21,61 @@ use Illuminate\Validation\ValidationException;
 
 class ToolGenerationController extends Controller
 {
+    /**
+     * List this user's creations for a single tool (lab library shape).
+     */
+    public function index(Request $request, FalWebhookProcessor $processor): JsonResponse
+    {
+        $data = $request->validate([
+            'tool_slug' => ['required', 'string', 'max:64'],
+        ]);
+
+        $userId = (int) $request->user()->id;
+        $mode = 'tool:'.$data['tool_slug'];
+
+        // Catch up active jobs if webhooks were missed.
+        $active = UserVideoCreation::query()
+            ->where('user_id', $userId)
+            ->where('mode', $mode)
+            ->whereNotNull('fal_request_id')
+            ->whereIn('status', [
+                UserVideoCreation::STATUS_PENDING,
+                UserVideoCreation::STATUS_QUEUED,
+                UserVideoCreation::STATUS_IN_PROGRESS,
+            ])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        foreach ($active as $creation) {
+            try {
+                $processor->syncFromFal('video', $creation);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        $creations = UserVideoCreation::query()
+            ->where('user_id', $userId)
+            ->where('mode', $mode)
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get();
+
+        $images = [];
+        foreach ($creations as $creation) {
+            $item = $this->presentLibraryItem($creation);
+            if ($item !== null) {
+                $images[] = $item;
+            }
+        }
+
+        return response()->json([
+            'tool_slug' => $data['tool_slug'],
+            'images' => $images,
+        ]);
+    }
+
     public function store(
         Request $request,
         FalService $fal,
@@ -356,6 +411,82 @@ class ToolGenerationController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Lab-library card shape (same as LabCreationsController::imageItem for videos).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function presentLibraryItem(UserVideoCreation $creation): ?array
+    {
+        $settings = is_array($creation->settings) ? $creation->settings : [];
+        $batchId = "tool-creation-{$creation->id}";
+        $createdMs = $creation->created_at?->getTimestampMs() ?? now()->getTimestampMs();
+        $toolSlug = (string) ($settings['tool_slug'] ?? str_replace('tool:', '', (string) $creation->mode));
+
+        $base = [
+            'id' => "tool-{$creation->id}",
+            'creation_id' => $creation->id,
+            'batch_id' => $batchId,
+            'batch_index' => 0,
+            'prompt' => $creation->prompt ?: $toolSlug,
+            'favorite' => (bool) $creation->is_favorite,
+            'is_public' => (bool) $creation->is_public,
+            'is_featured' => (bool) ($creation->is_featured ?? false),
+            'created_at' => $creation->created_at?->toIso8601String(),
+            'method' => 'text-to-video',
+            'model' => null,
+            'aspect' => $creation->aspect_ratio ?? '16:9',
+            'resolution' => $creation->resolution,
+            'duration' => $creation->duration_value ?? $creation->duration_seconds,
+            'audio' => null,
+            'input_assets' => [],
+            'tool_slug' => $toolSlug,
+        ];
+
+        if ($creation->status === UserVideoCreation::STATUS_COMPLETED) {
+            $src = $creation->thumbnail_url
+                ?: $creation->result_preview_url
+                ?: $creation->result_video_url
+                ?: '';
+            if ($src === '') {
+                return null;
+            }
+
+            return array_merge($base, [
+                'src' => $src,
+                'video_url' => $creation->result_video_url,
+                'status' => 'completed',
+                'progress' => null,
+                'queue_position' => null,
+                'progress_percent' => 100,
+                'error' => null,
+            ]);
+        }
+
+        if ($creation->isTerminal()) {
+            return array_merge($base, [
+                'src' => '',
+                'video_url' => null,
+                'status' => $creation->status,
+                'progress' => null,
+                'queue_position' => null,
+                'progress_percent' => null,
+                'error' => $creation->error_message,
+            ]);
+        }
+
+        return array_merge($base, [
+            'src' => '',
+            'video_url' => null,
+            'started_at' => $createdMs,
+            'status' => $creation->status,
+            'progress' => $creation->progress_message,
+            'queue_position' => $creation->queue_position,
+            'progress_percent' => LabCreationPresenter::progressPercent($creation),
+            'error' => null,
+        ]);
     }
 
     /**

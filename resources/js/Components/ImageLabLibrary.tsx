@@ -47,6 +47,10 @@ type Props = {
     onUseLastFrame?: (image: LabImage) => void | Promise<void>;
     onRevealComplete?: (id: string) => void;
     generating?: boolean;
+    /** Tools: hide Albums tab */
+    hideAlbums?: boolean;
+    /** Tools: hide lab method filters (text-to-video etc.) */
+    hideMethodFilters?: boolean;
 };
 
 const TIME_FILTERS = [
@@ -129,6 +133,8 @@ export default function ImageLabLibrary({
     onUseLastFrame,
     onRevealComplete,
     generating = false,
+    hideAlbums = false,
+    hideMethodFilters = false,
 }: Props) {
     const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'albums'>('generation');
@@ -152,16 +158,19 @@ export default function ImageLabLibrary({
         return images.filter((img) => {
             if (favoritesOnly && !img.favorite) return false;
             if (cutoff != null && img.createdAt < cutoff) return false;
-            if (methodFilter !== 'all' && (img.method || 'text-to-image') !== methodFilter) return false;
+            if (!hideMethodFilters && methodFilter !== 'all' && (img.method || 'text-to-image') !== methodFilter) {
+                return false;
+            }
             if (q && !img.prompt.toLowerCase().includes(q)) return false;
             return true;
         });
-    }, [images, search, favoritesOnly, timeFilter, methodFilter]);
+    }, [images, search, favoritesOnly, timeFilter, methodFilter, hideMethodFilters]);
 
     const preview = previewIndex !== null ? filtered[previewIndex] : null;
     const hasImages = images.length > 0;
     const hasResults = filtered.length > 0;
-    const libraryFilterCount = (timeFilter !== 'all' ? 1 : 0) + (methodFilter !== 'all' ? 1 : 0);
+    const libraryFilterCount =
+        (timeFilter !== 'all' ? 1 : 0) + (!hideMethodFilters && methodFilter !== 'all' ? 1 : 0);
     const activeFilterCount = libraryFilterCount + (favoritesOnly ? 1 : 0) + (search.trim() ? 1 : 0);
     const timeLabel = TIME_FILTERS.find((t) => t.id === timeFilter)?.label ?? 'All time';
     const methodLabel =
@@ -234,10 +243,12 @@ export default function ImageLabLibrary({
                 <div className="flex h-12 items-center justify-between gap-2 px-3 md:px-4">
                     <div className="inline-flex items-center rounded-xl border border-white/[0.06] bg-[#101016] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                         {(
-                            [
-                                { id: 'generation' as const, label: 'Generation', Icon: IconSparkles },
-                                { id: 'albums' as const, label: 'Albums', Icon: IconAlbums },
-                            ]
+                            hideAlbums
+                                ? [{ id: 'generation' as const, label: 'Generation', Icon: IconSparkles }]
+                                : [
+                                      { id: 'generation' as const, label: 'Generation', Icon: IconSparkles },
+                                      { id: 'albums' as const, label: 'Albums', Icon: IconAlbums },
+                                  ]
                         ).map((item) => {
                             const active = tab === item.id;
                             const ItemIcon = item.Icon;
@@ -409,6 +420,7 @@ export default function ImageLabLibrary({
                                                     </div>
                                                 </div>
 
+                                                {!hideMethodFilters && (
                                                 <div>
                                                     <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                                                         Creation method
@@ -466,6 +478,7 @@ export default function ImageLabLibrary({
                                                         })}
                                                     </div>
                                                 </div>
+                                                )}
                                             </div>
                                             </motion.div>
                                         </>
@@ -526,7 +539,7 @@ export default function ImageLabLibrary({
                         {timeFilter !== 'all' && (
                             <Chip onClear={() => setTimeFilter('all')}>{timeLabel}</Chip>
                         )}
-                        {methodFilter !== 'all' && (
+                        {!hideMethodFilters && methodFilter !== 'all' && (
                             <Chip onClear={() => setMethodFilter('all')}>{methodLabel}</Chip>
                         )}
                         {favoritesOnly && <Chip onClear={() => setFavoritesOnly(false)}>Favorites</Chip>}

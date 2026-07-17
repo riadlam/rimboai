@@ -262,6 +262,7 @@ class LabCreationsController extends Controller
     {
         $creations = UserVideoCreation::query()
             ->where('user_id', $userId)
+            ->where('mode', 'not like', 'tool:%')
             ->orderByDesc('created_at')
             ->limit(100)
             ->get();
