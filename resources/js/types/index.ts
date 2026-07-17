@@ -138,6 +138,8 @@ export type ToolBilling = {
     unit_price_by_resolution?: Record<string, number> | null;
     max_duration?: number | null;
     ref_duration_seconds?: number | null;
+    /** Supported billable duration steps (seconds); uploads snap up to the next step. */
+    duration_enums?: number[] | null;
 };
 
 export type ToolWorkspace = {

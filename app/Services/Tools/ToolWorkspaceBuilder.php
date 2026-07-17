@@ -58,6 +58,12 @@ class ToolWorkspaceBuilder
                 'ref_duration_seconds' => $primary->ref_duration_seconds !== null
                     ? (int) $primary->ref_duration_seconds
                     : 5,
+                'duration_enums' => self::durationEnumsFor(
+                    $toolSlug,
+                    $enums,
+                    $defaults,
+                    $primary->max_duration !== null ? (int) $primary->max_duration : null,
+                ),
             ],
             'uploads' => $this->uploadsFor($toolSlug),
             'controls' => $this->controlsFor($toolSlug, $enums, $defaults),
@@ -401,6 +407,84 @@ class ToolWorkspaceBuilder
         }
 
         return array_values(array_unique($notices));
+    }
+
+    /**
+     * Billable duration steps for this tool/model.
+     * Client + server snap measured duration UP to the next step.
+     *
+     * @param  list<mixed>|null  $enums
+     * @param  array<string, mixed>|null  $defaults
+     * @return list<int>
+     */
+    public static function durationEnumsFor(
+        string $toolSlug,
+        ?array $enums,
+        ?array $defaults,
+        ?int $maxDuration,
+    ): array {
+        $defaults = is_array($defaults) ? $defaults : [];
+
+        if (is_array($defaults['duration_enums'] ?? null) && $defaults['duration_enums'] !== []) {
+            return self::normalizeDurationEnums($defaults['duration_enums']);
+        }
+
+        // Numeric values in `enums` are duration steps (e.g. animate ['5','10'], extender ['2','5'…]).
+        // Resolution / mode labels like 720p / 2x are ignored.
+        $fromEnums = self::normalizeDurationEnums($enums ?? []);
+        if ($fromEnums !== []) {
+            return $fromEnums;
+        }
+
+        // Only when `enums` holds resolutions (not durations), e.g. video-to-anime 720p/1080p.
+        $known = match ($toolSlug) {
+            'video-to-anime-ai' => [5, 10],
+            default => [],
+        };
+        if ($known !== []) {
+            return $known;
+        }
+
+        // Continuous per-second models: allow every whole second up to max.
+        if ($maxDuration !== null && $maxDuration > 0) {
+            return range(1, $maxDuration);
+        }
+
+        return [5];
+    }
+
+    /**
+     * @param  list<mixed>  $values
+     * @return list<int>
+     */
+    private static function normalizeDurationEnums(array $values): array
+    {
+        $out = [];
+        foreach ($values as $value) {
+            if (is_int($value) || is_float($value)) {
+                if ($value > 0) {
+                    $out[] = (int) round((float) $value);
+                }
+                continue;
+            }
+            if (! is_string($value)) {
+                continue;
+            }
+            $trimmed = trim($value);
+            // Pure numeric duration steps only — skip 720p, 2x, Transparent, etc.
+            if (! preg_match('/^\d+(\.\d+)?$/', $trimmed)) {
+                continue;
+            }
+            $n = (int) round((float) $trimmed);
+            if ($n > 0) {
+                $out[] = $n;
+            }
+        }
+
+        $out = array_values(array_unique($out));
+        sort($out, SORT_NUMERIC);
+
+        return $out;
     }
 
     /**

@@ -12,6 +12,12 @@ export type ToolBilling = {
     unit_price_by_resolution?: Record<string, number> | null;
     max_duration?: number | null;
     ref_duration_seconds?: number | null;
+    /**
+     * Supported billable duration steps (seconds).
+     * Uploaded/selected length is snapped UP to the next value
+     * (e.g. 4s → 5 when enums are [5, 10]).
+     */
+    duration_enums?: number[] | null;
 };
 
 export type ToolCreditOptions = {
@@ -50,6 +56,39 @@ const RES_DIMS: Record<string, [number, number]> = {
     '4k': [3840, 2160],
 };
 
+/**
+ * Snap measured duration UP to the smallest supported enum ≥ duration.
+ * If longer than every enum, clamp to the max enum.
+ */
+export function snapBillableDuration(
+    seconds: number,
+    enums: number[] | null | undefined,
+    maxDuration?: number | null,
+): number {
+    const raw = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+    if (raw <= 0) return 0;
+
+    const steps = (enums ?? [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
+
+    if (steps.length === 0) {
+        // No discrete tiers: bill whole seconds (ceil), still respect max.
+        let d = Math.max(1, Math.ceil(raw - 1e-9));
+        if (maxDuration && maxDuration > 0) d = Math.min(d, maxDuration);
+        return d;
+    }
+
+    for (const step of steps) {
+        if (step + 1e-9 >= raw) return step;
+    }
+
+    const last = steps[steps.length - 1];
+    if (maxDuration && maxDuration > 0) return Math.min(last, maxDuration);
+    return last;
+}
+
 export function estimateToolCredits(
     billing: ToolBilling | null | undefined,
     options: ToolCreditOptions = {},
@@ -62,10 +101,14 @@ export function estimateToolCredits(
     const unit = normalizeUnit(billing.unit);
     const resolution = (options.resolution || '1080p').toLowerCase();
     const unitPrice = resolveUnitPrice(billing, resolution);
-    const duration = clampDuration(
-        options.durationSeconds ?? billing.ref_duration_seconds ?? 5,
+    const duration = snapBillableDuration(
+        options.durationSeconds ?? 0,
+        billing.duration_enums,
         billing.max_duration,
     );
+    if (!(duration > 0)) {
+        return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: unit || 'seconds' };
+    }
     const fps = Math.max(1, options.fps ?? 24);
 
     if (unit === 'megapixels' || unit === 'processed_megapixels') {
@@ -133,12 +176,6 @@ function resolveUnitPrice(billing: ToolBilling, resolution: string): number {
         if (typeof keyed === 'number' && keyed > 0) return keyed;
     }
     return Number(billing.unit_price) || 0;
-}
-
-function clampDuration(seconds: number, max: number | null | undefined): number {
-    let d = Math.max(1, Number.isFinite(seconds) ? seconds : 5);
-    if (max && max > 0) d = Math.min(d, max);
-    return d;
 }
 
 function normalizeUnit(unit: string | null | undefined): string {

@@ -12,11 +12,59 @@ class ToolGenerationCostEstimator
     ) {}
 
     /**
+     * Snap measured duration UP to the smallest supported enum ≥ duration.
+     *
+     * @param  list<int|float|string>|null  $enums
+     */
+    public static function snapBillableDuration(float $seconds, ?array $enums, ?int $maxDuration = null): float
+    {
+        if ($seconds <= 0 || ! is_finite($seconds)) {
+            return 0.0;
+        }
+
+        $steps = [];
+        foreach ($enums ?? [] as $value) {
+            if (! is_numeric($value)) {
+                continue;
+            }
+            $n = (float) $value;
+            if ($n > 0) {
+                $steps[] = $n;
+            }
+        }
+        $steps = array_values(array_unique($steps));
+        sort($steps, SORT_NUMERIC);
+
+        if ($steps === []) {
+            $d = max(1.0, (float) ceil($seconds - 1e-9));
+            if ($maxDuration !== null && $maxDuration > 0) {
+                $d = min($d, (float) $maxDuration);
+            }
+
+            return $d;
+        }
+
+        foreach ($steps as $step) {
+            if ($step + 1e-9 >= $seconds) {
+                return (float) $step;
+            }
+        }
+
+        $last = (float) $steps[array_key_last($steps)];
+        if ($maxDuration !== null && $maxDuration > 0) {
+            return min($last, (float) $maxDuration);
+        }
+
+        return $last;
+    }
+
+    /**
      * @param  array{
      *   unit?: string|null,
      *   unit_price?: float|string|null,
      *   unit_price_by_resolution?: array<string, float|int|string>|null,
      *   duration_seconds?: float|int|null,
+     *   duration_enums?: list<int|float|string>|null,
      *   max_duration?: int|null,
      *   resolution?: string|null,
      *   fps?: float|int|null,
@@ -34,7 +82,13 @@ class ToolGenerationCostEstimator
     {
         $unit = $this->normalizeUnit($options['unit'] ?? 'seconds');
         $maxDuration = isset($options['max_duration']) ? (int) $options['max_duration'] : null;
-        $duration = $this->clampDuration((float) ($options['duration_seconds'] ?? 5), $maxDuration);
+        $duration = self::snapBillableDuration(
+            (float) ($options['duration_seconds'] ?? 0),
+            isset($options['duration_enums']) && is_array($options['duration_enums'])
+                ? $options['duration_enums']
+                : null,
+            $maxDuration,
+        );
         $fps = max(1.0, (float) ($options['fps'] ?? 24));
         $resolution = strtolower((string) ($options['resolution'] ?? '1080p'));
         $unitPrice = $this->resolveUnitPrice(
@@ -42,6 +96,13 @@ class ToolGenerationCostEstimator
             $options['unit_price_by_resolution'] ?? null,
             $resolution,
         );
+
+        if (! ($duration > 0) || $unitPrice <= 0) {
+            return $this->pack(0.0, 0.0, $unit !== '' ? $unit : 'seconds', $unitPrice, [
+                'formula' => 'no_billable_duration',
+                'duration_seconds' => $duration,
+            ]);
+        }
 
         if (in_array($unit, ['megapixels', 'processed_megapixels'], true)) {
             [$w, $h] = $this->dimsFor($resolution);
@@ -114,7 +175,7 @@ class ToolGenerationCostEstimator
     {
         return [
             'fal_cost_usd' => $falCost,
-            'credits' => $this->credits->fromFalUsd($falCost),
+            'credits' => $falCost > 0 ? $this->credits->fromFalUsd($falCost) : 0,
             'billable_units' => $units,
             'unit' => $unit,
             'unit_price' => $unitPrice,
@@ -133,16 +194,6 @@ class ToolGenerationCostEstimator
         }
 
         return max(0.0, $fallback);
-    }
-
-    private function clampDuration(float $seconds, ?int $max): float
-    {
-        $d = max(1.0, $seconds);
-        if ($max !== null && $max > 0) {
-            $d = min($d, (float) $max);
-        }
-
-        return $d;
     }
 
     private function normalizeUnit(?string $unit): string

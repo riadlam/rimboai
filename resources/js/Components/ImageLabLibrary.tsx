@@ -51,6 +51,8 @@ type Props = {
     hideAlbums?: boolean;
     /** Tools: hide lab method filters (text-to-video etc.) */
     hideMethodFilters?: boolean;
+    /** Tools: hide prompt overlays / detail prompt */
+    hidePrompt?: boolean;
 };
 
 const TIME_FILTERS = [
@@ -135,6 +137,7 @@ export default function ImageLabLibrary({
     generating = false,
     hideAlbums = false,
     hideMethodFilters = false,
+    hidePrompt = false,
 }: Props) {
     const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'albums'>('generation');
@@ -607,6 +610,7 @@ export default function ImageLabLibrary({
                                         <BuildingCard
                                             key={img.id}
                                             prompt={img.prompt}
+                                            hidePrompt={hidePrompt}
                                             status={img.status}
                                             progress={img.progress}
                                             queuePosition={img.queuePosition}
@@ -696,11 +700,13 @@ export default function ImageLabLibrary({
                                         </button>
                                         {!selectMode && (
                                             <>
-                                                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition-all duration-300 ease-out group-hover:opacity-100">
-                                                    <p className="line-clamp-2 translate-y-1 text-[10px] text-white/80 transition-transform duration-300 ease-out group-hover:translate-y-0">
-                                                        {img.prompt}
-                                                    </p>
-                                                </div>
+                                                {!hidePrompt && (
+                                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition-all duration-300 ease-out group-hover:opacity-100">
+                                                        <p className="line-clamp-2 translate-y-1 text-[10px] text-white/80 transition-transform duration-300 ease-out group-hover:translate-y-0">
+                                                            {img.prompt}
+                                                        </p>
+                                                    </div>
+                                                )}
                                                 <ImageCardActions
                                                     src={img.videoUrl || img.src}
                                                     favorite={img.favorite}
@@ -786,6 +792,7 @@ export default function ImageLabLibrary({
                         onReuseSettings={onReuseSettings}
                         onUseResult={onUseResult}
                         onUseLastFrame={onUseLastFrame}
+                        hidePrompt={hidePrompt}
                     />
                 )}
             </AnimatePresence>
@@ -895,6 +902,7 @@ function useLabCardProgress(
 
 function BuildingCard({
     prompt,
+    hidePrompt = false,
     status,
     progress,
     queuePosition,
@@ -906,6 +914,7 @@ function BuildingCard({
     onRevealComplete,
 }: {
     prompt: string;
+    hidePrompt?: boolean;
     status?: LabImage['status'];
     progress?: string | null;
     queuePosition?: number | null;
@@ -995,7 +1004,9 @@ function BuildingCard({
                         <p className="text-[10px] text-white/30">Usually a few minutes</p>
                     )}
                 </div>
-                <p className="line-clamp-2 max-w-[92%] text-[10px] leading-snug text-white/25">{prompt}</p>
+                {!hidePrompt && (
+                    <p className="line-clamp-2 max-w-[92%] text-[10px] leading-snug text-white/25">{prompt}</p>
+                )}
             </div>
 
             <div className="absolute inset-x-3 bottom-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">

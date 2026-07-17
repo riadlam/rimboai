@@ -242,6 +242,7 @@ export default function ToolDetail({ tool, workspace, creditsConfig, tokenBalanc
                                     generating={generating}
                                     hideAlbums
                                     hideMethodFilters
+                                    hidePrompt
                                     onToggleFavorite={toggleFavorite}
                                     onDelete={deleteImages}
                                     onRevealComplete={onRevealComplete}

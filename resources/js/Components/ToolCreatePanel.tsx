@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
-import { estimateToolCredits } from '@/lib/toolCredits';
+import { estimateToolCredits, snapBillableDuration } from '@/lib/toolCredits';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import type { PageProps, Tool, ToolControlSpec, ToolUploadSpec, ToolWorkspace } from '@/types';
 
@@ -160,16 +160,42 @@ export default function ToolCreatePanel({
             ? Number(values.duration)
             : null;
 
-    const billDuration = useMemo(() => {
-        // Tools with an explicit duration control (extender, image→video, motion…) bill on it.
-        if (hasDurationControl && selectedDuration && selectedDuration > 0) {
-            return selectedDuration;
+    const requiresVideoDuration = workspace.uploads.some((u) => u.key === 'video' && u.required);
+    const durationEnums = workspace.billing?.duration_enums ?? null;
+
+    /** Raw source length before snapping — null until upload/selection is ready. */
+    const sourceDuration = useMemo(() => {
+        if (hasDurationControl) {
+            return selectedDuration && selectedDuration > 0 ? selectedDuration : null;
         }
-        if (videoDuration && videoDuration > 0) return videoDuration;
+        if (requiresVideoDuration) {
+            return videoDuration && videoDuration > 0 ? videoDuration : null;
+        }
+        // Image-only tools without a duration control: use model ref once image is ready.
+        const imageReady = workspace.uploads
+            .filter((u) => u.required)
+            .every((u) => Boolean(slots[u.key]?.file));
+        if (!imageReady) return null;
         return workspace.billing?.ref_duration_seconds ?? 5;
-    }, [hasDurationControl, selectedDuration, videoDuration, workspace.billing?.ref_duration_seconds]);
+    }, [
+        hasDurationControl,
+        selectedDuration,
+        requiresVideoDuration,
+        videoDuration,
+        workspace.uploads,
+        workspace.billing?.ref_duration_seconds,
+        slots,
+    ]);
+
+    const billDuration = useMemo(() => {
+        if (sourceDuration == null) return null;
+        return snapBillableDuration(sourceDuration, durationEnums, workspace.billing?.max_duration);
+    }, [sourceDuration, durationEnums, workspace.billing?.max_duration]);
 
     const creditEstimate = useMemo(() => {
+        if (billDuration == null) {
+            return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: workspace.billing?.unit || 'seconds' };
+        }
         return estimateToolCredits(
             workspace.billing,
             {
@@ -195,11 +221,12 @@ export default function ToolCreatePanel({
         !promptRequired ||
         (typeof values.prompt === 'string' && values.prompt.trim().length > 0);
 
+    const billingReady = requiredReady && billDuration != null && creditEstimate.credits > 0;
+
     const canCreate =
         workspace.available &&
-        requiredReady &&
         promptOk &&
-        creditEstimate.credits > 0 &&
+        billingReady &&
         !loading;
 
     const startCreate = useCallback(async () => {
@@ -208,6 +235,7 @@ export default function ToolCreatePanel({
             return;
         }
         if (!workspace.available || !workspace.model_id) return;
+        if (billDuration == null || billDuration <= 0) return;
 
         setError(null);
         setStatusMessage(t('detail.uploading'));
@@ -438,7 +466,7 @@ export default function ToolCreatePanel({
                     <div className="mb-2.5 flex items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                                ~{Math.round(billDuration)}s
+                                {billDuration != null ? `~${Math.round(billDuration)}s` : '—'}
                             </span>
                             {typeof values.scale === 'string' && (
                                 <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
@@ -455,7 +483,7 @@ export default function ToolCreatePanel({
                             <svg className="h-3 w-3 text-[#FF8A65]" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z" />
                             </svg>
-                            <span>{creditEstimate.credits || '—'}</span>
+                            <span>{billingReady ? creditEstimate.credits : '—'}</span>
                             <span className="text-white/35">{t('detail.credits')}</span>
                         </div>
                     </div>

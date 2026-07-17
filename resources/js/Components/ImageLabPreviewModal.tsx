@@ -34,6 +34,8 @@ type Props = {
     onReuseSettings?: (image: ImageLabPreviewItem) => void;
     onUseResult?: (image: ImageLabPreviewItem) => void;
     onUseLastFrame?: (image: ImageLabPreviewItem) => void | Promise<void>;
+    /** Tools: hide prompt block in generation details */
+    hidePrompt?: boolean;
 };
 
 function methodLabel(method?: ImageLabPreviewItem['method']): string {
@@ -91,6 +93,7 @@ export default function ImageLabPreviewModal({
     onReuseSettings,
     onUseResult,
     onUseLastFrame,
+    hidePrompt = false,
 }: Props) {
     const [zoom, setZoom] = useState(1);
     const [detailsOpen, setDetailsOpen] = useState(true);
@@ -426,24 +429,30 @@ export default function ImageLabPreviewModal({
 
                             {detailsOpen && (
                                 <div className="space-y-3 px-4 pb-4">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <DetailBtn onClick={handleReuseSettings} disabled={!onReuseSettings || reusing || capturingFrame}>
-                                            <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                                <path d="M20 7h-9" />
-                                                <path d="M14 17H5" />
-                                                <circle cx="17" cy="17" r="3" />
-                                                <circle cx="7" cy="7" r="3" />
-                                            </svg>
-                                            Reuse Settings
-                                        </DetailBtn>
-                                        <DetailBtn onClick={handleUseResult} disabled={!onUseResult || reusing || capturingFrame || !mediaUrl}>
-                                            <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                                <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
-                                                <rect x="2" y="6" width="14" height="12" rx="2" />
-                                            </svg>
-                                            {isVideo ? 'Use Video' : 'Use Image'}
-                                        </DetailBtn>
-                                    </div>
+                                    {(onReuseSettings || onUseResult || (isVideo && onUseLastFrame)) && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {onReuseSettings && (
+                                                <DetailBtn onClick={handleReuseSettings} disabled={reusing || capturingFrame}>
+                                                    <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                                        <path d="M20 7h-9" />
+                                                        <path d="M14 17H5" />
+                                                        <circle cx="17" cy="17" r="3" />
+                                                        <circle cx="7" cy="7" r="3" />
+                                                    </svg>
+                                                    Reuse Settings
+                                                </DetailBtn>
+                                            )}
+                                            {onUseResult && (
+                                                <DetailBtn onClick={handleUseResult} disabled={reusing || capturingFrame || !mediaUrl}>
+                                                    <svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                                        <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+                                                        <rect x="2" y="6" width="14" height="12" rx="2" />
+                                                    </svg>
+                                                    {isVideo ? 'Use Video' : 'Use Image'}
+                                                </DetailBtn>
+                                            )}
+                                        </div>
+                                    )}
                                     {isVideo && onUseLastFrame && (
                                         <DetailBtn
                                             onClick={() => void handleUseLastFrame()}
@@ -470,31 +479,33 @@ export default function ImageLabPreviewModal({
                                         <span className="truncate text-end font-medium text-zinc-200">{methodLabel(image.method)}</span>
                                     </div>
 
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[13px] text-zinc-500">Prompt</span>
-                                            <button
-                                                type="button"
-                                                title={copied ? 'Copied' : 'Copy prompt'}
-                                                onClick={() => copyPrompt(image.prompt)}
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
-                                            >
-                                                {copied ? (
-                                                    <svg className="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                                        <path d="M20 6 9 17l-5-5" />
-                                                    </svg>
-                                                ) : (
-                                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                                                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                                                    </svg>
-                                                )}
-                                            </button>
+                                    {!hidePrompt && (
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[13px] text-zinc-500">Prompt</span>
+                                                <button
+                                                    type="button"
+                                                    title={copied ? 'Copied' : 'Copy prompt'}
+                                                    onClick={() => copyPrompt(image.prompt)}
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
+                                                >
+                                                    {copied ? (
+                                                        <svg className="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                                            <path d="M20 6 9 17l-5-5" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                                                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
+                                            <div className="rounded-lg bg-white/[0.03] p-3 ring-1 ring-inset ring-white/5">
+                                                <p className="line-clamp-3 text-[13px] leading-relaxed text-zinc-300">{image.prompt}</p>
+                                            </div>
                                         </div>
-                                        <div className="rounded-lg bg-white/[0.03] p-3 ring-1 ring-inset ring-white/5">
-                                            <p className="line-clamp-3 text-[13px] leading-relaxed text-zinc-300">{image.prompt}</p>
-                                        </div>
-                                    </div>
+                                    )}
 
                                     <div className="flex items-center justify-between text-xs text-zinc-600">
                                         <span>{image.aspect || (isVideo ? '16:9' : '1:1')}</span>

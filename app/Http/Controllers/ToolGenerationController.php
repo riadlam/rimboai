@@ -191,15 +191,33 @@ class ToolGenerationController extends Controller
 
         $durationSeconds = isset($data['duration_seconds'])
             ? (float) $data['duration_seconds']
-            : (float) ($model->ref_duration_seconds ?? 5);
+            : 0.0;
 
         if ($data['tool_slug'] === 'ai-video-extender') {
             $durationSeconds = (float) ($settings['duration'] ?? 5);
         }
 
-        $settings['_duration_seconds'] = $durationSeconds;
-
         $defaults = $this->decodeJson($model->defaults) ?? [];
+        $enums = $this->decodeJson($model->enums);
+        $durationEnums = \App\Services\Tools\ToolWorkspaceBuilder::durationEnumsFor(
+            (string) $data['tool_slug'],
+            $enums,
+            $defaults,
+            $model->max_duration !== null ? (int) $model->max_duration : null,
+        );
+
+        // Snap UP to the model's supported duration tier before charging.
+        $durationSeconds = \App\Services\Credits\ToolGenerationCostEstimator::snapBillableDuration(
+            $durationSeconds,
+            $durationEnums,
+            $model->max_duration !== null ? (int) $model->max_duration : null,
+        );
+
+        if ($durationSeconds <= 0) {
+            return response()->json(['message' => 'Upload a video (or pick a duration) so credits can be calculated.'], 422);
+        }
+
+        $settings['_duration_seconds'] = $durationSeconds;
 
         try {
             $built = $inputBuilder->build(
@@ -217,10 +235,7 @@ class ToolGenerationController extends Controller
             return response()->json(['message' => 'Could not build tool request.'], 422);
         }
 
-        $billDuration = $built['duration_seconds'];
-        if ($data['tool_slug'] !== 'ai-video-extender') {
-            $billDuration = $durationSeconds;
-        }
+        $billDuration = $durationSeconds;
 
         $cost = $costEstimator->estimate([
             'unit' => $model->unit,
@@ -230,6 +245,7 @@ class ToolGenerationController extends Controller
                 (string) ($model->unit ?? 'seconds'),
             ),
             'duration_seconds' => $billDuration,
+            'duration_enums' => $durationEnums,
             'max_duration' => $model->max_duration,
             'resolution' => $settings['resolution']
                 ?? $built['resolution']
