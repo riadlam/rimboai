@@ -119,6 +119,9 @@ export default function ToolCreatePanel({ tool, workspace, creditsConfig, tokenB
                         setLoading(false);
                         setStatusMessage(t('detail.done'));
                         if (data.video_url) onResultVideo?.(data.video_url);
+                        // Silent follow-up polls so Fal cost_usd / wallet-after can land
+                        // after billing-events lag (same role as ReconcileFalCreationCostJob).
+                        void reconcileWalletAfterComplete(creationId);
                         return;
                     }
                     if (data.status === 'failed' || data.status === 'cancelled') {
@@ -544,6 +547,19 @@ function readMediaDuration(file: File): Promise<number | null> {
         };
         el.src = url;
     });
+}
+
+/** Hit status again after completion so server can fill Fal cost_usd / wallet-after. */
+async function reconcileWalletAfterComplete(creationId: number): Promise<void> {
+    const delays = [8_000, 25_000, 60_000];
+    for (const ms of delays) {
+        await new Promise((r) => setTimeout(r, ms));
+        try {
+            await apiGet(`/tools/creations/${creationId}/status`);
+        } catch {
+            // Best-effort — DB reconcile is the goal, UI already shows the result.
+        }
+    }
 }
 
 function UploadSlot({

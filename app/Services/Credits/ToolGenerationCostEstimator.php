@@ -15,6 +15,7 @@ class ToolGenerationCostEstimator
      * @param  array{
      *   unit?: string|null,
      *   unit_price?: float|string|null,
+     *   unit_price_by_resolution?: array<string, float|int|string>|null,
      *   duration_seconds?: float|int|null,
      *   max_duration?: int|null,
      *   resolution?: string|null,
@@ -32,11 +33,15 @@ class ToolGenerationCostEstimator
     public function estimate(array $options): array
     {
         $unit = $this->normalizeUnit($options['unit'] ?? 'seconds');
-        $unitPrice = max(0.0, (float) ($options['unit_price'] ?? 0));
         $maxDuration = isset($options['max_duration']) ? (int) $options['max_duration'] : null;
         $duration = $this->clampDuration((float) ($options['duration_seconds'] ?? 5), $maxDuration);
         $fps = max(1.0, (float) ($options['fps'] ?? 24));
         $resolution = strtolower((string) ($options['resolution'] ?? '1080p'));
+        $unitPrice = $this->resolveUnitPrice(
+            (float) ($options['unit_price'] ?? 0),
+            $options['unit_price_by_resolution'] ?? null,
+            $resolution,
+        );
 
         if (in_array($unit, ['megapixels', 'processed_megapixels'], true)) {
             [$w, $h] = $this->dimsFor($resolution);
@@ -115,6 +120,19 @@ class ToolGenerationCostEstimator
             'unit_price' => $unitPrice,
             'breakdown' => $breakdown,
         ];
+    }
+
+    private function resolveUnitPrice(float $fallback, mixed $tiers, string $resolution): float
+    {
+        if (is_array($tiers)) {
+            foreach ($tiers as $key => $value) {
+                if (strtolower((string) $key) === $resolution && is_numeric($value)) {
+                    return max(0.0, (float) $value);
+                }
+            }
+        }
+
+        return max(0.0, $fallback);
     }
 
     private function clampDuration(float $seconds, ?int $max): float

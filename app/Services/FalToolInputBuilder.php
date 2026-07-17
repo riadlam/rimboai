@@ -481,7 +481,8 @@ class FalToolInputBuilder
     }
 
     /**
-     * Video to Anime: Wan 2.2 v2v with an anime-locked prompt.
+     * Video to Anime: style-transfer that must keep the same characters.
+     * High Wan 2.2 "strength" rewrites identity from the prompt — we avoid that.
      *
      * @param  array<string, mixed>  $defaults
      * @param  array<string, mixed>  $settings
@@ -490,12 +491,58 @@ class FalToolInputBuilder
     private function buildAnime(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
         $detail = trim((string) ($settings['prompt'] ?? ''));
-        $prompt = 'anime style, cel shading, clean line art, vibrant colors, expressive animation';
+        // Explicit identity lock — without this, v2v invents a new anime character.
+        $prompt = 'Restyle this exact same video as anime. Keep the identical people, '
+            .'faces, bodies, hair, clothing, poses, camera angle, framing, and scene layout. '
+            .'Only change the rendering style to anime: clean line art, cel shading, '
+            .'vibrant colors, expressive animation. Do not replace or redesign any character.';
         if ($detail !== '') {
-            $prompt .= ', '.$detail;
+            $prompt .= ' Extra style notes (do not change identity): '.$detail;
         }
 
-        return $this->buildWanRestyle($endpointId, $defaults, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+        $negative = 'different person, different face, new character, identity swap, '
+            .'redesigned character, random anime OC, face morph';
+
+        // Wan 2.7 edit-video — instruction style transfer (best for keep-the-same-shot).
+        if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
+            $input = array_merge($defaults, [
+                'video_url' => $videoUrl,
+                'prompt' => $prompt,
+                'audio_setting' => $defaults['audio_setting'] ?? 'origin',
+            ]);
+
+            return $this->onlyKeys($input, [
+                'video_url', 'prompt', 'resolution', 'audio_setting',
+                'enable_safety_checker', 'reference_image_url', 'aspect_ratio', 'duration',
+            ]);
+        }
+
+        // Wan 2.2 / Kling fallback — keep strength LOW so source identity wins.
+        // Docs: 1.0 = fully prompt-based (destroys face), 0.0 = identical to input.
+        $strength = $this->clamp01($settings['strength'] ?? ($defaults['strength'] ?? 0.35)) ?? 0.35;
+        $strength = min($strength, 0.5);
+
+        if (str_contains($endpointId, 'kling-video')) {
+            return $this->onlyKeys([
+                'video_url' => $videoUrl,
+                'prompt' => $prompt,
+                'strength' => $strength,
+            ], ['video_url', 'prompt', 'strength']);
+        }
+
+        $input = array_merge($defaults, [
+            'video_url' => $videoUrl,
+            'prompt' => $prompt,
+            'strength' => $strength,
+            'negative_prompt' => $negative,
+            'aspect_ratio' => $defaults['aspect_ratio'] ?? 'auto',
+            'enable_prompt_expansion' => false,
+        ]);
+
+        return $this->onlyKeys($input, [
+            'video_url', 'prompt', 'negative_prompt', 'resolution', 'acceleration',
+            'aspect_ratio', 'enable_safety_checker', 'enable_prompt_expansion', 'strength',
+        ]);
     }
 
     /**

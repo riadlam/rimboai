@@ -569,38 +569,52 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── Video To Anime ──────────────────────────────────────────────
+            // Wan 2.7 edit-video is primary: instruction-based style transfer that
+            // keeps the source clip's structure. Wan 2.2 v2v is fallback with a
+            // low strength so identity is not regenerated from the prompt.
             [
                 'sort' => 240,
                 'tool_slug' => 'video-to-anime-ai',
                 'tool_name' => 'Video to Anime',
-                'endpoint_id' => 'fal-ai/wan/v2.2-a14b/video-to-video',
-                'name' => 'Wan 2.2 Anime Restyle',
-                'description' => 'Restyles live footage into anime look while preserving the original action.',
+                'endpoint_id' => 'fal-ai/wan/v2.7/edit-video',
+                'name' => 'Wan 2.7 Anime Edit',
+                'description' => 'Instruction-based anime style transfer that keeps the same characters, poses, and camera.',
                 'unit' => 'seconds',
-                'unit_price' => 0.08,
-                'ref_cost_usd' => 0.08 * $s,
+                // Fal: $0.10 / s
+                'unit_price' => 0.10,
+                'ref_cost_usd' => 0.10 * $s,
                 'ref_duration_seconds' => 5,
-                'max_duration' => 30,
-                'enums' => ['480p', '580p', '720p'],
+                'max_duration' => 10,
+                'enums' => ['720p', '1080p'],
                 'is_primary' => true,
-                'defaults' => ['resolution' => '720p', 'acceleration' => 'regular', 'strength' => 0.75],
-                'tags' => ['anime', 'v2v', 'wan', 'primary'],
+                'defaults' => [
+                    'resolution' => '720p',
+                    'audio_setting' => 'origin',
+                ],
+                'tags' => ['anime', 'edit', 'wan27', 'primary'],
             ],
             [
                 'sort' => 250,
                 'tool_slug' => 'video-to-anime-ai',
                 'tool_name' => 'Video to Anime',
-                'endpoint_id' => 'fal-ai/kling-video/o3/standard/video-to-video/edit',
-                'name' => 'Kling O3 Anime Edit',
-                'description' => 'Kling O3 element-driven restyle — anime fallback path.',
+                'endpoint_id' => 'fal-ai/wan/v2.2-a14b/video-to-video',
+                'name' => 'Wan 2.2 Anime Restyle',
+                'description' => 'Wan 2.2 v2v fallback — low strength so faces stay recognizable.',
                 'unit' => 'seconds',
-                'unit_price' => 0.126,
-                'ref_cost_usd' => 0.126 * $s,
-                'max_duration' => 15,
-                'enums' => null,
+                'unit_price' => 0.08,
+                'ref_cost_usd' => 0.08 * $s,
+                'ref_duration_seconds' => 5,
+                'max_duration' => 10,
+                'enums' => ['480p', '580p', '720p'],
                 'is_primary' => false,
-                'defaults' => null,
-                'tags' => ['anime', 'v2v', 'kling', 'fallback'],
+                // Keep strength low: 1.0 = full prompt rewrite (destroys identity).
+                'defaults' => [
+                    'resolution' => '720p',
+                    'acceleration' => 'regular',
+                    'strength' => 0.35,
+                    'aspect_ratio' => 'auto',
+                ],
+                'tags' => ['anime', 'v2v', 'wan', 'fallback'],
             ],
 
             // ── AI Video Filters ────────────────────────────────────────────

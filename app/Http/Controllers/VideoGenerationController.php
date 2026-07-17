@@ -351,12 +351,27 @@ class VideoGenerationController extends Controller
         if (! $creation->isTerminal() && $creation->fal_request_id) {
             $processor->syncFromFal('video', $creation);
             $creation->refresh();
-        } elseif (
-            $creation->status === UserVideoCreation::STATUS_COMPLETED
-            && $creation->fal_request_id
+        }
+
+        // Fill cost_usd + fal_wallet_balance_after (billing often lags a few seconds).
+        if (
+            $creation->fal_request_id
+            && in_array($creation->status, [
+                UserVideoCreation::STATUS_COMPLETED,
+                UserVideoCreation::STATUS_FAILED,
+            ], true)
             && ! $walletCost->isFullyReconciled($creation)
         ) {
-            $walletCost->maybeFillCostUsd($creation);
+            try {
+                if ($creation->status === UserVideoCreation::STATUS_COMPLETED) {
+                    $walletCost->recordAfterCompletion($creation);
+                } else {
+                    $walletCost->recordAfterFailure($creation);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+            $creation->refresh();
         }
 
         return response()->json($this->present($creation));

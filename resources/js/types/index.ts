@@ -134,6 +134,8 @@ export type ToolControlSpec = {
 export type ToolBilling = {
     unit: string;
     unit_price: number;
+    /** When set, Fal $/unit changes with the selected output resolution. */
+    unit_price_by_resolution?: Record<string, number> | null;
     max_duration?: number | null;
     ref_duration_seconds?: number | null;
 };

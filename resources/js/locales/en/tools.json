@@ -78,7 +78,7 @@
     "motionPrompt": "Motion prompt",
     "motionPromptPlaceholder": "Describe how the image should move…",
     "animeDetailPrompt": "Style details (optional)",
-    "animeDetailPlaceholder": "Extra anime style details…",
+    "animeDetailPlaceholder": "e.g. Ghibli look, 90s shonen — face & character stay the same",
     "soundPrompt": "Describe the sound",
     "soundPromptPlaceholder": "e.g. footsteps on gravel, rain, cinematic whoosh…",
     "filter": "Filter",

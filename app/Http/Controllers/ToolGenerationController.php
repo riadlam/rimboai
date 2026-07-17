@@ -170,9 +170,15 @@ class ToolGenerationController extends Controller
         $cost = $costEstimator->estimate([
             'unit' => $model->unit,
             'unit_price' => $model->unit_price,
+            'unit_price_by_resolution' => \App\Services\Tools\ToolWorkspaceBuilder::unitPriceByResolution(
+                (string) $model->endpoint_id,
+                (string) ($model->unit ?? 'seconds'),
+            ),
             'duration_seconds' => $billDuration,
             'max_duration' => $model->max_duration,
-            'resolution' => $built['resolution'] ?? ($settings['resolution'] ?? '1080p'),
+            'resolution' => $settings['resolution']
+                ?? $built['resolution']
+                ?? ($defaults['resolution'] ?? '720p'),
             'fps' => str_contains((string) $model->unit, 'frames') ? 30 : 24,
         ]);
 
@@ -230,6 +236,7 @@ class ToolGenerationController extends Controller
 
         try {
             $walletCost->recordBalanceBefore($creation);
+            $creation->refresh();
             $submit = $fal->submit((string) $model->endpoint_id, $built['input']);
         } catch (\Throwable $e) {
             report($e);
@@ -274,12 +281,30 @@ class ToolGenerationController extends Controller
         if (! $creation->isTerminal() && $creation->fal_request_id) {
             $processor->syncFromFal('video', $creation);
             $creation->refresh();
-        } elseif (
-            $creation->status === UserVideoCreation::STATUS_COMPLETED
-            && $creation->fal_request_id
+        }
+
+        // Always attempt Fal wallet reconcile on terminal tools (same columns as labs:
+        // cost_usd, fal_wallet_balance_after, deducted_amount_from_main_wallet).
+        // Use recordAfterCompletion so delayed reconcile jobs are scheduled when
+        // billing-events lag — maybeFillCostUsd alone does not schedule retries.
+        if (
+            $creation->fal_request_id
+            && in_array($creation->status, [
+                UserVideoCreation::STATUS_COMPLETED,
+                UserVideoCreation::STATUS_FAILED,
+            ], true)
             && ! $walletCost->isFullyReconciled($creation)
         ) {
-            $walletCost->maybeFillCostUsd($creation);
+            try {
+                if ($creation->status === UserVideoCreation::STATUS_COMPLETED) {
+                    $walletCost->recordAfterCompletion($creation);
+                } else {
+                    $walletCost->recordAfterFailure($creation);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+            $creation->refresh();
         }
 
         return response()->json($this->present($creation));
@@ -355,6 +380,17 @@ class ToolGenerationController extends Controller
             'credits' => $settings['credits'] ?? $creation->credits_charged,
             'token_balance' => null,
             'tool_slug' => $settings['tool_slug'] ?? null,
+            // Actual Fal billing (DB columns) — same as lab video creations.
+            'cost_usd' => $creation->cost_usd !== null ? (float) $creation->cost_usd : null,
+            'fal_wallet_balance_before' => $creation->fal_wallet_balance_before !== null
+                ? (float) $creation->fal_wallet_balance_before
+                : null,
+            'fal_wallet_balance_after' => $creation->fal_wallet_balance_after !== null
+                ? (float) $creation->fal_wallet_balance_after
+                : null,
+            'deducted_amount_from_main_wallet' => $creation->deducted_amount_from_main_wallet !== null
+                ? (float) $creation->deducted_amount_from_main_wallet
+                : null,
             'created_at' => optional($creation->created_at)?->toIso8601String(),
         ];
     }

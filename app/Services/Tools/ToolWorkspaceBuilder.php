@@ -49,6 +49,11 @@ class ToolWorkspaceBuilder
             'billing' => [
                 'unit' => (string) ($primary->unit ?? 'seconds'),
                 'unit_price' => (float) ($primary->unit_price ?? 0),
+                // Fal tiers that change $/s (or flat $/clip) by output resolution.
+                'unit_price_by_resolution' => self::unitPriceByResolution(
+                    (string) $primary->endpoint_id,
+                    (string) ($primary->unit ?? 'seconds'),
+                ),
                 'max_duration' => $primary->max_duration !== null ? (int) $primary->max_duration : null,
                 'ref_duration_seconds' => $primary->ref_duration_seconds !== null
                     ? (int) $primary->ref_duration_seconds
@@ -278,17 +283,8 @@ class ToolWorkspaceBuilder
                 ],
             ],
 
-            // Video to Anime — strength + optional style detail prompt
+            // Video to Anime — optional style detail only (identity is locked server-side)
             'video-to-anime-ai' => [
-                [
-                    'type' => 'slider',
-                    'key' => 'strength',
-                    'label_key' => 'strength',
-                    'min' => 0,
-                    'max' => 1,
-                    'step' => 0.05,
-                    'default' => (float) ($defaults['strength'] ?? 0.75),
-                ],
                 [
                     'type' => 'textarea',
                     'key' => 'prompt',
@@ -405,6 +401,51 @@ class ToolWorkspaceBuilder
         }
 
         return array_values(array_unique($notices));
+    }
+
+    /**
+     * Resolution-tiered Fal prices for models that bill differently by output size.
+     * Keys are lowercase resolution labels; values are USD per billing unit.
+     *
+     * @return array<string, float>|null
+     */
+    public static function unitPriceByResolution(string $endpointId, string $unit): ?array
+    {
+        // Wan Animate Move / Wan 2.2 v2v — billed per "video second" (16fps-normalized).
+        // https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/move
+        // https://fal.ai/models/fal-ai/wan/v2.2-a14b/video-to-video
+        if (
+            str_contains($endpointId, 'wan/v2.2-14b/animate/move')
+            || str_contains($endpointId, 'wan/v2.2-a14b/video-to-video')
+        ) {
+            return [
+                '480p' => 0.04,
+                '580p' => 0.06,
+                '720p' => 0.08,
+            ];
+        }
+
+        // PixVerse V4.5 image-to-video — flat per clip; price changes with resolution (5s base).
+        // https://fal.ai/models/fal-ai/pixverse/v4.5/image-to-video
+        if (str_contains($endpointId, 'pixverse/v4.5/image-to-video') && $unit === 'video') {
+            if (str_contains($endpointId, '/fast')) {
+                return [
+                    '360p' => 0.30,
+                    '540p' => 0.30,
+                    '720p' => 0.40,
+                    '1080p' => 0.80,
+                ];
+            }
+
+            return [
+                '360p' => 0.15,
+                '540p' => 0.15,
+                '720p' => 0.20,
+                '1080p' => 0.40,
+            ];
+        }
+
+        return null;
     }
 
     /**

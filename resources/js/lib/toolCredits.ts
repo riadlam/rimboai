@@ -8,6 +8,8 @@ import { creditsFromFalUsd, type CreditsConfig } from '@/lib/imageCredits';
 export type ToolBilling = {
     unit: string;
     unit_price: number;
+    /** When set, Fal $/unit changes with the selected output resolution. */
+    unit_price_by_resolution?: Record<string, number> | null;
     max_duration?: number | null;
     ref_duration_seconds?: number | null;
 };
@@ -58,13 +60,13 @@ export function estimateToolCredits(
     }
 
     const unit = normalizeUnit(billing.unit);
-    const unitPrice = Number(billing.unit_price) || 0;
+    const resolution = (options.resolution || '1080p').toLowerCase();
+    const unitPrice = resolveUnitPrice(billing, resolution);
     const duration = clampDuration(
         options.durationSeconds ?? billing.ref_duration_seconds ?? 5,
         billing.max_duration,
     );
     const fps = Math.max(1, options.fps ?? 24);
-    const resolution = (options.resolution || '1080p').toLowerCase();
 
     if (unit === 'megapixels' || unit === 'processed_megapixels') {
         const [w, h] = RES_DIMS[resolution] ?? RES_DIMS['1080p'];
@@ -122,6 +124,15 @@ export function estimateToolCredits(
         billableUnits: duration,
         unit: unit || 'seconds',
     };
+}
+
+function resolveUnitPrice(billing: ToolBilling, resolution: string): number {
+    const tiers = billing.unit_price_by_resolution;
+    if (tiers && typeof tiers === 'object') {
+        const keyed = tiers[resolution] ?? tiers[resolution.toLowerCase()];
+        if (typeof keyed === 'number' && keyed > 0) return keyed;
+    }
+    return Number(billing.unit_price) || 0;
 }
 
 function clampDuration(seconds: number, max: number | null | undefined): number {
