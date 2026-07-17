@@ -231,7 +231,11 @@ export default function VideoLabCreateForm({
 
     const modelsForPicker = useMemo(() => {
         const frameMode = framesMode ? 'first_last' : 'default';
-        const compatible = allModels.filter((m) => supportsMediaMix(m, mediaCounts, frameMode));
+        const compatible = allModels.filter((m) => {
+            // Frames toggle on → only models that can do first+last, even before images are added.
+            if (framesMode && !getMediaCaps(m).supports_last_frame) return false;
+            return supportsMediaMix(m, mediaCounts, frameMode);
+        });
         // Rank safest / best-fit models first in the picker.
         return [...compatible].sort((a, b) => {
             const sa = pickBestVideoModel([a], mediaCounts, prompt)?.score ?? 0;
@@ -1504,23 +1508,32 @@ export default function VideoLabCreateForm({
                             <div className="relative pe-6">
                                 <h2 className="text-lg font-semibold tracking-tight text-white">{t('selectModel')}</h2>
                                 <p className="mt-1 text-[13px] text-zinc-500">
-                                    {mediaTotal(mediaCounts) > 0
-                                        ? `Safe models for your media (${modelsForPicker.length}) — others hidden`
-                                        : t('selectModelSub')}
+                                    {framesMode
+                                        ? t('video.framesModelsOnly', {
+                                              count: modelsForPicker.length,
+                                              defaultValue: `First & last frame models (${modelsForPicker.length})`,
+                                          })
+                                        : mediaTotal(mediaCounts) > 0
+                                          ? `Safe models for your media (${modelsForPicker.length}) — others hidden`
+                                          : t('selectModelSub')}
                                 </p>
                             </div>
                             <div className="relative max-h-[60vh] space-y-1.5 overflow-y-auto py-1 scrollbar-thin">
-                                {modelsForPicker.length === 0 && mediaTotal(mediaCounts) > 0 ? (
+                                {modelsForPicker.length === 0 && (framesMode || mediaTotal(mediaCounts) > 0) ? (
                                     <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-6 text-center">
                                         <p className="text-sm font-medium text-rose-100">{t('video.noCompatible')}</p>
                                         <p className="mt-1 text-[12px] text-rose-100/70">
-                                            Change or remove references to see available models again.
+                                            {framesMode
+                                                ? t('video.framesNoModels', {
+                                                      defaultValue: 'No models support first & last frames right now.',
+                                                  })
+                                                : 'Change or remove references to see available models again.'}
                                         </p>
                                     </div>
                                 ) : null}
                                 {(modelsForPicker.length
                                     ? modelsForPicker
-                                    : mediaTotal(mediaCounts) > 0
+                                    : framesMode || mediaTotal(mediaCounts) > 0
                                       ? []
                                       : [
                                             {

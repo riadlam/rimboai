@@ -104,7 +104,9 @@
     "needFirstFrame": "Add a first-frame image.",
     "needLastFrame": "Add a last-frame image.",
     "framesUnsupported": "This model doesn’t support first & last frame. Pick another model or turn the toggle off.",
-    "framesSwitchedModel": "Switched to {{model}} for first & last frames"
+    "framesSwitchedModel": "Switched to {{model}} for first & last frames",
+    "framesModelsOnly": "First & last frame models ({{count}})",
+    "framesNoModels": "No models support first & last frames right now."
   },
   "voice": {
     "title": "Voiceover",
