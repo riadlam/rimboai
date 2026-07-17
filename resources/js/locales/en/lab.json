@@ -127,8 +127,12 @@
     "needSample": "Upload a voice sample",
     "clonedVoice": "Cloned voice",
     "sampleTooShort": "Sample is too short ({{duration}}). Need at least {{min}}s of clear speech.",
-    "sampleReady": "Sample analyzed · {{duration}} — tokens update with your text length.",
+    "sampleReady": "Sample analyzed · {{duration}}.",
+    "sampleReadyMiniMax": "Sample analyzed · {{duration}}. Tokens = clone fee + your text length.",
+    "sampleReadyChatterbox": "Sample analyzed · {{duration}}. Tokens are based only on the text you enter (per 1,000 characters).",
     "sampleBilledHint": "sample {{duration}}",
+    "sampleBilledHintMiniMax": "clone + text · sample {{duration}}",
+    "billedByTextHint": "billed by text only",
     "analyzingSample": "Analyzing sample…",
     "needLongerSample": "Use a sample of at least {{min}}s"
   },

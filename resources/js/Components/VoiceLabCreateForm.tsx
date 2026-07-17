@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Brand, BrandVoice } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
-import { estimateVoiceCredits, formatVoiceSampleDuration, isVoiceCloneModel, minVoiceSampleSeconds, readVoiceSampleDuration } from '@/lib/voiceCredits';
+import { estimateVoiceCredits, formatVoiceSampleDuration, isMiniMaxVoiceClone, isVoiceCloneModel, minVoiceSampleSeconds, readVoiceSampleDuration } from '@/lib/voiceCredits';
 import { publicAsset } from '@/lib/publicAsset';
 import { LabModelPickerModal, LabModelPickerTrigger, type LabPickerModel } from '@/Components/LabModelPicker';
 
@@ -230,6 +230,7 @@ export default function VoiceLabCreateForm({
 
     const needsSampleAudio = isVoiceCloneModel(selectedModelRecord);
     const minSampleSeconds = minVoiceSampleSeconds(selectedModelRecord?.endpoint_id);
+    const isMiniMaxClone = isMiniMaxVoiceClone(selectedModelRecord?.endpoint_id);
 
     const modelBrandVoices = selectedModelRecord?.voices;
     const modelVoices = useMemo(
@@ -618,7 +619,9 @@ export default function VoiceLabCreateForm({
                             )}
                             {sampleAudio && !sampleTooShort && sampleDurationLabel && (
                                 <p className="text-[11px] leading-relaxed text-white/40">
-                                    {t('voice.sampleReady', { duration: sampleDurationLabel })}
+                                    {isMiniMaxClone
+                                        ? t('voice.sampleReadyMiniMax', { duration: sampleDurationLabel })
+                                        : t('voice.sampleReadyChatterbox', { duration: sampleDurationLabel })}
                                 </p>
                             )}
                         </div>
@@ -826,7 +829,9 @@ export default function VoiceLabCreateForm({
                         )}
                         {needsSampleAudio && sampleDurationLabel && (
                             <span className="text-[10px] font-normal text-white/40">
-                                {t('voice.sampleBilledHint', { duration: sampleDurationLabel })}
+                                {isMiniMaxClone
+                                    ? t('voice.sampleBilledHintMiniMax', { duration: sampleDurationLabel })
+                                    : t('voice.billedByTextHint')}
                             </span>
                         )}
                     </span>

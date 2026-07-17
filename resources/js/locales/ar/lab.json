@@ -127,8 +127,12 @@
     "needSample": "ارفع عينة صوت",
     "clonedVoice": "صوت مستنسخ",
     "sampleTooShort": "العينة قصيرة جداً ({{duration}}). يلزم على الأقل {{min}} ثانية من كلام واضح.",
-    "sampleReady": "تم تحليل العينة · {{duration}} — يتم تحديث التوكنات حسب طول النص.",
+    "sampleReady": "تم تحليل العينة · {{duration}}.",
+    "sampleReadyMiniMax": "تم تحليل العينة · {{duration}}. التوكنات = رسوم الاستنساخ + طول النص.",
+    "sampleReadyChatterbox": "تم تحليل العينة · {{duration}}. التوكنات تعتمد فقط على النص الذي تدخله (لكل 1000 حرف).",
     "sampleBilledHint": "عينة {{duration}}",
+    "sampleBilledHintMiniMax": "استنساخ + نص · عينة {{duration}}",
+    "billedByTextHint": "الفوترة بالنص فقط",
     "analyzingSample": "جاري تحليل العينة…",
     "needLongerSample": "استخدم عينة لا تقل عن {{min}} ثانية"
   },
