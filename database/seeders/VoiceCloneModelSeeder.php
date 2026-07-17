@@ -27,7 +27,7 @@ class VoiceCloneModelSeeder extends Seeder
     {
         $this->seedVoiceModels();
         $this->seedMusicCover();
-        $this->command?->info('VoiceCloneModelSeeder: MiniMax Voice Clone, Chatterbox Voice Clone, MiniMax Music Cover are active.');
+        $this->command?->info('VoiceCloneModelSeeder: MiniMax Voice Clone, Chatterbox multilingual, MiniMax Music Cover are active.');
     }
 
     private function seedVoiceModels(): void
@@ -68,14 +68,14 @@ class VoiceCloneModelSeeder extends Seeder
                 'tags' => ['voice-clone', 'sample-audio', 'popular', 'multilingual'],
             ],
             [
-                'endpoint_id' => 'fal-ai/chatterbox/text-to-speech',
+                'endpoint_id' => 'fal-ai/chatterbox/text-to-speech/multilingual',
                 'name' => 'Chatterbox Voice Clone',
-                'description' => 'Zero-shot voice cloning from a short reference clip with expressive TTS controls.',
+                'description' => 'Zero-shot voice cloning from a short reference clip. Multilingual (Arabic, French, English, and more) — max 300 characters per request.',
                 'category' => 'Chatterbox',
                 'sort' => 10,
                 'unit' => '1000 characters',
                 'unit_price' => 0.025,
-                'tags' => ['voice-clone', 'sample-audio', 'expressive', 'popular'],
+                'tags' => ['voice-clone', 'sample-audio', 'expressive', 'popular', 'multilingual', 'arabic'],
             ],
         ];
 
@@ -102,6 +102,16 @@ class VoiceCloneModelSeeder extends Seeder
                 ['endpoint_id' => $model['endpoint_id']],
                 $values,
             );
+        }
+
+        // English-only Chatterbox rejects Arabic/non-ASCII — retire it in favor of multilingual.
+        if (Schema::hasColumn('text_to_voice_models', 'status')) {
+            DB::table('text_to_voice_models')
+                ->where('endpoint_id', 'fal-ai/chatterbox/text-to-speech')
+                ->update([
+                    'status' => 'inactive',
+                    'updated_at' => $now,
+                ]);
         }
     }
 

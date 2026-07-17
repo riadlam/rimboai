@@ -28,6 +28,7 @@ type Props = {
 };
 
 const MAX_CHARS = 70000;
+const CHATTERBOX_MULTILINGUAL_MAX_CHARS = 300;
 
 const QUICK_PROMPTS = [
     {
@@ -231,6 +232,10 @@ export default function VoiceLabCreateForm({
     const needsSampleAudio = isVoiceCloneModel(selectedModelRecord);
     const minSampleSeconds = minVoiceSampleSeconds(selectedModelRecord?.endpoint_id);
     const isMiniMaxClone = isMiniMaxVoiceClone(selectedModelRecord?.endpoint_id);
+    const maxChars = (selectedModelRecord?.endpoint_id || '').toLowerCase().includes('chatterbox')
+        && (selectedModelRecord?.endpoint_id || '').toLowerCase().includes('multilingual')
+        ? CHATTERBOX_MULTILINGUAL_MAX_CHARS
+        : MAX_CHARS;
 
     const modelBrandVoices = selectedModelRecord?.voices;
     const modelVoices = useMemo(
@@ -342,7 +347,8 @@ export default function VoiceLabCreateForm({
         if (needsSampleAudio) {
             setMode('clone');
         }
-    }, [selectedModelRecord?.endpoint_id, needsSampleAudio]);
+        setText((prev) => (prev.length > maxChars ? prev.slice(0, maxChars) : prev));
+    }, [selectedModelRecord?.endpoint_id, needsSampleAudio, maxChars]);
 
     useEffect(() => {
         if (!sampleAudio) {
@@ -634,13 +640,13 @@ export default function VoiceLabCreateForm({
                                 {t('voice.textToConvert')}
                             </label>
                             <span className="text-xs text-zinc-500">
-                                {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+                                {text.length.toLocaleString()} / {maxChars.toLocaleString()}
                             </span>
                         </div>
                         <textarea
                             id="voice-text-input"
                             value={text}
-                            onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
+                            onChange={(e) => setText(e.target.value.slice(0, maxChars))}
                             placeholder={t('voice.placeholder')}
                             className="min-h-[120px] w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                         />

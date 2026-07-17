@@ -39,6 +39,31 @@ class FalVoiceInputBuilder
         }
 
         if (str_contains($id, 'chatterbox') && str_contains($id, 'text-to-speech')) {
+            // Multilingual endpoint: custom clone uses `voice` = audio URL + custom_audio_language
+            // English-only endpoint: `audio_url` + ASCII text only
+            $isMultilingual = str_contains($id, 'multilingual');
+
+            if ($isMultilingual) {
+                $input = [
+                    'text' => mb_substr($text, 0, 300),
+                ];
+
+                if ($audioUrl !== '') {
+                    $input['voice'] = $audioUrl;
+                    $input['custom_audio_language'] = $this->detectChatterboxLanguage($text, $options['language'] ?? null);
+                } else {
+                    $input['voice'] = $this->detectChatterboxLanguage($text, $options['language'] ?? null);
+                }
+
+                if ($caps['style']) {
+                    // Multilingual exaggeration range is 0.25–2.0 (UI 0–100 → map into that band)
+                    $ui = max(0.0, min(100.0, (float) ($options['style'] ?? $options['exaggeration'] ?? 25)));
+                    $input['exaggeration'] = round(0.25 + ($ui / 100) * 1.75, 3);
+                }
+
+                return $input;
+            }
+
             $input = [
                 'text' => $text,
             ];
@@ -153,6 +178,69 @@ class FalVoiceInputBuilder
     public function requiresSampleAudio(string $endpointId): bool
     {
         return $this->controlCapabilities($endpointId)['requires_sample_audio'];
+    }
+
+    /**
+     * Map UI / locale hints to Chatterbox multilingual language codes.
+     */
+    private function detectChatterboxLanguage(string $text, mixed $hint = null): string
+    {
+        $allowed = [
+            'english', 'arabic', 'danish', 'german', 'greek', 'spanish', 'finnish', 'french',
+            'hebrew', 'hindi', 'italian', 'japanese', 'korean', 'malay', 'dutch', 'norwegian',
+            'polish', 'portuguese', 'russian', 'swedish', 'swahili', 'turkish', 'chinese',
+        ];
+
+        if (is_string($hint)) {
+            $normalized = strtolower(trim($hint));
+            $aliases = [
+                'en' => 'english',
+                'ar' => 'arabic',
+                'fr' => 'french',
+                'de' => 'german',
+                'es' => 'spanish',
+                'it' => 'italian',
+                'pt' => 'portuguese',
+                'ru' => 'russian',
+                'zh' => 'chinese',
+                'ja' => 'japanese',
+                'ko' => 'korean',
+                'hi' => 'hindi',
+                'he' => 'hebrew',
+                'tr' => 'turkish',
+                'nl' => 'dutch',
+                'pl' => 'polish',
+            ];
+            $normalized = $aliases[$normalized] ?? $normalized;
+            if (in_array($normalized, $allowed, true)) {
+                return $normalized;
+            }
+        }
+
+        // Script detection for common non-Latin text
+        if (preg_match('/[\x{0600}-\x{06FF}\x{0750}-\x{077F}\x{08A0}-\x{08FF}]/u', $text)) {
+            return 'arabic';
+        }
+        if (preg_match('/[\x{0400}-\x{04FF}]/u', $text)) {
+            return 'russian';
+        }
+        if (preg_match('/[\x{4E00}-\x{9FFF}]/u', $text)) {
+            return 'chinese';
+        }
+        if (preg_match('/[\x{3040}-\x{30FF}]/u', $text)) {
+            return 'japanese';
+        }
+        if (preg_match('/[\x{AC00}-\x{D7AF}]/u', $text)) {
+            return 'korean';
+        }
+        if (preg_match('/[\x{0590}-\x{05FF}]/u', $text)) {
+            return 'hebrew';
+        }
+        if (preg_match('/[\x{0900}-\x{097F}]/u', $text)) {
+            return 'hindi';
+        }
+
+        return 'english';
     }
 
     private function map01(int|float|null $ui): float
