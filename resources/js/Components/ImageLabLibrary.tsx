@@ -941,7 +941,6 @@ function BuildingCard({
 
     return (
         <motion.div
-            layout
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: fadeOut ? 0 : 1, scale: fadeOut ? 0.98 : 1 }}
             transition={{ delay: fadeOut ? 0 : batchIndex * 0.04, duration: fadeOut ? 0.35 : 0.22 }}

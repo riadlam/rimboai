@@ -31,6 +31,9 @@ const CURRENCIES: Record<Currency, { flag: string; symbol: string; rateFromDzd: 
     GBP: { flag: '🇬🇧', symbol: '£', rateFromDzd: 0.79 / 134 },
 };
 
+/** Only DZD is live for SofizPay right now — keep others defined for later. */
+const ENABLED_CURRENCIES: Currency[] = ['DZD'];
+
 const PACK_BADGES: Record<string, { popular?: boolean; best?: boolean }> = {
     pro: { popular: true },
     business: { best: true },
@@ -51,8 +54,7 @@ export default function CreditsModal({ open, onClose }: Props) {
     const { t: tp, i18n } = useTranslation('pricing');
     const { props } = usePage<PageProps>();
     const locale = intlLocale((i18n.language as 'en' | 'fr' | 'ar') || readSavedLang());
-    const [currency, setCurrency] = useState<Currency>('DZD');
-    const [currencyOpen, setCurrencyOpen] = useState(false);
+    const [currency] = useState<Currency>('DZD');
     const [selected, setSelected] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -178,37 +180,13 @@ export default function CreditsModal({ open, onClose }: Props) {
                                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
                                     <div className="flex items-center justify-between gap-3">
                                         <span className="text-[12px] font-medium text-zinc-400">{t('modal.currency')}</span>
-                                        <div className="relative">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrencyOpen((v) => !v)}
-                                                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-white transition hover:border-white/20"
-                                            >
-                                                <span>{cur.flag}</span>
-                                                <span className="font-medium">{currency}</span>
-                                                <svg className="h-3.5 w-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-                                                </svg>
-                                            </button>
-                                            {currencyOpen && (
-                                                <div className="absolute end-0 top-full z-10 mt-1 min-w-[120px] overflow-hidden rounded-xl border border-white/10 bg-[#1a1a1f] py-1 shadow-xl">
-                                                    {(Object.keys(CURRENCIES) as Currency[]).map((c) => (
-                                                        <button
-                                                            key={c}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setCurrency(c);
-                                                                setCurrencyOpen(false);
-                                                            }}
-                                                            className={`flex w-full items-center gap-2 px-3 py-2 text-start text-[12px] transition hover:bg-white/5 ${
-                                                                currency === c ? 'text-[#FF8A65]' : 'text-zinc-300'
-                                                            }`}
-                                                        >
-                                                            <span>{CURRENCIES[c].flag}</span>
-                                                            <span>{c}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                        <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-white">
+                                            <span>{CURRENCIES.DZD.flag}</span>
+                                            <span className="font-medium">DZD</span>
+                                            {ENABLED_CURRENCIES.length === 1 && (
+                                                <span className="ms-0.5 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+                                                    {t('modal.onlyCurrency', { defaultValue: 'Only' })}
+                                                </span>
                                             )}
                                         </div>
                                     </div>

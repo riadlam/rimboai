@@ -33,8 +33,6 @@ export default function Settings() {
 
     const currencies = [
         { code: 'DZD', label: t('currencyDzd') },
-        { code: 'USD', label: t('currencyUsd') },
-        { code: 'EUR', label: t('currencyEur') },
     ];
 
     return (

@@ -39,6 +39,9 @@ const CURRENCIES: Record<Currency, { label: string; name: string; symbol: string
     GBP: { label: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧', rateFromDzd: 0.79 / 134 },
 };
 
+/** Only DZD is live for SofizPay right now — keep others defined for later. */
+const ENABLED_CURRENCIES: Currency[] = ['DZD'];
+
 /** UI chrome only — price/tokens/name always come from token_packages. */
 const PACK_META: Record<
     string,
@@ -399,11 +402,11 @@ export default function Pricing() {
                                 <p className="mt-1 text-sm text-white/45">{t('choosePackSub')}</p>
                             </div>
 
-                            {/* Currency selector — compact segmented control */}
+                            {/* Currency — DZD only for now (SofizPay) */}
                             <div className="flex flex-col items-start gap-1.5 lg:items-end">
                                 <span className="text-[11px] font-medium uppercase tracking-wider text-white/35">{t('showPricesIn')}</span>
                                 <div className="relative flex gap-1 rounded-full border border-white/10 bg-black/30 p-1">
-                                    {(Object.keys(CURRENCIES) as Currency[]).map((code) => {
+                                    {ENABLED_CURRENCIES.map((code) => {
                                         const info = CURRENCIES[code];
                                         const active = currency === code;
                                         return (

@@ -39,6 +39,7 @@
     "title": "Acheter des jetons",
     "subtitle": "Rechargez le solde de votre Lab. Les prix suivent le catalogue en direct.",
     "currency": "Devise",
+    "onlyCurrency": "Uniquement",
     "hint": "Sélectionnez un pack. SofizPay traite le paiement final en toute sécurité en dinar algérien.",
     "emptyPacks": "Aucun pack de jetons disponible pour le moment.",
     "popular": "Populaire",

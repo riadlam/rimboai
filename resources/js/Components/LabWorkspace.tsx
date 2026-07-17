@@ -362,6 +362,40 @@ function isActiveStatus(status?: CreationStatus) {
     return status !== undefined && status !== 'completed' && status !== 'failed' && status !== 'cancelled';
 }
 
+/** Keep in-flight local cards when a library fetch would otherwise wipe them (common on slow mobile). */
+function mergeFetchedLabImages(prev: LabImage[], fetched: LabImage[]): LabImage[] {
+    const serverByCreation = new Map<number, LabImage>();
+    for (const item of fetched) {
+        if (item.creationId != null) serverByCreation.set(item.creationId, item);
+    }
+
+    const localsToKeep = prev.filter((local) => {
+        if (local.creationId != null && serverByCreation.has(local.creationId)) {
+            return false;
+        }
+        return isActiveStatus(local.status) || local.completing === true;
+    });
+
+    const mergedServer = fetched.map((item) => {
+        if (item.creationId == null) return item;
+        const local = prev.find((p) => p.creationId === item.creationId);
+        if (!local) return item;
+        return {
+            ...item,
+            startedAt: local.startedAt ?? item.startedAt,
+            batchId: local.batchId ?? item.batchId,
+            batchIndex: local.batchIndex ?? item.batchIndex,
+            completing: local.completing === true ? true : item.completing,
+            progressPercent:
+                typeof local.progressPercent === 'number' && typeof item.progressPercent === 'number'
+                    ? Math.max(local.progressPercent, item.progressPercent)
+                    : (item.progressPercent ?? local.progressPercent),
+        };
+    });
+
+    return [...localsToKeep, ...mergedServer];
+}
+
 export default function LabWorkspace(props: Props) {
     return (
         <LabToastProvider>
@@ -601,15 +635,11 @@ function LabWorkspaceInner({
 
         const collectActive = (): { type: 'image' | 'video' | 'music' | 'voice'; id: number }[] => {
             if (isImageLab || isVideoLab) {
+                // Always poll with the lab type — never infer from method (FLF was mis-typed as image).
+                const type = isVideoLab ? 'video' : 'image';
                 return imagesRef.current
                     .filter((i) => i.creationId && isActiveStatus(i.status))
-                    .map((i) => {
-                        const isVideo =
-                            i.method === 'text-to-video' ||
-                            i.method === 'image-to-video' ||
-                            i.method === 'reference-to-video';
-                        return { type: (isVideo ? 'video' : 'image') as 'image' | 'video', id: i.creationId as number };
-                    });
+                    .map((i) => ({ type, id: i.creationId as number }));
             }
             if (isMusicLab) {
                 return tracksRef.current
@@ -700,7 +730,7 @@ function LabWorkspaceInner({
                     if (cancelled) return;
 
                     const mapped = (data.images ?? []).map(mapApiImage);
-                    setImages(mapped);
+                    setImages((prev) => mergeFetchedLabImages(prev, mapped));
 
                     return;
                 }

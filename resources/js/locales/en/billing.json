@@ -39,6 +39,7 @@
     "title": "Buy tokens",
     "subtitle": "Top up your Lab balance. Prices follow the live catalogue.",
     "currency": "Currency",
+    "onlyCurrency": "Only",
     "hint": "Select a pack. SofizPay processes the final payment securely in Algerian Dinar.",
     "emptyPacks": "No token packs available right now.",
     "popular": "Popular",
