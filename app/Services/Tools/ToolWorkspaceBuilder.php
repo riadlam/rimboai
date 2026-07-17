@@ -229,7 +229,7 @@ class ToolWorkspaceBuilder
                     'required' => false,
                 ],
             ],
-            // 8️⃣ Video To Video — prompt + Strength + Guidance + resolution + aspect
+            // 8️⃣ Video To Video — Wan 2.7 edit: prompt-driven, keeps the shot.
             'video-to-video' => [
                 [
                     'type' => 'textarea',
@@ -239,26 +239,8 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
-                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1']),
-                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
-                [
-                    'type' => 'slider',
-                    'key' => 'strength',
-                    'label_key' => 'strength',
-                    'min' => 0,
-                    'max' => 1,
-                    'step' => 0.05,
-                    'default' => (float) ($defaults['strength'] ?? 0.5),
-                ],
-                [
-                    'type' => 'slider',
-                    'key' => 'guidance_scale',
-                    'label_key' => 'guidanceScale',
-                    'min' => 1,
-                    'max' => 10,
-                    'step' => 0.5,
-                    'default' => (float) ($defaults['guidance_scale'] ?? 5),
-                ],
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
             // 9️⃣ Denoise Video — single Strength slider
             'denoise-video' => [
@@ -312,7 +294,7 @@ class ToolWorkspaceBuilder
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
-            // AI Video Filters — filter preset + strength + Wan res/aspect
+            // AI Video Filters — Wan 2.7 edit: filter preset + res/aspect (prompt-driven)
             'ai-video-filters' => [
                 [
                     'type' => 'choice',
@@ -322,17 +304,8 @@ class ToolWorkspaceBuilder
                     'default' => 'cinematic',
                     'option_label_prefix' => 'filters',
                 ],
-                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1']),
-                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
-                [
-                    'type' => 'slider',
-                    'key' => 'strength',
-                    'label_key' => 'strength',
-                    'min' => 0,
-                    'max' => 1,
-                    'step' => 0.05,
-                    'default' => (float) ($defaults['strength'] ?? 0.6),
-                ],
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
             // Motion Control — camera + duration + PixVerse resolution
@@ -367,7 +340,7 @@ class ToolWorkspaceBuilder
                 ],
             ],
 
-            // AI Video Editor — edit prompt + strength + Wan res/aspect
+            // AI Video Editor — Wan 2.7 edit: edit prompt + res/aspect (prompt-driven)
             'ai-video-editor' => [
                 [
                     'type' => 'textarea',
@@ -377,17 +350,8 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
-                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1']),
-                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
-                [
-                    'type' => 'slider',
-                    'key' => 'strength',
-                    'label_key' => 'strength',
-                    'min' => 0,
-                    'max' => 1,
-                    'step' => 0.05,
-                    'default' => (float) ($defaults['strength'] ?? 0.7),
-                ],
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
             // AI Sound Effect Generator — sound description prompt

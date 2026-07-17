@@ -310,6 +310,11 @@ class FalToolInputBuilder
             throw new \InvalidArgumentException('An edit prompt is required.');
         }
 
+        // Premium primary: Wan 2.7 edit-video (instruction-based, keeps the shot).
+        if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
+            return $this->buildWan27Edit($defaults, $settings, $videoUrl, $prompt);
+        }
+
         $strength = $this->clamp01($settings['strength'] ?? null);
         // Wan 2.2 v2v guidance_scale is a 1–10 float.
         $guidance = isset($settings['guidance_scale']) && is_numeric($settings['guidance_scale'])
@@ -504,17 +509,7 @@ class FalToolInputBuilder
 
         // Wan 2.7 edit-video — instruction style transfer on the existing footage.
         if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
-            $input = array_merge($defaults, [
-                'video_url' => $videoUrl,
-                'prompt' => $prompt,
-                'audio_setting' => $defaults['audio_setting'] ?? 'origin',
-            ]);
-            $input = $this->applyClientGeometry($input, $settings);
-
-            return $this->onlyKeys($input, [
-                'video_url', 'prompt', 'resolution', 'audio_setting',
-                'enable_safety_checker', 'reference_image_url', 'aspect_ratio', 'duration',
-            ]);
+            return $this->buildWan27Edit($defaults, $settings, $videoUrl, $prompt);
         }
 
         // Wan 2.2 / Kling fallback — low strength so the source identity wins.
@@ -555,7 +550,7 @@ class FalToolInputBuilder
     private function buildFilters(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
         $filter = (string) ($settings['filter'] ?? 'cinematic');
-        $prompt = match ($filter) {
+        $look = match ($filter) {
             'vintage' => 'vintage retro film look, soft film grain, faded warm tones, nostalgic mood',
             'noir' => 'black and white film noir, high contrast, deep moody shadows',
             'vibrant' => 'vibrant highly saturated colors, punchy vivid contrast',
@@ -564,7 +559,14 @@ class FalToolInputBuilder
             default => 'cinematic color grading, filmic teal and orange, dramatic lighting',
         };
 
-        return $this->buildWanRestyle($endpointId, $defaults, $settings, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+        // Premium primary: Wan 2.7 edit-video applies the look without altering the footage.
+        if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
+            $prompt = 'Apply a '.$look.' color grade to the entire video. Keep the same scene, subjects, motion and framing — only change the color, lighting and mood.';
+
+            return $this->buildWan27Edit($defaults, $settings, $videoUrl, $prompt);
+        }
+
+        return $this->buildWanRestyle($endpointId, $defaults, $settings, $videoUrl, $look, $this->clamp01($settings['strength'] ?? null));
     }
 
     /**
@@ -581,7 +583,35 @@ class FalToolInputBuilder
             throw new \InvalidArgumentException('An edit prompt is required.');
         }
 
+        // Premium primary: Wan 2.7 edit-video (instruction-based, keeps the shot).
+        if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
+            return $this->buildWan27Edit($defaults, $settings, $videoUrl, $prompt);
+        }
+
         return $this->buildWanRestyle($endpointId, $defaults, $settings, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+    }
+
+    /**
+     * Shared Wan 2.7 edit-video payload — premium instruction-based restyle that
+     * preserves the source shot. Driven purely by prompt + geometry (no strength).
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildWan27Edit(array $defaults, array $settings, string $videoUrl, string $prompt): array
+    {
+        $input = array_merge($defaults, [
+            'video_url' => $videoUrl,
+            'prompt' => $prompt,
+            'audio_setting' => $defaults['audio_setting'] ?? 'origin',
+        ]);
+        $input = $this->applyClientGeometry($input, $settings);
+
+        return $this->onlyKeys($input, [
+            'video_url', 'prompt', 'resolution', 'audio_setting',
+            'enable_safety_checker', 'reference_image_url', 'aspect_ratio', 'duration',
+        ]);
     }
 
     /**
@@ -655,8 +685,16 @@ class FalToolInputBuilder
     private function applyClientGeometry(array $input, array $settings): array
     {
         $input = $this->applyClientResolution($input, $settings, 'resolution');
-        if (! empty($settings['aspect_ratio']) && is_string($settings['aspect_ratio'])) {
+        // "auto" is a UI convenience meaning "match the source aspect" — Wan has no
+        // such enum, so we simply omit the field to let the model keep the input ratio.
+        if (
+            ! empty($settings['aspect_ratio'])
+            && is_string($settings['aspect_ratio'])
+            && strtolower($settings['aspect_ratio']) !== 'auto'
+        ) {
             $input['aspect_ratio'] = $settings['aspect_ratio'];
+        } else {
+            unset($input['aspect_ratio']);
         }
 
         return $input;

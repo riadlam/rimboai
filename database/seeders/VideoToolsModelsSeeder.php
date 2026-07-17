@@ -194,18 +194,18 @@ class VideoToolsModelsSeeder extends Seeder
                 'sort' => 50,
                 'tool_slug' => 'lip-sync',
                 'tool_name' => 'Lip Sync AI',
-                'endpoint_id' => 'fal-ai/sync-lipsync/v2',
-                'name' => 'Sync Lipsync 2.0',
-                'description' => 'Sync Labs lipsync-2 — high-quality audio→mouth sync for talking-head clips.',
+                'endpoint_id' => 'fal-ai/sync-lipsync/v3',
+                'name' => 'Sync 3 (4K Lipsync)',
+                'description' => 'Sync Labs flagship sync-3 — native 4K lipsync with obstruction detection, extreme angles and full-shot consistency.',
                 'unit' => 'seconds',
-                // Fal: $3 / minute = $0.05 / s
-                'unit_price' => 0.05,
-                'ref_cost_usd' => 0.05 * $s,
+                // Fal: $8 / minute = $0.13333 / s
+                'unit_price' => 0.133333,
+                'ref_cost_usd' => 0.133333 * $s,
                 'max_duration' => 120,
                 'enums' => ['cut_off', 'loop', 'bounce', 'silence', 'remap'],
                 'is_primary' => true,
-                'defaults' => ['model' => 'lipsync-2', 'sync_mode' => 'cut_off'],
-                'tags' => ['lipsync', 'sync', 'primary'],
+                'defaults' => ['sync_mode' => 'cut_off'],
+                'tags' => ['lipsync', 'sync', 'sync3', 'primary'],
             ],
             [
                 'sort' => 60,
@@ -389,29 +389,28 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── Video To Video ──────────────────────────────────────────────
-            // Wan 2.2 v2v is primary: it natively exposes the Strength + Guidance
-            // controls the product spec requires (Strength 0→1, Guidance 1→10).
+            // Wan 2.7 edit-video is primary: premium instruction-based restyle that
+            // preserves the source shot (characters, poses, camera) instead of
+            // regenerating from the prompt — no destructive strength slider.
             [
                 'sort' => 150,
                 'tool_slug' => 'video-to-video',
                 'tool_name' => 'Video To Video',
-                'endpoint_id' => 'fal-ai/wan/v2.2-a14b/video-to-video',
-                'name' => 'Wan 2.2 Video to Video',
-                'description' => 'Prompt-driven video restyle with real strength & guidance controls.',
+                'endpoint_id' => 'fal-ai/wan/v2.7/edit-video',
+                'name' => 'Wan 2.7 Edit (Premium)',
+                'description' => 'Top-tier instruction-based video restyle that keeps the same characters, poses and camera while applying your prompt.',
                 'unit' => 'seconds',
-                // Fal: $0.08 / video second @ 720p (16fps normalized)
-                'unit_price' => 0.08,
-                'ref_cost_usd' => 0.08 * $s,
-                'max_duration' => 30,
-                'enums' => ['480p', '580p', '720p'],
+                // Fal: $0.10 / second
+                'unit_price' => 0.10,
+                'ref_cost_usd' => 0.10 * $s,
+                'max_duration' => 10,
+                'enums' => ['720p', '1080p'],
                 'is_primary' => true,
                 'defaults' => [
                     'resolution' => '720p',
-                    'acceleration' => 'regular',
-                    'strength' => 0.9,
-                    'guidance_scale' => 3.5,
+                    'audio_setting' => 'origin',
                 ],
-                'tags' => ['v2v', 'wan', 'primary'],
+                'tags' => ['v2v', 'wan27', 'edit', 'primary'],
             ],
             [
                 'sort' => 160,
@@ -515,19 +514,19 @@ class VideoToolsModelsSeeder extends Seeder
                 'sort' => 210,
                 'tool_slug' => 'animate-a-picture',
                 'tool_name' => 'Image to Animation AI',
-                'endpoint_id' => 'fal-ai/kling-video/v2.1/standard/image-to-video',
-                'name' => 'Kling 2.1 Image to Video',
-                'description' => 'Kling 2.1 Standard — brings a still image to life with natural, physics-aware motion.',
+                'endpoint_id' => 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video',
+                'name' => 'Kling 2.5 Turbo Pro',
+                'description' => 'Kling 2.5 Turbo Pro — top-tier image-to-video with unparalleled motion fluidity, cinematic visuals and precise prompt adherence.',
                 'unit' => 'seconds',
-                // Fal: $0.28 for 5s (+$0.056/s) => $0.056/s
-                'unit_price' => 0.056,
-                'ref_cost_usd' => 0.056 * $s,
+                // Fal: $0.21 for 5s (+$0.042/s) => $0.042/s
+                'unit_price' => 0.042,
+                'ref_cost_usd' => 0.042 * $s,
                 'ref_duration_seconds' => 5,
                 'max_duration' => 10,
                 'enums' => ['5', '10'],
                 'is_primary' => true,
                 'defaults' => ['duration' => 5, 'cfg_scale' => 0.5],
-                'tags' => ['animate', 'kling', 'i2v', 'primary'],
+                'tags' => ['animate', 'kling', 'turbo', 'i2v', 'primary'],
             ],
             [
                 'sort' => 220,
@@ -618,22 +617,24 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── AI Video Filters ────────────────────────────────────────────
+            // Wan 2.7 edit-video primary: applies cinematic looks while keeping the
+            // original footage intact (no identity/motion drift).
             [
                 'sort' => 260,
                 'tool_slug' => 'ai-video-filters',
                 'tool_name' => 'AI Video Filters',
-                'endpoint_id' => 'fal-ai/wan/v2.2-a14b/video-to-video',
-                'name' => 'Wan 2.2 Filter Restyle',
-                'description' => 'Applies cinematic looks and creative filters across the whole clip.',
+                'endpoint_id' => 'fal-ai/wan/v2.7/edit-video',
+                'name' => 'Wan 2.7 Filter (Premium)',
+                'description' => 'Applies cinematic looks and creative color grades across the whole clip while preserving the original footage.',
                 'unit' => 'seconds',
-                'unit_price' => 0.08,
-                'ref_cost_usd' => 0.08 * $s,
+                'unit_price' => 0.10,
+                'ref_cost_usd' => 0.10 * $s,
                 'ref_duration_seconds' => 5,
-                'max_duration' => 30,
-                'enums' => ['480p', '580p', '720p'],
+                'max_duration' => 10,
+                'enums' => ['720p', '1080p'],
                 'is_primary' => true,
-                'defaults' => ['resolution' => '720p', 'acceleration' => 'regular', 'strength' => 0.6],
-                'tags' => ['filters', 'v2v', 'wan', 'primary'],
+                'defaults' => ['resolution' => '720p', 'audio_setting' => 'origin'],
+                'tags' => ['filters', 'wan27', 'edit', 'primary'],
             ],
             [
                 'sort' => 270,
@@ -690,22 +691,24 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── AI Video Editor ─────────────────────────────────────────────
+            // Wan 2.7 edit-video primary: instruction-based editing that keeps the
+            // shot and refines it, rather than regenerating from scratch.
             [
                 'sort' => 300,
                 'tool_slug' => 'ai-video-editor',
                 'tool_name' => 'AI Video Editor',
-                'endpoint_id' => 'fal-ai/wan/v2.2-a14b/video-to-video',
-                'name' => 'Wan 2.2 Prompt Editor',
-                'description' => 'Prompt-driven edits — restyle and reshape footage with natural language.',
+                'endpoint_id' => 'fal-ai/wan/v2.7/edit-video',
+                'name' => 'Wan 2.7 Editor (Premium)',
+                'description' => 'Prompt-driven edits — restyle and reshape footage with natural language while keeping the original scene structure.',
                 'unit' => 'seconds',
-                'unit_price' => 0.08,
-                'ref_cost_usd' => 0.08 * $s,
+                'unit_price' => 0.10,
+                'ref_cost_usd' => 0.10 * $s,
                 'ref_duration_seconds' => 5,
-                'max_duration' => 30,
-                'enums' => ['480p', '580p', '720p'],
+                'max_duration' => 10,
+                'enums' => ['720p', '1080p'],
                 'is_primary' => true,
-                'defaults' => ['resolution' => '720p', 'acceleration' => 'regular', 'strength' => 0.7],
-                'tags' => ['editor', 'v2v', 'wan', 'primary'],
+                'defaults' => ['resolution' => '720p', 'audio_setting' => 'origin'],
+                'tags' => ['editor', 'wan27', 'edit', 'primary'],
             ],
             [
                 'sort' => 310,
