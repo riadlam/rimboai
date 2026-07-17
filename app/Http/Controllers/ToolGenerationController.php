@@ -117,6 +117,7 @@ class ToolGenerationController extends Controller
                 // Shared / prompt-driven
                 'settings.prompt' => ['nullable', 'string', 'max:2000'],
                 'settings.resolution' => ['nullable', 'string', 'max:16'],
+                'settings.aspect_ratio' => ['nullable', 'string', 'max:16'],
                 // Legacy keys (kept for backward compatibility)
                 'settings.refine_edges' => ['nullable', 'boolean'],
                 'settings.subject_is_person' => ['nullable', 'boolean'],

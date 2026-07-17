@@ -135,8 +135,21 @@ class ToolWorkspaceBuilder
                     'default' => $this->scaleDefault($defaults),
                 ],
             ],
-            // 2️⃣ Video Enhancer / Anime Video Enhancer — single Strength slider (0 → 1)
-            'video-enhancer', 'anime-video-enhancer' => [
+            // 2️⃣ Video Enhancer — Strength + output resolution (SeedVR target_resolution)
+            'video-enhancer' => [
+                [
+                    'type' => 'slider',
+                    'key' => 'strength',
+                    'label_key' => 'strength',
+                    'min' => 0,
+                    'max' => 1,
+                    'step' => 0.05,
+                    'default' => (float) ($defaults['noise_scale'] ?? $defaults['recover_detail'] ?? 0.5),
+                ],
+                $this->resolutionControl($enums, $defaults, ['720p', '1080p', '1440p', '2160p']),
+            ],
+            // Anime enhancer primary is Topaz (scale) — no resolution UI
+            'anime-video-enhancer' => [
                 [
                     'type' => 'slider',
                     'key' => 'strength',
@@ -216,7 +229,7 @@ class ToolWorkspaceBuilder
                     'required' => false,
                 ],
             ],
-            // 8️⃣ Video To Video — prompt (required) + Strength + Guidance
+            // 8️⃣ Video To Video — prompt + Strength + Guidance + resolution + aspect
             'video-to-video' => [
                 [
                     'type' => 'textarea',
@@ -226,6 +239,8 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1']),
+                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
                 [
                     'type' => 'slider',
                     'key' => 'strength',
@@ -280,16 +295,10 @@ class ToolWorkspaceBuilder
 
             // AI Dance Generator — output resolution only
             'ai-dance-generator' => [
-                [
-                    'type' => 'choice',
-                    'key' => 'resolution',
-                    'label_key' => 'resolution',
-                    'options' => $this->stringOptions($enums) ?: ['480p', '580p', '720p'],
-                    'default' => (string) ($defaults['resolution'] ?? '720p'),
-                ],
+                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
             ],
 
-            // Video to Anime — optional style detail only (identity is locked server-side)
+            // Video to Anime — style detail + Wan edit resolution/aspect
             'video-to-anime-ai' => [
                 [
                     'type' => 'textarea',
@@ -299,9 +308,11 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => false,
                 ],
+                $this->aspectRatioControl($defaults, ['16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
-            // AI Video Filters — filter preset + strength
+            // AI Video Filters — filter preset + strength + Wan res/aspect
             'ai-video-filters' => [
                 [
                     'type' => 'choice',
@@ -311,6 +322,8 @@ class ToolWorkspaceBuilder
                     'default' => 'cinematic',
                     'option_label_prefix' => 'filters',
                 ],
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1']),
+                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
                 [
                     'type' => 'slider',
                     'key' => 'strength',
@@ -322,7 +335,7 @@ class ToolWorkspaceBuilder
                 ],
             ],
 
-            // Motion Control — camera movement + duration
+            // Motion Control — camera + duration + PixVerse resolution
             'motion-control' => [
                 [
                     'type' => 'choice',
@@ -343,6 +356,7 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => false,
                 ],
+                $this->resolutionControl(null, $defaults, ['360p', '540p', '720p', '1080p']),
                 [
                     'type' => 'choice',
                     'key' => 'duration',
@@ -353,7 +367,7 @@ class ToolWorkspaceBuilder
                 ],
             ],
 
-            // AI Video Editor — edit prompt (required) + strength
+            // AI Video Editor — edit prompt + strength + Wan res/aspect
             'ai-video-editor' => [
                 [
                     'type' => 'textarea',
@@ -363,6 +377,8 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1']),
+                $this->resolutionControl($enums, $defaults, ['480p', '580p', '720p']),
                 [
                     'type' => 'slider',
                     'key' => 'strength',
@@ -530,6 +546,82 @@ class ToolWorkspaceBuilder
         }
 
         return null;
+    }
+
+    /**
+     * Lab-style resolution choice (filters duration enums like "5" out of the list).
+     *
+     * @param  list<mixed>|null  $enums
+     * @param  array<string, mixed>  $defaults
+     * @param  list<string>  $fallback
+     * @return array<string, mixed>
+     */
+    private function resolutionControl(?array $enums, array $defaults, array $fallback): array
+    {
+        $options = $this->resolutionOptions($enums);
+        if ($options === []) {
+            $options = $fallback;
+        }
+
+        $default = (string) ($defaults['resolution'] ?? $defaults['target_resolution'] ?? ($options[0] ?? '720p'));
+        if (! in_array($default, $options, true)) {
+            $default = $options[0] ?? '720p';
+        }
+
+        return [
+            'type' => 'choice',
+            'key' => 'resolution',
+            'label_key' => 'resolution',
+            'options' => $options,
+            'default' => $default,
+            'ui' => 'resolution',
+        ];
+    }
+
+    /**
+     * Lab-style aspect ratio choice with mini preview boxes on the client.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  list<string>  $options
+     * @return array<string, mixed>
+     */
+    private function aspectRatioControl(array $defaults, array $options): array
+    {
+        $default = (string) ($defaults['aspect_ratio'] ?? ($options[0] ?? '16:9'));
+        if (! in_array($default, $options, true)) {
+            $default = $options[0] ?? '16:9';
+        }
+
+        return [
+            'type' => 'choice',
+            'key' => 'aspect_ratio',
+            'label_key' => 'aspectRatio',
+            'options' => $options,
+            'default' => $default,
+            'option_label_prefix' => 'aspects',
+            'ui' => 'aspect',
+        ];
+    }
+
+    /**
+     * @param  list<mixed>|null  $enums
+     * @return list<string>
+     */
+    private function resolutionOptions(?array $enums): array
+    {
+        $out = [];
+        foreach ($enums ?? [] as $value) {
+            $s = strtolower(trim((string) $value));
+            if ($s === '') {
+                continue;
+            }
+            // Accept 480p / 720p / 1080p / 2k / 4k — skip pure duration numbers and modes.
+            if (preg_match('/^(\d{3,4}p|[24]k)$/', $s)) {
+                $out[] = $s;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**

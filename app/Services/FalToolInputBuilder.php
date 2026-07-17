@@ -115,6 +115,7 @@ class FalToolInputBuilder
             if ($strength !== null) {
                 $input['noise_scale'] = $strength;
             }
+            $input = $this->applyClientResolution($input, $settings, 'target_resolution');
 
             return $this->onlyKeys($input, [
                 'video_url', 'upscale_mode', 'upscale_factor', 'target_resolution',
@@ -340,6 +341,7 @@ class FalToolInputBuilder
         if ($guidance !== null) {
             $input['guidance_scale'] = $guidance;
         }
+        $input = $this->applyClientGeometry($input, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio',
@@ -407,6 +409,7 @@ class FalToolInputBuilder
                 'prompt' => $prompt,
                 'duration' => (int) $duration,
             ]);
+            $input = $this->applyClientResolution($input, $settings, 'resolution');
 
             return $this->onlyKeys($input, [
                 'image_url', 'prompt', 'duration', 'resolution', 'negative_prompt', 'enable_prompt_expansion',
@@ -447,6 +450,7 @@ class FalToolInputBuilder
         if ($prompt !== '') {
             $input['prompt'] = $prompt;
         }
+        $input = $this->applyClientResolution($input, $settings, 'resolution');
 
         return $this->onlyKeys($input, [
             'image_url', 'prompt', 'resolution', 'duration', 'camera_movement', 'style', 'seed',
@@ -505,6 +509,7 @@ class FalToolInputBuilder
                 'prompt' => $prompt,
                 'audio_setting' => $defaults['audio_setting'] ?? 'origin',
             ]);
+            $input = $this->applyClientGeometry($input, $settings);
 
             return $this->onlyKeys($input, [
                 'video_url', 'prompt', 'resolution', 'audio_setting',
@@ -532,6 +537,7 @@ class FalToolInputBuilder
             'aspect_ratio' => $defaults['aspect_ratio'] ?? 'auto',
             'enable_prompt_expansion' => false,
         ]);
+        $input = $this->applyClientGeometry($input, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration',
@@ -558,7 +564,7 @@ class FalToolInputBuilder
             default => 'cinematic color grading, filmic teal and orange, dramatic lighting',
         };
 
-        return $this->buildWanRestyle($endpointId, $defaults, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+        return $this->buildWanRestyle($endpointId, $defaults, $settings, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
     }
 
     /**
@@ -575,17 +581,24 @@ class FalToolInputBuilder
             throw new \InvalidArgumentException('An edit prompt is required.');
         }
 
-        return $this->buildWanRestyle($endpointId, $defaults, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
+        return $this->buildWanRestyle($endpointId, $defaults, $settings, $videoUrl, $prompt, $this->clamp01($settings['strength'] ?? null));
     }
 
     /**
      * Shared Wan 2.2 v2v / Kling O3 restyle payload.
      *
      * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
-    private function buildWanRestyle(string $endpointId, array $defaults, string $videoUrl, string $prompt, ?float $strength): array
-    {
+    private function buildWanRestyle(
+        string $endpointId,
+        array $defaults,
+        array $settings,
+        string $videoUrl,
+        string $prompt,
+        ?float $strength,
+    ): array {
         if (str_contains($endpointId, 'kling-video')) {
             $input = ['video_url' => $videoUrl, 'prompt' => $prompt];
             if ($strength !== null) {
@@ -599,6 +612,7 @@ class FalToolInputBuilder
         if ($strength !== null) {
             $input['strength'] = $strength;
         }
+        $input = $this->applyClientGeometry($input, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio', 'enable_safety_checker', 'strength',
@@ -629,6 +643,37 @@ class FalToolInputBuilder
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'duration', 'num_steps', 'cfg_strength', 'negative_prompt', 'seed',
         ]);
+    }
+
+    /**
+     * Override defaults with client-selected resolution / aspect when provided.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function applyClientGeometry(array $input, array $settings): array
+    {
+        $input = $this->applyClientResolution($input, $settings, 'resolution');
+        if (! empty($settings['aspect_ratio']) && is_string($settings['aspect_ratio'])) {
+            $input['aspect_ratio'] = $settings['aspect_ratio'];
+        }
+
+        return $input;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function applyClientResolution(array $input, array $settings, string $key): array
+    {
+        if (! empty($settings['resolution']) && is_string($settings['resolution'])) {
+            $input[$key] = strtolower($settings['resolution']);
+        }
+
+        return $input;
     }
 
     private function clamp01(mixed $value): ?float

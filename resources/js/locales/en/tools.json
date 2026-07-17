@@ -42,6 +42,15 @@
     "changeFile": "Click to replace file",
     "scale": "Scale",
     "resolution": "Resolution",
+    "aspectRatio": "Aspect ratio",
+    "aspects": {
+      "auto": "Auto",
+      "16:9": "16:9",
+      "9:16": "9:16",
+      "1:1": "1:1",
+      "4:3": "4:3",
+      "3:4": "3:4"
+    },
     "strength": "Strength",
     "guidanceScale": "Guidance scale",
     "syncMode": "Sync mode",
@@ -111,6 +120,7 @@
     },
     "settings": "Advanced settings",
     "credits": "credits",
+    "estimate": "est.",
     "create": "Create",
     "processing": "Processing…",
     "uploading": "Uploading media…",

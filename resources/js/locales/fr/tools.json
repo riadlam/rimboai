@@ -42,6 +42,15 @@
     "changeFile": "Cliquez pour remplacer le fichier",
     "scale": "Échelle",
     "resolution": "Résolution",
+    "aspectRatio": "Format",
+    "aspects": {
+      "auto": "Auto",
+      "16:9": "16:9",
+      "9:16": "9:16",
+      "1:1": "1:1",
+      "4:3": "4:3",
+      "3:4": "3:4"
+    },
     "strength": "Intensité",
     "guidanceScale": "Échelle de guidage",
     "syncMode": "Mode de sync",
@@ -111,6 +120,7 @@
     },
     "settings": "Paramètres avancés",
     "credits": "crédits",
+    "estimate": "est.",
     "create": "Créer",
     "processing": "Traitement…",
     "uploading": "Téléversement…",

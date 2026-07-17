@@ -55,6 +55,28 @@ const GROUP_BY_SLUG: Record<string, 'enhance' | 'transform' | 'edit' | 'create'>
     'ai-sound-effect-generator': 'create',
 };
 
+const ASPECT_META: Record<string, { w: number; h: number }> = {
+    auto: { w: 14, h: 14 },
+    '16:9': { w: 18, h: 10 },
+    '9:16': { w: 10, h: 18 },
+    '1:1': { w: 14, h: 14 },
+    '4:3': { w: 16, h: 12 },
+    '3:4': { w: 12, h: 16 },
+};
+
+const RESOLUTION_SUB: Record<string, string> = {
+    '360p': 'Low',
+    '480p': 'SD',
+    '540p': 'SD+',
+    '580p': 'SD+',
+    '720p': 'Standard',
+    '1080p': 'HD',
+    '1440p': 'QHD',
+    '2160p': '4K',
+    '2k': 'QHD',
+    '4k': 'Cinema',
+};
+
 export default function ToolCreatePanel({
     tool,
     workspace,
@@ -163,7 +185,17 @@ export default function ToolCreatePanel({
     const requiresVideoDuration = workspace.uploads.some((u) => u.key === 'video' && u.required);
     const durationEnums = workspace.billing?.duration_enums ?? null;
 
-    /** Raw source length before snapping — null until upload/selection is ready. */
+    /** Placeholder duration used for the instant estimate (before real media length is known). */
+    const estimatedSourceDuration = useMemo(() => {
+        const ref = workspace.billing?.ref_duration_seconds ?? 5;
+        if (durationEnums && durationEnums.length > 0) {
+            if (durationEnums.includes(ref)) return ref;
+            return durationEnums[0];
+        }
+        return ref;
+    }, [workspace.billing?.ref_duration_seconds, durationEnums]);
+
+    /** Measured / selected length — null until we know the real billable source. */
     const sourceDuration = useMemo(() => {
         if (hasDurationControl) {
             return selectedDuration && selectedDuration > 0 ? selectedDuration : null;
@@ -171,29 +203,34 @@ export default function ToolCreatePanel({
         if (requiresVideoDuration) {
             return videoDuration && videoDuration > 0 ? videoDuration : null;
         }
-        // Image-only tools without a duration control: use model ref once image is ready.
-        const imageReady = workspace.uploads
+        // Image-only tools without a duration control: ref once required assets are ready.
+        const assetsReady = workspace.uploads
             .filter((u) => u.required)
             .every((u) => Boolean(slots[u.key]?.file));
-        if (!imageReady) return null;
-        return workspace.billing?.ref_duration_seconds ?? 5;
+        if (!assetsReady) return null;
+        return estimatedSourceDuration;
     }, [
         hasDurationControl,
         selectedDuration,
         requiresVideoDuration,
         videoDuration,
         workspace.uploads,
-        workspace.billing?.ref_duration_seconds,
         slots,
+        estimatedSourceDuration,
     ]);
 
+    const isDurationEstimate = sourceDuration == null;
+
     const billDuration = useMemo(() => {
-        if (sourceDuration == null) return null;
-        return snapBillableDuration(sourceDuration, durationEnums, workspace.billing?.max_duration);
-    }, [sourceDuration, durationEnums, workspace.billing?.max_duration]);
+        return snapBillableDuration(
+            sourceDuration ?? estimatedSourceDuration,
+            durationEnums,
+            workspace.billing?.max_duration,
+        );
+    }, [sourceDuration, estimatedSourceDuration, durationEnums, workspace.billing?.max_duration]);
 
     const creditEstimate = useMemo(() => {
-        if (billDuration == null) {
+        if (!(billDuration > 0)) {
             return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: workspace.billing?.unit || 'seconds' };
         }
         return estimateToolCredits(
@@ -221,7 +258,9 @@ export default function ToolCreatePanel({
         !promptRequired ||
         (typeof values.prompt === 'string' && values.prompt.trim().length > 0);
 
-    const billingReady = requiredReady && billDuration != null && creditEstimate.credits > 0;
+    // Create only when uploads are ready AND we have a real (non-estimate) duration.
+    const billingReady =
+        requiredReady && !isDurationEstimate && billDuration > 0 && creditEstimate.credits > 0;
 
     const canCreate =
         workspace.available &&
@@ -235,7 +274,7 @@ export default function ToolCreatePanel({
             return;
         }
         if (!workspace.available || !workspace.model_id) return;
-        if (billDuration == null || billDuration <= 0) return;
+        if (isDurationEstimate || !(billDuration > 0)) return;
 
         setError(null);
         setStatusMessage(t('detail.uploading'));
@@ -295,6 +334,7 @@ export default function ToolCreatePanel({
         }
     }, [
         billDuration,
+        isDurationEstimate,
         isGuest,
         onCreationStarted,
         pollStatus,
@@ -466,8 +506,15 @@ export default function ToolCreatePanel({
                     <div className="mb-2.5 flex items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                                {billDuration != null ? `~${Math.round(billDuration)}s` : '—'}
+                                {billDuration > 0
+                                    ? `${isDurationEstimate ? '~' : ''}${Math.round(billDuration)}s`
+                                    : '—'}
                             </span>
+                            {isDurationEstimate && (
+                                <span className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] uppercase tracking-wide text-white/35">
+                                    {t('detail.estimate')}
+                                </span>
+                            )}
                             {typeof values.scale === 'string' && (
                                 <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
                                     {values.scale}
@@ -483,7 +530,11 @@ export default function ToolCreatePanel({
                             <svg className="h-3 w-3 text-[#FF8A65]" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z" />
                             </svg>
-                            <span>{billingReady ? creditEstimate.credits : '—'}</span>
+                            <span>
+                                {creditEstimate.credits > 0
+                                    ? `${isDurationEstimate ? '~' : ''}${creditEstimate.credits}`
+                                    : '—'}
+                            </span>
                             <span className="text-white/35">{t('detail.credits')}</span>
                         </div>
                     </div>
@@ -497,7 +548,7 @@ export default function ToolCreatePanel({
                     {isGuest && (
                         <p className="mb-2 text-[11px] text-white/40">{t('detail.signInToCreate')}</p>
                     )}
-                    {tokenBalance > 0 && creditEstimate.credits > tokenBalance && !isGuest && (
+                    {tokenBalance > 0 && creditEstimate.credits > tokenBalance && !isGuest && !isDurationEstimate && (
                         <p className="mb-2 text-[11px] text-amber-200/80">{t('detail.insufficientCredits')}</p>
                     )}
 
@@ -527,7 +578,11 @@ export default function ToolCreatePanel({
                                 <span>
                                     {isGuest
                                         ? t('detail.signInToCreate')
-                                        : `${t('detail.create')} · ${creditEstimate.credits} ${t('detail.credits')}`}
+                                        : `${t('detail.create')} · ${
+                                              creditEstimate.credits > 0
+                                                  ? `${isDurationEstimate ? '~' : ''}${creditEstimate.credits}`
+                                                  : '—'
+                                          } ${t('detail.credits')}`}
                                 </span>
                             </>
                         )}
@@ -720,6 +775,71 @@ function ControlField({
 
     if (control.type === 'choice') {
         const options = control.options ?? [];
+
+        if (control.ui === 'aspect') {
+            return (
+                <section className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
+                    <div className={`grid gap-1.5 ${options.length >= 5 ? 'grid-cols-5' : options.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                        {options.map((option) => {
+                            const active = String(value) === String(option);
+                            const meta = ASPECT_META[option] ?? { w: 14, h: 14 };
+                            const text = control.option_label_prefix
+                                ? t(`detail.${control.option_label_prefix}.${option}`, { defaultValue: option })
+                                : option;
+                            return (
+                                <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => onChange(option)}
+                                    className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 transition ${
+                                        active
+                                            ? 'border-orange-400/50 bg-orange-500/15 text-orange-100'
+                                            : 'border-white/[0.07] bg-white/[0.03] text-white/50 hover:border-white/15 hover:text-white/80'
+                                    }`}
+                                >
+                                    <span
+                                        className={`rounded-[3px] border ${active ? 'border-orange-300/70' : 'border-current'}`}
+                                        style={{ width: meta.w, height: meta.h }}
+                                    />
+                                    <span className="text-[10px] font-semibold">{text}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+            );
+        }
+
+        if (control.ui === 'resolution') {
+            return (
+                <section className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
+                    <div className={`grid gap-1.5 ${options.length <= 3 ? 'grid-cols-3' : options.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                        {options.map((option) => {
+                            const active = String(value) === String(option);
+                            const sub = RESOLUTION_SUB[option.toLowerCase()] ?? '';
+                            return (
+                                <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => onChange(option)}
+                                    className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 transition ${
+                                        active
+                                            ? 'border-orange-400/50 bg-orange-500/15 text-orange-100'
+                                            : 'border-white/[0.07] bg-white/[0.03] text-white/50 hover:border-white/15 hover:text-white/80'
+                                    }`}
+                                >
+                                    <span className="text-[12px] font-semibold tracking-tight">{option}</span>
+                                    {sub ? <span className="text-[9px] font-medium text-white/35">{sub}</span> : null}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+            );
+        }
+
         return (
             <section className="space-y-2" ref={helpRef}>
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>

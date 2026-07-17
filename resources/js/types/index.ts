@@ -129,6 +129,8 @@ export type ToolControlSpec = {
     max?: number;
     step?: number;
     required?: boolean;
+    /** Lab-style presentation for aspect / resolution choice grids */
+    ui?: 'aspect' | 'resolution';
 };
 
 export type ToolBilling = {
