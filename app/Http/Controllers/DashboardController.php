@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Innovation;
 use App\Models\InnovationCategory;
 use App\Services\FalImageInputBuilder;
+use App\Services\Tools\ToolWorkspaceBuilder;
 use App\Services\ToolsService;
 use App\Services\TrendsFeedService;
 use App\Services\VideoModelCapabilities;
@@ -129,14 +130,23 @@ class DashboardController extends Controller
         return Inertia::render('Pricing');
     }
 
-    public function showTool(Request $request): Response
+    public function showTool(Request $request, ToolWorkspaceBuilder $workspaceBuilder): Response
     {
         $routeName = $request->route()->getName();
         $tools = collect(ToolsService::all())->keyBy('route');
         $tool = $tools[$routeName] ?? abort(404);
+        $toolSlug = str_replace('tools.', '', (string) $routeName);
+
+        $user = $request->user();
 
         return Inertia::render('ToolDetail', [
             'tool' => $tool,
+            'workspace' => $workspaceBuilder->build($toolSlug),
+            'creditsConfig' => [
+                'markup' => (float) config('credits.markup', 1.25),
+                'usd_per_credit' => (float) config('credits.usd_per_credit', 0.01),
+            ],
+            'tokenBalance' => $user ? (int) ($user->tokens ?? 0) : 0,
         ]);
     }
 

@@ -460,6 +460,16 @@ class FalWebhookProcessor
             ];
         }
 
+        // VEED-style: video is a list of File objects
+        if (is_array($video) && isset($video[0]) && is_array($video[0]) && ! empty($video[0]['url']) && is_string($video[0]['url'])) {
+            return [
+                'url' => $video[0]['url'],
+                'content_type' => $video[0]['content_type'] ?? 'video/mp4',
+                'file_name' => $video[0]['file_name'] ?? null,
+                'file_size' => $video[0]['file_size'] ?? null,
+            ];
+        }
+
         if (is_string($video) && $video !== '') {
             return ['url' => $video, 'content_type' => 'video/mp4'];
         }

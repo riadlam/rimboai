@@ -108,6 +108,46 @@ export type Tool = {
     badge?: string;
 };
 
+export type ToolUploadSpec = {
+    key: string;
+    accept: string;
+    required: boolean;
+    label_key: string;
+};
+
+export type ToolControlSpec = {
+    type: 'choice' | 'toggle' | 'slider' | 'textarea';
+    key: string;
+    label_key?: string;
+    desc_key?: string;
+    placeholder_key?: string;
+    options?: string[];
+    default?: string | number | boolean;
+    option_label_prefix?: string;
+    suffix?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    required?: boolean;
+};
+
+export type ToolBilling = {
+    unit: string;
+    unit_price: number;
+    max_duration?: number | null;
+    ref_duration_seconds?: number | null;
+};
+
+export type ToolWorkspace = {
+    available: boolean;
+    tool_slug: string;
+    model_id: number | null;
+    billing: ToolBilling | null;
+    uploads: ToolUploadSpec[];
+    controls: ToolControlSpec[];
+    notices: string[];
+};
+
 export type TokenPackage = {
     slug: string;
     name: string;

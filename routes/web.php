@@ -12,6 +12,7 @@ use App\Http\Controllers\LabMediaUploadController;
 use App\Http\Controllers\VideoGenerationController;
 use App\Http\Controllers\MusicGenerationController;
 use App\Http\Controllers\TrendsController;
+use App\Http\Controllers\ToolGenerationController;
 use App\Http\Controllers\VoiceGenerationController;
 use App\Http\Controllers\FalWebhookController;
 
@@ -130,6 +131,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/lab/music/creations/{creation}/status', [MusicGenerationController::class, 'status'])
         ->middleware('throttle:120,1')
         ->name('lab.music.status');
+
+    // Specialized video tools (Fal submit via video_tools_models.model_id)
+    Route::post('/tools/generate', [ToolGenerationController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('tools.generate');
+    Route::get('/tools/creations/{creation}/status', [ToolGenerationController::class, 'status'])
+        ->middleware('throttle:300,1')
+        ->name('tools.status');
 
 });
 
