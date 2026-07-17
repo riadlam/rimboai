@@ -271,11 +271,10 @@ export default function VideoLabCreateForm({
         framesMode ? 'first_last' : 'default',
     );
 
-    const selectedCaps = useMemo(
-        () => getMediaCaps(selectedModelRecord),
-        [selectedModelRecord],
+    const catalogHasFramesModels = useMemo(
+        () => allModels.some((m) => getMediaCaps(m).supports_last_frame),
+        [allModels],
     );
-    const supportsFramesMode = selectedCaps.supports_last_frame;
 
     const durationOptions = useMemo(
         () => {
@@ -443,35 +442,6 @@ export default function VideoLabCreateForm({
         setMedia([]);
     };
 
-    const prevSupportsFrames = useRef<boolean | null>(null);
-
-    // Auto-enable frames UI when switching onto a model that supports first+last.
-    // If the user turns it off, it stays off until they toggle again or leave & re-enter an FLF model.
-    useEffect(() => {
-        const wasSupported = prevSupportsFrames.current;
-        prevSupportsFrames.current = supportsFramesMode;
-
-        if (!supportsFramesMode) {
-            if (framesMode) {
-                setFramesMode(false);
-                setFirstFrame((prev) => {
-                    if (prev?.url) URL.revokeObjectURL(prev.url);
-                    return null;
-                });
-                setLastFrame((prev) => {
-                    if (prev?.url) URL.revokeObjectURL(prev.url);
-                    return null;
-                });
-            }
-            return;
-        }
-
-        if (wasSupported !== true && supportsFramesMode) {
-            promoteMediaToFrames(mediaRef.current);
-            setFramesMode(true);
-        }
-    }, [supportsFramesMode, framesMode]);
-
     const setFrameFromFile = (slot: 'first' | 'last', file: File | null) => {
         if (!file) return;
         if (detectMediaKind(file) !== 'image') {
@@ -514,9 +484,40 @@ export default function VideoLabCreateForm({
     };
 
     const enableFramesMode = () => {
-        promoteMediaToFrames(mediaRef.current);
+        const before = mediaRef.current;
+        const imageCount = before.filter((m) => m.kind === 'image').length;
+        promoteMediaToFrames(before);
         setFramesMode(true);
         userModelLocked.current = false;
+
+        if (getMediaCaps(selectedModelRecord).supports_last_frame) {
+            return;
+        }
+
+        const flfModels = allModels.filter((m) => getMediaCaps(m).supports_last_frame);
+        if (flfModels.length === 0) {
+            setMediaNotice(t('video.framesUnsupported'));
+            return;
+        }
+
+        const pickCounts: MediaCounts = {
+            images: Math.min(2, imageCount),
+            videos: 0,
+            audios: 0,
+        };
+
+        const best =
+            pickBestVideoModel(flfModels, pickCounts, prompt) ??
+            ({ model: flfModels[0], score: 0 } as const);
+
+        setSelectedBrand(best.model.brandName);
+        setSelectedModel(best.model.name);
+        setSwitchNotice(
+            t('video.framesSwitchedModel', {
+                model: formatModelName(best.model.name),
+                defaultValue: `Switched to ${formatModelName(best.model.name)} for first & last frames`,
+            }),
+        );
     };
 
     const disableFramesMode = () => {
@@ -810,7 +811,7 @@ export default function VideoLabCreateForm({
 
                     {/* Upload media / First–last frames */}
                     <div className="relative">
-                        {supportsFramesMode && (
+                        {catalogHasFramesModels && (
                             <div className="mb-2 flex items-center justify-end">
                                 <button
                                     type="button"
@@ -836,7 +837,7 @@ export default function VideoLabCreateForm({
                         )}
 
                         <AnimatePresence mode="wait" initial={false}>
-                            {framesMode && supportsFramesMode ? (
+                            {framesMode ? (
                                 <motion.div
                                     key="frames"
                                     initial={{ opacity: 0, y: 8, height: 0 }}

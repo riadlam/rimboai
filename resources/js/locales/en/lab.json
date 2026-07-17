@@ -103,7 +103,8 @@
     "framesHint": "Animate from start to end",
     "needFirstFrame": "Add a first-frame image.",
     "needLastFrame": "Add a last-frame image.",
-    "framesUnsupported": "This model doesn’t support first & last frame. Pick another model or turn the toggle off."
+    "framesUnsupported": "This model doesn’t support first & last frame. Pick another model or turn the toggle off.",
+    "framesSwitchedModel": "Switched to {{model}} for first & last frames"
   },
   "voice": {
     "title": "Voiceover",
