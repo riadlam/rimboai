@@ -259,7 +259,9 @@ export default function VoiceLabCreateForm({
         [pickerModels, allModels, selectedModel],
     );
 
-    const isChatterboxClone = isChatterboxCloneModel(selectedModelRecord);
+    const isChatterboxClone =
+        isChatterboxCloneModel(selectedModelRecord) ||
+        (selectedModelRecord?.name || '').toLowerCase().includes('chatterbox');
     const effectiveEndpointId = useMemo(() => {
         if (!isChatterboxClone) return selectedModelRecord?.endpoint_id || '';
         return chatterboxEndpointForLanguage(chatterboxLanguage);
@@ -551,6 +553,53 @@ export default function VoiceLabCreateForm({
 
             <div className="relative overflow-x-hidden p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:scrollbar-thin">
                 <div className="space-y-4">
+                    {isChatterboxClone && (
+                        <div className="space-y-2 rounded-2xl border border-orange-400/25 bg-gradient-to-br from-[#FF5733]/10 via-black to-black p-3.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <label htmlFor="chatterbox-language" className="text-sm font-semibold text-white">
+                                    {t('voice.outputLanguage')} <span className="text-[#FF5733]">*</span>
+                                </label>
+                                <span className="rounded-md border border-orange-400/25 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-200">
+                                    Chatterbox
+                                </span>
+                            </div>
+                            <div className="relative">
+                                <select
+                                    id="chatterbox-language"
+                                    value={chatterboxLanguage}
+                                    onChange={(e) => setChatterboxLanguage(e.target.value as ChatterboxLanguageId)}
+                                    className="h-12 w-full cursor-pointer appearance-none rounded-xl border border-white/15 bg-black pe-10 ps-3.5 text-sm font-semibold text-white outline-none transition hover:border-orange-400/40 focus:border-orange-400/50 focus:ring-2 focus:ring-orange-500/20"
+                                >
+                                    {CHATTERBOX_LANGUAGES.map((lang) => (
+                                        <option key={lang.id} value={lang.id} className="bg-zinc-950 text-white">
+                                            {t(lang.labelKey)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <svg
+                                    className="pointer-events-none absolute end-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-orange-200/80"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth="2.2"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-white/50">
+                                {chatterboxLanguage === 'english'
+                                    ? t('voice.chatterboxEnglishHint', { max: maxChars })
+                                    : t('voice.chatterboxMultiHint', {
+                                          max: maxChars,
+                                          lang: t(
+                                              CHATTERBOX_LANGUAGES.find((l) => l.id === chatterboxLanguage)?.labelKey ||
+                                                  'voice.langArabic',
+                                          ),
+                                      })}
+                            </p>
+                        </div>
+                    )}
+
                     {needsSampleAudio && (
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-2">
@@ -675,42 +724,6 @@ export default function VoiceLabCreateForm({
                                         ? t('voice.sampleReadyMiniMax', { duration: sampleDurationLabel })
                                         : t('voice.sampleReadyChatterbox', { duration: sampleDurationLabel })}
                                 </p>
-                            )}
-
-                            {isChatterboxClone && (
-                                <div className="space-y-1.5">
-                                    <label htmlFor="chatterbox-language" className="text-sm font-medium text-zinc-200">
-                                        {t('voice.outputLanguage')} <span className="text-[#FF5733]">*</span>
-                                    </label>
-                                    <div className="relative">
-                                        <select
-                                            id="chatterbox-language"
-                                            value={chatterboxLanguage}
-                                            onChange={(e) => setChatterboxLanguage(e.target.value as ChatterboxLanguageId)}
-                                            className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/40 pe-10 ps-3 text-sm font-medium text-white outline-none transition hover:border-orange-400/35 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
-                                        >
-                                            {CHATTERBOX_LANGUAGES.map((lang) => (
-                                                <option key={lang.id} value={lang.id} className="bg-zinc-950 text-white">
-                                                    {t(lang.labelKey)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <svg
-                                            className="pointer-events-none absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                        >
-                                            <path d="m6 9 6 6 6-6" />
-                                        </svg>
-                                    </div>
-                                    <p className="text-[11px] leading-relaxed text-white/40">
-                                        {chatterboxLanguage === 'english'
-                                            ? t('voice.chatterboxEnglishHint', { max: maxChars })
-                                            : t('voice.chatterboxMultiHint', { max: maxChars, lang: t(CHATTERBOX_LANGUAGES.find((l) => l.id === chatterboxLanguage)?.labelKey || 'voice.langArabic') })}
-                                    </p>
-                                </div>
                             )}
                         </div>
                     )}
