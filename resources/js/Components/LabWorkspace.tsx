@@ -1194,7 +1194,6 @@ function LabWorkspaceInner({
                                 : v,
                         ),
                     );
-                    setLoading(false);
                     return;
                 }
 
@@ -1213,6 +1212,7 @@ function LabWorkspaceInner({
                             : v,
                     ),
                 );
+            } finally {
                 setLoading(false);
             }
         },
