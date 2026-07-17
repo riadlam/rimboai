@@ -30,16 +30,19 @@ class VideoModelCapabilities
     {
         $id = strtolower(trim($endpointId));
 
-        // Seedance — true multimodal reference-to-video (+ first-frame I2V)
+        // Seedance — multimodal R2V + first-frame I2V + optional end frame on I2V
         if (str_contains($id, 'seedance') && str_contains($id, 'text-to-video')) {
             $fast = str_contains($id, '/fast');
+            $i2v = $fast
+                ? 'bytedance/seedance-2.0/fast/image-to-video'
+                : 'bytedance/seedance-2.0/image-to-video';
 
             return $this->caps(
                 images: true,
                 videos: true,
                 audio: true,
                 firstFrame: true,
-                lastFrame: false,
+                lastFrame: true,
                 lastRequired: false,
                 maxImages: 9,
                 maxVideos: 3,
@@ -47,12 +50,10 @@ class VideoModelCapabilities
                 reference: $fast
                     ? 'bytedance/seedance-2.0/fast/reference-to-video'
                     : 'bytedance/seedance-2.0/reference-to-video',
-                firstFrameEndpoint: $fast
-                    ? 'bytedance/seedance-2.0/fast/image-to-video'
-                    : 'bytedance/seedance-2.0/image-to-video',
+                firstFrameEndpoint: $i2v,
                 firstFrameParam: 'image_url',
-                firstLastEndpoint: null,
-                lastFrameParam: null,
+                firstLastEndpoint: $i2v,
+                lastFrameParam: 'end_image_url',
             );
         }
 
@@ -156,6 +157,29 @@ class VideoModelCapabilities
                 firstFrameParam: 'image_url',
                 firstLastEndpoint: null,
                 lastFrameParam: null,
+            );
+        }
+
+        // Kling v3 — I2V supports optional end_image_url (start → end transition)
+        if (str_contains($id, 'kling-video/v3/') && str_contains($id, 'text-to-video')) {
+            $tier = str_contains($id, '/standard/') ? 'standard' : 'pro';
+            $i2v = "fal-ai/kling-video/v3/{$tier}/image-to-video";
+
+            return $this->caps(
+                images: false,
+                videos: false,
+                audio: false,
+                firstFrame: true,
+                lastFrame: true,
+                lastRequired: false,
+                maxImages: 1,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: null,
+                firstFrameEndpoint: $i2v,
+                firstFrameParam: 'start_image_url',
+                firstLastEndpoint: $i2v,
+                lastFrameParam: 'end_image_url',
             );
         }
 

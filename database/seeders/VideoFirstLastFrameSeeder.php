@@ -19,6 +19,10 @@ class VideoFirstLastFrameSeeder extends Seeder
         'fal-ai/veo3.1/fast' => 'fal-ai/veo3.1/fast/first-last-frame-to-video',
         'fal-ai/veo3.1/lite' => 'fal-ai/veo3.1/lite/first-last-frame-to-video',
         'fal-ai/kling-video/o1/reference-to-video' => 'fal-ai/kling-video/o1/image-to-video',
+        'fal-ai/kling-video/v3/pro/text-to-video' => 'fal-ai/kling-video/v3/pro/image-to-video',
+        'fal-ai/kling-video/v3/standard/text-to-video' => 'fal-ai/kling-video/v3/standard/image-to-video',
+        'bytedance/seedance-2.0/text-to-video' => 'bytedance/seedance-2.0/image-to-video',
+        'bytedance/seedance-2.0/fast/text-to-video' => 'bytedance/seedance-2.0/fast/image-to-video',
     ];
 
     /** Pricing rows for FLF / start-end submit endpoints (image_to_video_models). */
@@ -62,6 +66,36 @@ class VideoFirstLastFrameSeeder extends Seeder
             'max_duration' => 10,
             'enums' => '["3","4","5","6","7","8","9","10"]',
             'sort' => 86,
+        ],
+        'fal-ai/kling-video/v3/pro/image-to-video' => [
+            'name' => 'Kling 3 Pro Image to Video',
+            'description' => 'Kling v3 Pro start/end frame image-to-video.',
+            'unit' => 'seconds',
+            'unit_price' => '0.140000',
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => '["3","4","5","6","7","8","9","10","11","12","13","14","15"]',
+            'sort' => 55,
+        ],
+        'bytedance/seedance-2.0/image-to-video' => [
+            'name' => 'Seedance 2.0 Image to Video',
+            'description' => 'Seedance 2.0 start/end frame image-to-video.',
+            'unit' => 'seconds',
+            'unit_price' => '0.014000',
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => '["auto","4","5","6","7","8","9","10","11","12","13","14","15"]',
+            'sort' => 20,
+        ],
+        'bytedance/seedance-2.0/fast/image-to-video' => [
+            'name' => 'Seedance 2.0 Fast Image to Video',
+            'description' => 'Seedance 2.0 Fast start/end frame image-to-video.',
+            'unit' => 'seconds',
+            'unit_price' => '0.011200',
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => '["auto","4","5","6","7","8","9","10","11","12","13","14","15"]',
+            'sort' => 25,
         ],
     ];
 

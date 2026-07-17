@@ -30,6 +30,10 @@ return new class extends Migration
             'fal-ai/veo3.1/fast' => 'fal-ai/veo3.1/fast/first-last-frame-to-video',
             'fal-ai/veo3.1/lite' => 'fal-ai/veo3.1/lite/first-last-frame-to-video',
             'fal-ai/kling-video/o1/reference-to-video' => 'fal-ai/kling-video/o1/image-to-video',
+            'fal-ai/kling-video/v3/pro/text-to-video' => 'fal-ai/kling-video/v3/pro/image-to-video',
+            'fal-ai/kling-video/v3/standard/text-to-video' => 'fal-ai/kling-video/v3/standard/image-to-video',
+            'bytedance/seedance-2.0/text-to-video' => 'bytedance/seedance-2.0/image-to-video',
+            'bytedance/seedance-2.0/fast/text-to-video' => 'bytedance/seedance-2.0/fast/image-to-video',
         ];
 
         foreach ($map as $catalogEndpoint => $flfEndpoint) {
