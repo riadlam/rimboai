@@ -12,6 +12,7 @@ import AssetMentionTextarea, {
 import {
     describeMediaGuidance,
     generateBlockReason,
+    getMediaCaps,
     mediaTotal,
     resolveMediaRouteMode,
     supportsMediaMix,
@@ -34,7 +35,8 @@ export type VideoGenerateOptions = {
     audio: boolean;
     endpointId?: string;
     modelName?: string;
-    routeMode?: 'text-to-video' | 'image-to-video' | 'reference-to-video';
+    routeMode?: 'text-to-video' | 'image-to-video' | 'reference-to-video' | 'first-last-frame-to-video';
+    frameMode?: 'first_last';
     imageFiles?: File[];
     videoFiles?: File[];
     audioFiles?: File[];
@@ -167,6 +169,13 @@ export default function VideoLabCreateForm({
     const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]['id']>('720p');
     const [aspect, setAspect] = useState<(typeof ASPECTS)[number]>('16:9');
     const [media, setMedia] = useState<MediaItem[]>([]);
+    const [framesMode, setFramesMode] = useState(false);
+    const [firstFrame, setFirstFrame] = useState<MediaItem | null>(null);
+    const [lastFrame, setLastFrame] = useState<MediaItem | null>(null);
+    const firstFrameInputId = useId();
+    const lastFrameInputId = useId();
+    const firstFrameRef = useRef<HTMLInputElement>(null);
+    const lastFrameRef = useRef<HTMLInputElement>(null);
     const assetMentions = useMemo<AssetMention[]>(() => {
         const indexes: Record<MediaItem['kind'], number> = { image: 0, video: 0, audio: 0 };
         return media.map((item) => {
@@ -205,24 +214,31 @@ export default function VideoLabCreateForm({
         [brands],
     );
 
-    const mediaCounts = useMemo<MediaCounts>(
-        () => ({
+    const mediaCounts = useMemo<MediaCounts>(() => {
+        if (framesMode) {
+            return {
+                images: (firstFrame ? 1 : 0) + (lastFrame ? 1 : 0),
+                videos: 0,
+                audios: 0,
+            };
+        }
+        return {
             images: media.filter((m) => m.kind === 'image').length,
             videos: media.filter((m) => m.kind === 'video').length,
             audios: media.filter((m) => m.kind === 'audio').length,
-        }),
-        [media],
-    );
+        };
+    }, [framesMode, firstFrame, lastFrame, media]);
 
     const modelsForPicker = useMemo(() => {
-        const compatible = allModels.filter((m) => supportsMediaMix(m, mediaCounts));
+        const frameMode = framesMode ? 'first_last' : 'default';
+        const compatible = allModels.filter((m) => supportsMediaMix(m, mediaCounts, frameMode));
         // Rank safest / best-fit models first in the picker.
         return [...compatible].sort((a, b) => {
             const sa = pickBestVideoModel([a], mediaCounts, prompt)?.score ?? 0;
             const sb = pickBestVideoModel([b], mediaCounts, prompt)?.score ?? 0;
             return sb - sa;
         });
-    }, [allModels, mediaCounts, prompt]);
+    }, [allModels, mediaCounts, prompt, framesMode]);
 
     const selectedModelRecord = useMemo(
         () => allModels.find((m) => m.name === selectedModel),
@@ -249,7 +265,17 @@ export default function VideoLabCreateForm({
     const selectedEnums = 'enums' in selectedMeta ? selectedMeta.enums : null;
     const selectedMaxDuration = 'max_duration' in selectedMeta ? selectedMeta.max_duration : null;
 
-    const routeMode = resolveMediaRouteMode(selectedModelRecord, mediaCounts);
+    const routeMode = resolveMediaRouteMode(
+        selectedModelRecord,
+        mediaCounts,
+        framesMode ? 'first_last' : 'default',
+    );
+
+    const selectedCaps = useMemo(
+        () => getMediaCaps(selectedModelRecord),
+        [selectedModelRecord],
+    );
+    const supportsFramesMode = selectedCaps.supports_last_frame;
 
     const durationOptions = useMemo(
         () => {
@@ -297,10 +323,20 @@ export default function VideoLabCreateForm({
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
-    const mediaGuidance = describeMediaGuidance(mediaCounts, modelsForPicker.length);
+    const mediaGuidance = describeMediaGuidance(
+        mediaCounts,
+        modelsForPicker.length,
+        framesMode ? 'first_last' : 'default',
+    );
     const showInfoGuidance = Boolean(mediaGuidance && mediaGuidance.tone !== 'error' && !guidanceDismissed);
     const showErrorGuidance = Boolean(mediaGuidance && mediaGuidance.tone === 'error');
-    const rawBlockReason = generateBlockReason(hasMeaningfulPrompt(prompt), mediaCounts, selectedModelRecord, modelsForPicker.length);
+    const rawBlockReason = generateBlockReason(
+        hasMeaningfulPrompt(prompt),
+        mediaCounts,
+        selectedModelRecord,
+        modelsForPicker.length,
+        framesMode ? 'first_last' : 'default',
+    );
     const blockReason = !rawBlockReason
         ? null
         : rawBlockReason === 'Add a prompt to generate.'
@@ -309,7 +345,13 @@ export default function VideoLabCreateForm({
             ? t('video.blockAudioAlone')
             : rawBlockReason === 'No model supports this media mix. Remove some references.'
               ? t('video.blockMix')
-              : rawBlockReason;
+              : rawBlockReason === 'Add a first-frame image.'
+                ? t('video.needFirstFrame')
+                : rawBlockReason === 'Add a last-frame image.'
+                  ? t('video.needLastFrame')
+                  : rawBlockReason.startsWith("This model doesn't support first")
+                    ? t('video.framesUnsupported')
+                    : rawBlockReason;
     const canGenerate = !blockReason && routeMode !== null && hasEnoughTokens;
     const durationPct =
         durationStops.length <= 1 ? 100 : (durationIndex / (durationStops.length - 1)) * 100;
@@ -373,7 +415,122 @@ export default function VideoLabCreateForm({
     // Re-show info guidance when the media mix shape changes
     useEffect(() => {
         setGuidanceDismissed(false);
-    }, [mediaCounts.images, mediaCounts.videos, mediaCounts.audios]);
+    }, [mediaCounts.images, mediaCounts.videos, mediaCounts.audios, framesMode]);
+
+    const revokeFrame = (item: MediaItem | null) => {
+        if (item?.url) URL.revokeObjectURL(item.url);
+    };
+
+    /** Move images from the general upload tray into first/last frame slots. */
+    const promoteMediaToFrames = (items: MediaItem[]) => {
+        const images = items.filter((m) => m.kind === 'image');
+        const rest = items.filter((m) => m.kind !== 'image');
+
+        const nextFirst = images[0] ?? null;
+        const nextLast = images[1] ?? null;
+
+        setFirstFrame((prev) => {
+            if (prev && prev.id !== nextFirst?.id) revokeFrame(prev);
+            return nextFirst;
+        });
+        setLastFrame((prev) => {
+            if (prev && prev.id !== nextLast?.id) revokeFrame(prev);
+            return nextLast;
+        });
+
+        // Drop leftover images (3+) and any video/audio refs — frames mode is image-only.
+        [...images.slice(2), ...rest].forEach((m) => URL.revokeObjectURL(m.url));
+        setMedia([]);
+    };
+
+    const prevSupportsFrames = useRef<boolean | null>(null);
+
+    // Auto-enable frames UI when switching onto a model that supports first+last.
+    // If the user turns it off, it stays off until they toggle again or leave & re-enter an FLF model.
+    useEffect(() => {
+        const wasSupported = prevSupportsFrames.current;
+        prevSupportsFrames.current = supportsFramesMode;
+
+        if (!supportsFramesMode) {
+            if (framesMode) {
+                setFramesMode(false);
+                setFirstFrame((prev) => {
+                    if (prev?.url) URL.revokeObjectURL(prev.url);
+                    return null;
+                });
+                setLastFrame((prev) => {
+                    if (prev?.url) URL.revokeObjectURL(prev.url);
+                    return null;
+                });
+            }
+            return;
+        }
+
+        if (wasSupported !== true && supportsFramesMode) {
+            promoteMediaToFrames(mediaRef.current);
+            setFramesMode(true);
+        }
+    }, [supportsFramesMode, framesMode]);
+
+    const setFrameFromFile = (slot: 'first' | 'last', file: File | null) => {
+        if (!file) return;
+        if (detectMediaKind(file) !== 'image') {
+            setMediaNotice('First & last frames need an image (JPG, PNG, WEBP, or GIF).');
+            return;
+        }
+        setMediaNotice(null);
+        const next: MediaItem = {
+            id: `frame-${slot}-${Date.now()}`,
+            url: URL.createObjectURL(file),
+            kind: 'image',
+            name: file.name,
+            file,
+        };
+        if (slot === 'first') {
+            setFirstFrame((prev) => {
+                revokeFrame(prev);
+                return next;
+            });
+        } else {
+            setLastFrame((prev) => {
+                revokeFrame(prev);
+                return next;
+            });
+        }
+    };
+
+    const clearFrame = (slot: 'first' | 'last') => {
+        if (slot === 'first') {
+            setFirstFrame((prev) => {
+                revokeFrame(prev);
+                return null;
+            });
+        } else {
+            setLastFrame((prev) => {
+                revokeFrame(prev);
+                return null;
+            });
+        }
+    };
+
+    const enableFramesMode = () => {
+        promoteMediaToFrames(mediaRef.current);
+        setFramesMode(true);
+        userModelLocked.current = false;
+    };
+
+    const disableFramesMode = () => {
+        setFramesMode(false);
+        setFirstFrame((prev) => {
+            revokeFrame(prev);
+            return null;
+        });
+        setLastFrame((prev) => {
+            revokeFrame(prev);
+            return null;
+        });
+        userModelLocked.current = false;
+    };
 
     // Audio toggle only applies to models with generate_audio
     useEffect(() => {
@@ -651,19 +808,109 @@ export default function VideoLabCreateForm({
                         </button>
                     </div>
 
-                    {/* Upload media */}
-                    <div
-                        onDragOver={(e) => {
-                            e.preventDefault();
-                            setDragOver(true);
-                        }}
-                        onDragLeave={() => setDragOver(false)}
-                        onDrop={(e) => {
-                            e.preventDefault();
-                            setDragOver(false);
-                            addMedia(e.dataTransfer.files);
-                        }}
-                    >
+                    {/* Upload media / First–last frames */}
+                    <div className="relative">
+                        {supportsFramesMode && (
+                            <div className="mb-2 flex items-center justify-end">
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={framesMode}
+                                    onClick={() => (framesMode ? disableFramesMode() : enableFramesMode())}
+                                    className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pe-1.5 ps-2.5 text-[11px] font-medium text-zinc-300 transition hover:border-orange-400/35 hover:bg-orange-500/[0.06] hover:text-orange-100"
+                                >
+                                    <span className="text-zinc-400 group-hover:text-orange-200/90">{t('video.framesToggle')}</span>
+                                    <span
+                                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
+                                            framesMode ? 'bg-[#FF5733]' : 'bg-white/15'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition ${
+                                                framesMode ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                                            }`}
+                                        />
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+
+                        <AnimatePresence mode="wait" initial={false}>
+                            {framesMode && supportsFramesMode ? (
+                                <motion.div
+                                    key="frames"
+                                    initial={{ opacity: 0, y: 8, height: 0 }}
+                                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                                    exit={{ opacity: 0, y: -6, height: 0 }}
+                                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] p-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
+                                        <div className="mb-2.5 flex items-center justify-between px-0.5">
+                                            <div>
+                                                <p className="text-xs font-medium text-white/70">{t('video.framesToggleHint')}</p>
+                                                <p className="text-[10px] text-white/35">{t('video.framesHint')}</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            <FrameSlot
+                                                label={t('video.firstFrame')}
+                                                hint={t('video.addFirstFrame')}
+                                                item={firstFrame}
+                                                inputId={firstFrameInputId}
+                                                onClear={() => clearFrame('first')}
+                                            />
+                                            <FrameSlot
+                                                label={t('video.lastFrame')}
+                                                hint={t('video.addLastFrame')}
+                                                item={lastFrame}
+                                                inputId={lastFrameInputId}
+                                                onClear={() => clearFrame('last')}
+                                            />
+                                        </div>
+                                        <input
+                                            id={firstFrameInputId}
+                                            ref={firstFrameRef}
+                                            type="file"
+                                            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                                            className="sr-only"
+                                            onChange={(e) => {
+                                                setFrameFromFile('first', e.target.files?.[0] ?? null);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <input
+                                            id={lastFrameInputId}
+                                            ref={lastFrameRef}
+                                            type="file"
+                                            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                                            className="sr-only"
+                                            onChange={(e) => {
+                                                setFrameFromFile('last', e.target.files?.[0] ?? null);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="media"
+                                    initial={{ opacity: 0, y: 8, height: 0 }}
+                                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                                    exit={{ opacity: 0, y: -6, height: 0 }}
+                                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                                    className="overflow-hidden"
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        setDragOver(true);
+                                    }}
+                                    onDragLeave={() => setDragOver(false)}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        setDragOver(false);
+                                        addMedia(e.dataTransfer.files);
+                                    }}
+                                >
                         {media.length === 0 ? (
                             <label
                                 htmlFor={mediaInputId}
@@ -789,6 +1036,9 @@ export default function VideoLabCreateForm({
                                 e.target.value = '';
                             }}
                         />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                         {mediaNotice && (
                             <p className="mt-2 px-0.5 text-[11px] text-amber-200/90">{mediaNotice}</p>
                         )}
@@ -830,6 +1080,11 @@ export default function VideoLabCreateForm({
                                                 {routeMode === 'image-to-video' && (
                                                     <p className="mt-1.5 text-[11px] font-medium text-orange-200/90">
                                                         Mode: first-frame image → video
+                                                    </p>
+                                                )}
+                                                {routeMode === 'first-last-frame-to-video' && (
+                                                    <p className="mt-1.5 text-[11px] font-medium text-orange-200/90">
+                                                        Mode: first → last frame
                                                     </p>
                                                 )}
                                                 {routeMode === 'reference-to-video' && (
@@ -1119,9 +1374,12 @@ export default function VideoLabCreateForm({
                             endpointId: 'endpoint_id' in selectedMeta ? selectedMeta.endpoint_id || undefined : undefined,
                             modelName: selectedMeta.name,
                             routeMode: routeMode ?? undefined,
-                            imageFiles: media.filter((m) => m.kind === 'image').map((m) => m.file),
-                            videoFiles: media.filter((m) => m.kind === 'video').map((m) => m.file),
-                            audioFiles: media.filter((m) => m.kind === 'audio').map((m) => m.file),
+                            frameMode: framesMode ? 'first_last' : undefined,
+                            imageFiles: framesMode
+                                ? [firstFrame, lastFrame].filter(Boolean).map((m) => m!.file)
+                                : media.filter((m) => m.kind === 'image').map((m) => m.file),
+                            videoFiles: framesMode ? [] : media.filter((m) => m.kind === 'video').map((m) => m.file),
+                            audioFiles: framesMode ? [] : media.filter((m) => m.kind === 'audio').map((m) => m.file),
                         });
                     }}
                     className="relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
@@ -1360,6 +1618,55 @@ function MediaBadge({ children, delay = 0 }: { children: React.ReactNode; delay?
         >
             {children}
         </motion.div>
+    );
+}
+
+function FrameSlot({
+    label,
+    hint,
+    item,
+    inputId,
+    onClear,
+}: {
+    label: string;
+    hint: string;
+    item: MediaItem | null;
+    inputId: string;
+    onClear: () => void;
+}) {
+    return (
+        <div className="min-w-0">
+            <p className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-wider text-white/40">{label}</p>
+            {item ? (
+                <div className="group/frame relative aspect-[4/3] overflow-hidden rounded-xl bg-black/40 ring-1 ring-white/10">
+                    <img src={item.url} alt="" className="size-full object-cover" />
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        aria-label={`Remove ${label}`}
+                        className="absolute end-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/75 text-xs text-white ring-1 ring-white/20"
+                    >
+                        ×
+                    </button>
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-[10px] text-white/70">
+                        {item.name}
+                    </span>
+                </div>
+            ) : (
+                <label
+                    htmlFor={inputId}
+                    className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-white/[0.02] text-center transition hover:border-orange-400/40 hover:bg-orange-500/[0.05]"
+                >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-400/25 bg-orange-500/10 text-orange-200">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 5v14" />
+                            <path d="M5 12h14" />
+                        </svg>
+                    </span>
+                    <span className="px-2 text-[11px] font-medium text-zinc-300">{hint}</span>
+                </label>
+            )}
+        </div>
     );
 }
 

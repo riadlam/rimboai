@@ -80,12 +80,16 @@ export type BrandModel = {
         supports_ref_videos: boolean;
         supports_ref_audio: boolean;
         supports_first_frame: boolean;
+        supports_last_frame?: boolean;
+        last_frame_required?: boolean;
         max_ref_images?: number | null;
         max_ref_videos?: number | null;
         max_ref_audios?: number | null;
         reference_endpoint_id?: string | null;
         first_frame_endpoint_id?: string | null;
         first_frame_param?: string | null;
+        first_last_frame_endpoint_id?: string | null;
+        last_frame_param?: string | null;
     };
 };
 

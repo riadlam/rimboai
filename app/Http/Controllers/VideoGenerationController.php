@@ -94,6 +94,7 @@ class VideoGenerationController extends Controller
                 'video_urls.*' => ['string', 'max:2048'],
                 'audio_urls' => ['nullable', 'array', 'max:3'],
                 'audio_urls.*' => ['string', 'max:2048'],
+                'frame_mode' => ['nullable', 'string', Rule::in(['first_last'])],
             ]);
         } catch (ValidationException $e) {
             $first = collect($e->errors())->flatten()->first();
@@ -145,6 +146,7 @@ class VideoGenerationController extends Controller
             'videos' => count($videoFiles) + count($preVideoUrls),
             'audios' => count($audioFiles) + count($preAudioUrls),
         ];
+        $frameMode = ($data['frame_mode'] ?? null) === 'first_last' ? 'first_last' : null;
 
         if ($counts['audios'] > 0 && ($counts['images'] + $counts['videos']) === 0) {
             return response()->json([
@@ -152,13 +154,13 @@ class VideoGenerationController extends Controller
             ], 422);
         }
 
-        if (! $capabilities->supportsMediaMix($model->endpoint_id, $counts)) {
+        if (! $capabilities->supportsMediaMix($model->endpoint_id, $counts, $frameMode)) {
             return response()->json([
                 'message' => 'The selected model does not support this media mix. Choose a compatible model or remove unsupported references.',
             ], 422);
         }
 
-        $route = $capabilities->resolveRoute($model->endpoint_id, $counts);
+        $route = $capabilities->resolveRoute($model->endpoint_id, $counts, $frameMode);
         if ($route === null) {
             return response()->json([
                 'message' => 'Could not resolve a fal endpoint for this model and media mix.',
@@ -234,6 +236,7 @@ class VideoGenerationController extends Controller
             'video_urls' => $videoUrls,
             'audio_urls' => $audioUrls,
             'first_frame_param' => $route['first_frame_param'],
+            'last_frame_param' => $route['last_frame_param'] ?? null,
         ]);
 
         $falInput = $built['input'];

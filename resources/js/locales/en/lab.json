@@ -81,7 +81,7 @@
     "needSources": "Add source images to continue",
     "needPrompt": "Add a prompt to generate"
   },
-  "video": {
+    "video": {
     "uploadMedia": "Upload media",
     "promptSub": "Scene, motion, camera, and style",
     "placeholder": "Describe the scene, motion, and style of your video...",
@@ -93,7 +93,17 @@
     "noCompatible": "No compatible models",
     "blockPrompt": "Add a prompt to generate.",
     "blockAudioAlone": "Add an image or video — audio can't be used alone.",
-    "blockMix": "No model supports this media mix. Remove some references."
+    "blockMix": "No model supports this media mix. Remove some references.",
+    "framesToggle": "Frames",
+    "framesToggleHint": "First & last",
+    "firstFrame": "First frame",
+    "lastFrame": "Last frame",
+    "addFirstFrame": "Start image",
+    "addLastFrame": "End image",
+    "framesHint": "Animate from start to end",
+    "needFirstFrame": "Add a first-frame image.",
+    "needLastFrame": "Add a last-frame image.",
+    "framesUnsupported": "This model doesn’t support first & last frame. Pick another model or turn the toggle off."
   },
   "voice": {
     "title": "Voiceover",

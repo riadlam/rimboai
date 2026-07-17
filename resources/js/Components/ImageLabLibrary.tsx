@@ -19,7 +19,7 @@ export type LabImage = {
     quantity?: number | null;
     imageMode?: 'create' | 'variations' | null;
     inputAssets?: { url: string; kind: 'image' | 'video' | 'audio'; name?: string | null; fallbackUrls?: string[] | null }[];
-    method?: 'text-to-image' | 'image-to-image' | 'text-to-video' | 'image-to-video' | 'reference-to-video';
+    method?: 'text-to-image' | 'image-to-image' | 'text-to-video' | 'image-to-video' | 'reference-to-video' | 'first-last-frame-to-video';
     modelName?: string | null;
     status?: 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
     creationId?: number;
@@ -211,6 +211,7 @@ export default function ImageLabLibrary({
                     img.method === 'text-to-video' ||
                     img.method === 'image-to-video' ||
                     img.method === 'reference-to-video' ||
+                    img.method === 'first-last-frame-to-video' ||
                     Boolean(img.videoUrl);
                 const url = (isVideo ? img.videoUrl || img.src : img.src) || '';
                 if (!url) return;
@@ -582,6 +583,7 @@ export default function ImageLabLibrary({
                                     img.method === 'text-to-video' ||
                                     img.method === 'image-to-video' ||
                                     img.method === 'reference-to-video' ||
+                                    img.method === 'first-last-frame-to-video' ||
                                     Boolean(img.videoUrl);
                                 const mediaSrc = isVideo ? img.videoUrl || img.src : img.src;
                                 const posterSrc =
@@ -901,7 +903,7 @@ function BuildingCard({
     method?: LabImage['method'];
     onRevealComplete?: () => void;
 }) {
-    const isVideo = method === 'text-to-video' || method === 'image-to-video' || method === 'reference-to-video';
+    const isVideo = method === 'text-to-video' || method === 'image-to-video' || method === 'reference-to-video' || method === 'first-last-frame-to-video';
     const { pct, setPct, pctRef } = useLabCardProgress(startedAt, status, queuePosition, completing, progressPercent);
     const [fadeOut, setFadeOut] = useState(false);
     const revealStarted = useRef(false);

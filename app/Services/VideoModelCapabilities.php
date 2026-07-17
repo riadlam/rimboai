@@ -14,12 +14,16 @@ class VideoModelCapabilities
      *   supports_ref_videos: bool,
      *   supports_ref_audio: bool,
      *   supports_first_frame: bool,
+     *   supports_last_frame: bool,
+     *   last_frame_required: bool,
      *   max_ref_images: int|null,
      *   max_ref_videos: int|null,
      *   max_ref_audios: int|null,
      *   reference_endpoint_id: string|null,
      *   first_frame_endpoint_id: string|null,
-     *   first_frame_param: string|null
+     *   first_frame_param: string|null,
+     *   first_last_frame_endpoint_id: string|null,
+     *   last_frame_param: string|null
      * }
      */
     public function for(string $endpointId): array
@@ -35,6 +39,8 @@ class VideoModelCapabilities
                 videos: true,
                 audio: true,
                 firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
                 maxImages: 9,
                 maxVideos: 3,
                 maxAudios: 3,
@@ -45,27 +51,32 @@ class VideoModelCapabilities
                     ? 'bytedance/seedance-2.0/fast/image-to-video'
                     : 'bytedance/seedance-2.0/image-to-video',
                 firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
-        // Veo — multi-image reference-to-video (max 3) + first-frame I2V
+        // Veo — multi-image reference-to-video + first-frame I2V + first/last frame
         if ($id === 'fal-ai/veo3.1' || str_starts_with($id, 'fal-ai/veo3.1/')) {
             $tier = 'fal-ai/veo3.1';
             if (str_contains($id, '/fast')) {
                 $tier = 'fal-ai/veo3.1/fast';
             } elseif (str_contains($id, '/lite')) {
-                // Lite: first-frame only (no reference-to-video in catalog)
                 return $this->caps(
                     images: false,
                     videos: false,
                     audio: false,
                     firstFrame: true,
+                    lastFrame: true,
+                    lastRequired: true,
                     maxImages: 1,
                     maxVideos: 0,
                     maxAudios: 0,
                     reference: null,
                     firstFrameEndpoint: 'fal-ai/veo3.1/lite/image-to-video',
                     firstFrameParam: 'image_url',
+                    firstLastEndpoint: 'fal-ai/veo3.1/lite/first-last-frame-to-video',
+                    lastFrameParam: 'last_frame_url',
                 );
             }
 
@@ -74,6 +85,8 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: true,
+                lastFrame: true,
+                lastRequired: true,
                 maxImages: 3,
                 maxVideos: 0,
                 maxAudios: 0,
@@ -82,6 +95,8 @@ class VideoModelCapabilities
                     : 'fal-ai/veo3.1/reference-to-video',
                 firstFrameEndpoint: $tier.'/image-to-video',
                 firstFrameParam: 'image_url',
+                firstLastEndpoint: $tier.'/first-last-frame-to-video',
+                lastFrameParam: 'last_frame_url',
             );
         }
 
@@ -90,13 +105,17 @@ class VideoModelCapabilities
                 images: true,
                 videos: false,
                 audio: false,
-                firstFrame: false,
+                firstFrame: true,
+                lastFrame: true,
+                lastRequired: false,
                 maxImages: 7,
                 maxVideos: 0,
                 maxAudios: 0,
                 reference: 'fal-ai/kling-video/o1/reference-to-video',
-                firstFrameEndpoint: null,
-                firstFrameParam: null,
+                firstFrameEndpoint: 'fal-ai/kling-video/o1/image-to-video',
+                firstFrameParam: 'start_image_url',
+                firstLastEndpoint: 'fal-ai/kling-video/o1/image-to-video',
+                lastFrameParam: 'end_image_url',
             );
         }
 
@@ -106,12 +125,16 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
                 maxImages: 7,
                 maxVideos: 0,
                 maxAudios: 0,
                 reference: 'fal-ai/kling-video/o3/4k/reference-to-video',
                 firstFrameEndpoint: null,
                 firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
@@ -123,12 +146,16 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
                 maxImages: 4,
                 maxVideos: 0,
                 maxAudios: 0,
                 reference: "fal-ai/kling-video/o3/{$tier}/reference-to-video",
                 firstFrameEndpoint: "fal-ai/kling-video/o3/{$tier}/image-to-video",
                 firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
@@ -141,12 +168,16 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: $i2v !== null,
+                lastFrame: false,
+                lastRequired: false,
                 maxImages: 1,
                 maxVideos: 0,
                 maxAudios: 0,
                 reference: null,
                 firstFrameEndpoint: $i2v,
                 firstFrameParam: str_contains($id, '/o3/') ? 'image_url' : 'start_image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
@@ -156,12 +187,16 @@ class VideoModelCapabilities
                 videos: true,
                 audio: false,
                 firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
                 maxImages: 5,
                 maxVideos: 5,
                 maxAudios: 0,
                 reference: 'fal-ai/wan/v2.7/reference-to-video',
                 firstFrameEndpoint: 'fal-ai/wan/v2.7/image-to-video',
                 firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
@@ -171,24 +206,28 @@ class VideoModelCapabilities
                 videos: false,
                 audio: false,
                 firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
                 maxImages: 5,
                 maxVideos: 0,
                 maxAudios: 0,
                 reference: 'fal-ai/pixverse/c1/reference-to-video',
                 firstFrameEndpoint: null,
                 firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
         // Sora / Grok — first-frame I2V
         if (str_contains($id, 'sora-2/text-to-video')) {
-            return $this->caps(false, false, false, true, 1, 0, 0, null, 'fal-ai/sora-2/image-to-video', 'image_url');
+            return $this->caps(false, false, false, true, false, false, 1, 0, 0, null, 'fal-ai/sora-2/image-to-video', 'image_url', null, null);
         }
         if (str_contains($id, 'grok-imagine-video/text-to-video')) {
-            return $this->caps(false, false, false, true, 1, 0, 0, null, 'xai/grok-imagine-video/image-to-video', 'image_url');
+            return $this->caps(false, false, false, true, false, false, 1, 0, 0, null, 'xai/grok-imagine-video/image-to-video', 'image_url', null, null);
         }
 
-        return $this->caps(false, false, false, false, 0, 0, 0, null, null, null);
+        return $this->caps(false, false, false, false, false, false, 0, 0, 0, null, null, null, null, null);
     }
 
     /**
@@ -196,7 +235,7 @@ class VideoModelCapabilities
      *
      * @param  array{images?: int, videos?: int, audios?: int}  $counts
      */
-    public function supportsMediaMix(string $endpointId, array $counts): bool
+    public function supportsMediaMix(string $endpointId, array $counts, ?string $frameMode = null): bool
     {
         $images = (int) ($counts['images'] ?? 0);
         $videos = (int) ($counts['videos'] ?? 0);
@@ -207,12 +246,29 @@ class VideoModelCapabilities
             return true;
         }
 
+        $caps = $this->for($endpointId);
+
+        if ($frameMode === 'first_last') {
+            if (! $caps['supports_last_frame'] || ! $caps['first_last_frame_endpoint_id']) {
+                return false;
+            }
+            if ($videos > 0 || $audios > 0) {
+                return false;
+            }
+            if ($images < 1 || $images > 2) {
+                return false;
+            }
+            if ($caps['last_frame_required'] && $images < 2) {
+                return false;
+            }
+
+            return true;
+        }
+
         // Seedance rule: audio requires at least one image or video.
         if ($audios > 0 && ($images + $videos) === 0) {
             return false;
         }
-
-        $caps = $this->for($endpointId);
 
         if ($videos > 0 && ! $caps['supports_ref_videos']) {
             return false;
@@ -249,9 +305,14 @@ class VideoModelCapabilities
      * Resolve which fal endpoint + mode to use for this media mix.
      *
      * @param  array{images?: int, videos?: int, audios?: int}  $counts
-     * @return array{endpoint_id: string, mode: 'text-to-video'|'image-to-video'|'reference-to-video', first_frame_param: string|null}|null
+     * @return array{
+     *   endpoint_id: string,
+     *   mode: 'text-to-video'|'image-to-video'|'reference-to-video'|'first-last-frame-to-video',
+     *   first_frame_param: string|null,
+     *   last_frame_param: string|null
+     * }|null
      */
-    public function resolveRoute(string $endpointId, array $counts): ?array
+    public function resolveRoute(string $endpointId, array $counts, ?string $frameMode = null): ?array
     {
         $images = (int) ($counts['images'] ?? 0);
         $videos = (int) ($counts['videos'] ?? 0);
@@ -263,14 +324,43 @@ class VideoModelCapabilities
                 'endpoint_id' => $endpointId,
                 'mode' => 'text-to-video',
                 'first_frame_param' => null,
+                'last_frame_param' => null,
             ];
         }
 
-        if (! $this->supportsMediaMix($endpointId, $counts)) {
+        if (! $this->supportsMediaMix($endpointId, $counts, $frameMode)) {
             return null;
         }
 
         $caps = $this->for($endpointId);
+
+        if ($frameMode === 'first_last' && $caps['supports_last_frame'] && $caps['first_last_frame_endpoint_id']) {
+            if ($images >= 2) {
+                $flfEndpoint = $caps['first_last_frame_endpoint_id'];
+                $firstParam = str_contains($flfEndpoint, 'veo')
+                    ? 'first_frame_url'
+                    : ($caps['first_frame_param'] ?: 'first_frame_url');
+
+                return [
+                    'endpoint_id' => $flfEndpoint,
+                    'mode' => 'first-last-frame-to-video',
+                    'first_frame_param' => $firstParam,
+                    'last_frame_param' => $caps['last_frame_param'] ?: 'last_frame_url',
+                ];
+            }
+
+            // Only first frame provided — fall back to I2V when available.
+            if ($images === 1 && $caps['first_frame_endpoint_id'] && ! $caps['last_frame_required']) {
+                return [
+                    'endpoint_id' => $caps['first_frame_endpoint_id'],
+                    'mode' => 'image-to-video',
+                    'first_frame_param' => $caps['first_frame_param'],
+                    'last_frame_param' => null,
+                ];
+            }
+
+            return null;
+        }
 
         // Single image, no other media → first-frame I2V when available
         if ($images === 1 && $videos === 0 && $audios === 0 && $caps['supports_first_frame'] && $caps['first_frame_endpoint_id']) {
@@ -278,6 +368,7 @@ class VideoModelCapabilities
                 'endpoint_id' => $caps['first_frame_endpoint_id'],
                 'mode' => 'image-to-video',
                 'first_frame_param' => $caps['first_frame_param'],
+                'last_frame_param' => null,
             ];
         }
 
@@ -287,6 +378,7 @@ class VideoModelCapabilities
                 'endpoint_id' => $caps['reference_endpoint_id'],
                 'mode' => 'reference-to-video',
                 'first_frame_param' => null,
+                'last_frame_param' => null,
             ];
         }
 
@@ -313,12 +405,16 @@ class VideoModelCapabilities
      *   supports_ref_videos: bool,
      *   supports_ref_audio: bool,
      *   supports_first_frame: bool,
+     *   supports_last_frame: bool,
+     *   last_frame_required: bool,
      *   max_ref_images: int|null,
      *   max_ref_videos: int|null,
      *   max_ref_audios: int|null,
      *   reference_endpoint_id: string|null,
      *   first_frame_endpoint_id: string|null,
-     *   first_frame_param: string|null
+     *   first_frame_param: string|null,
+     *   first_last_frame_endpoint_id: string|null,
+     *   last_frame_param: string|null
      * }
      */
     private function caps(
@@ -326,24 +422,32 @@ class VideoModelCapabilities
         bool $videos,
         bool $audio,
         bool $firstFrame,
+        bool $lastFrame,
+        bool $lastRequired,
         ?int $maxImages,
         ?int $maxVideos,
         ?int $maxAudios,
         ?string $reference,
         ?string $firstFrameEndpoint,
         ?string $firstFrameParam,
+        ?string $firstLastEndpoint,
+        ?string $lastFrameParam,
     ): array {
         return [
             'supports_ref_images' => $images,
             'supports_ref_videos' => $videos,
             'supports_ref_audio' => $audio,
             'supports_first_frame' => $firstFrame,
+            'supports_last_frame' => $lastFrame,
+            'last_frame_required' => $lastRequired,
             'max_ref_images' => $maxImages,
             'max_ref_videos' => $maxVideos,
             'max_ref_audios' => $maxAudios,
             'reference_endpoint_id' => $reference,
             'first_frame_endpoint_id' => $firstFrameEndpoint,
             'first_frame_param' => $firstFrameParam,
+            'first_last_frame_endpoint_id' => $firstLastEndpoint,
+            'last_frame_param' => $lastFrameParam,
         ];
     }
 }

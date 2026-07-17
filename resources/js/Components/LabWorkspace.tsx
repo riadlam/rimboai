@@ -916,6 +916,9 @@ function LabWorkspaceInner({
                 imageUrls.forEach((url) => form.append('image_urls[]', url));
                 videoUrls.forEach((url) => form.append('video_urls[]', url));
                 audioUrls.forEach((url) => form.append('audio_urls[]', url));
+                if (options?.frameMode === 'first_last') {
+                    form.append('frame_mode', 'first_last');
+                }
 
                 const data = await apiPostForm<CreationResponse>('/lab/video/generate', form);
                 syncTokenBalance(data.token_balance);

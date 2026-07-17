@@ -219,6 +219,9 @@ class DashboardController extends Controller
             'status',
             'sort',
             'supports_audio',
+            'supports_first_frame',
+            'supports_last_frame',
+            'first_last_frame_endpoint_id',
             'supports_vocals',
             'supports_lyrics',
             'supports_instrumental',
@@ -430,7 +433,21 @@ class DashboardController extends Controller
                         }
 
                         if ($isVideoCatalog && $videoCaps !== null && $endpointId !== '') {
-                            $payload['media_capabilities'] = $videoCaps->for($endpointId);
+                            $caps = $videoCaps->for($endpointId);
+                            // Prefer DB flags when present (admin / seeder source of truth for FLF).
+                            if (Schema::hasColumn($modelsTable, 'supports_last_frame') && isset($m->supports_last_frame)) {
+                                $caps['supports_last_frame'] = (bool) $m->supports_last_frame || $caps['supports_last_frame'];
+                            }
+                            if (Schema::hasColumn($modelsTable, 'supports_first_frame') && isset($m->supports_first_frame) && (bool) $m->supports_first_frame) {
+                                $caps['supports_first_frame'] = true;
+                            }
+                            if (Schema::hasColumn($modelsTable, 'first_last_frame_endpoint_id')
+                                && is_string($m->first_last_frame_endpoint_id ?? null)
+                                && $m->first_last_frame_endpoint_id !== '') {
+                                $caps['first_last_frame_endpoint_id'] = $m->first_last_frame_endpoint_id;
+                                $caps['supports_last_frame'] = true;
+                            }
+                            $payload['media_capabilities'] = $caps;
                         }
 
                         if ($isVoiceCatalog) {

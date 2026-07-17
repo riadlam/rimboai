@@ -125,7 +125,8 @@ class FalVideoInputBuilder
      *   image_urls?: array<int, string>|null,
      *   video_urls?: array<int, string>|null,
      *   audio_urls?: array<int, string>|null,
-     *   first_frame_param?: string|null
+     *   first_frame_param?: string|null,
+     *   last_frame_param?: string|null
      * }  $options
      * @return array{input: array<string, mixed>, duration_seconds: int, duration_value: string, aspect_ratio: string, resolution: string|null, with_audio: bool}
      */
@@ -178,6 +179,23 @@ class FalVideoInputBuilder
         if ($mode === 'image-to-video' && $imageUrls !== []) {
             $param = (string) ($options['first_frame_param'] ?? 'image_url');
             $input[$param] = $imageUrls[0];
+        }
+
+        if ($mode === 'first-last-frame-to-video' && $imageUrls !== []) {
+            $firstParam = (string) ($options['first_frame_param'] ?? 'first_frame_url');
+            $lastParam = (string) ($options['last_frame_param'] ?? 'last_frame_url');
+            $input[$firstParam] = $imageUrls[0];
+            if (isset($imageUrls[1])) {
+                $input[$lastParam] = $imageUrls[1];
+            }
+
+            // Kling O1 prompt can reference @Image1 / @Image2 for start/end frames.
+            if (str_contains(strtolower($endpointId), 'kling-video/o1/') && str_contains(strtolower($endpointId), 'image-to-video')) {
+                $input['prompt'] = $this->withReferencePrefix(
+                    $prompt,
+                    isset($imageUrls[1]) ? '@Image1 @Image2' : '@Image1',
+                );
+            }
         }
 
         if ($mode === 'reference-to-video') {
