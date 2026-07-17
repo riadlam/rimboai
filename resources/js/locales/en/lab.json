@@ -125,7 +125,12 @@
     "chooseSample": "Choose voice sample",
     "dropSample": "Drop or browse · MP3, WAV…",
     "needSample": "Upload a voice sample",
-    "clonedVoice": "Cloned voice"
+    "clonedVoice": "Cloned voice",
+    "sampleTooShort": "Sample is too short ({{duration}}). Need at least {{min}}s of clear speech.",
+    "sampleReady": "Sample analyzed · {{duration}} — tokens update with your text length.",
+    "sampleBilledHint": "sample {{duration}}",
+    "analyzingSample": "Analyzing sample…",
+    "needLongerSample": "Use a sample of at least {{min}}s"
   },
   "music": {
     "title": "Music",

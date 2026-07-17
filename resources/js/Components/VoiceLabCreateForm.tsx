@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Brand, BrandVoice } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
-import { estimateVoiceCredits } from '@/lib/voiceCredits';
+import { estimateVoiceCredits, formatVoiceSampleDuration, isVoiceCloneModel, minVoiceSampleSeconds, readVoiceSampleDuration } from '@/lib/voiceCredits';
 import { publicAsset } from '@/lib/publicAsset';
 import { LabModelPickerModal, LabModelPickerTrigger, type LabPickerModel } from '@/Components/LabModelPicker';
 
@@ -167,11 +167,12 @@ function voiceControlCapabilities(endpointId?: string | null): {
     return { stability: false, clarity: false, style: false, speed: false };
 }
 
-function formatAudioMeta(file: File, durationLabel: string | null): string {
+function formatAudioMeta(file: File, durationLabel: string | null, analyzing = false): string {
     const size =
         file.size > 1024 * 1024
             ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
             : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+    if (analyzing) return `${size} · analyzing…`;
     return `${size}${durationLabel ? ` · ${durationLabel}` : ''} · ready`;
 }
 
@@ -217,8 +218,8 @@ export default function VoiceLabCreateForm({
         [brands],
     );
 
-    const cloneModels = useMemo(() => allModels.filter((m) => m.supports_audio === true), [allModels]);
-    const presetModels = useMemo(() => allModels.filter((m) => m.supports_audio !== true), [allModels]);
+    const cloneModels = useMemo(() => allModels.filter((m) => isVoiceCloneModel(m)), [allModels]);
+    const presetModels = useMemo(() => allModels.filter((m) => !isVoiceCloneModel(m)), [allModels]);
     const hasCloneModels = cloneModels.length > 0;
     const pickerModels = mode === 'clone' ? cloneModels : presetModels.length > 0 ? presetModels : allModels;
 
@@ -227,7 +228,8 @@ export default function VoiceLabCreateForm({
         [pickerModels, allModels, selectedModel],
     );
 
-    const needsSampleAudio = Boolean(selectedModelRecord?.supports_audio);
+    const needsSampleAudio = isVoiceCloneModel(selectedModelRecord);
+    const minSampleSeconds = minVoiceSampleSeconds(selectedModelRecord?.endpoint_id);
 
     const modelBrandVoices = selectedModelRecord?.voices;
     const modelVoices = useMemo(
@@ -273,21 +275,32 @@ export default function VoiceLabCreateForm({
         controlCaps.stability || controlCaps.clarity || controlCaps.style || controlCaps.speed;
 
     const creditEstimate = useMemo(() => {
-        // Always show at least the minimum charge (1 character) so the bar never reads 0/—
-        return estimateVoiceCredits(selectedModelRecord, Math.max(1, text.trim().length), creditsConfig);
-    }, [selectedModelRecord, text, creditsConfig]);
+        return estimateVoiceCredits(
+            selectedModelRecord,
+            Math.max(1, text.trim().length),
+            creditsConfig,
+            { sampleSeconds: sampleDurationSec },
+        );
+    }, [selectedModelRecord, text, creditsConfig, sampleDurationSec]);
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
 
-    const sampleDurationLabel =
-        sampleDurationSec != null && Number.isFinite(sampleDurationSec)
-            ? `${Math.max(1, Math.round(sampleDurationSec))}s`
-            : null;
+    const sampleDurationLabel = formatVoiceSampleDuration(
+        sampleDurationSec != null && sampleDurationSec > 0 ? sampleDurationSec : null,
+    );
+    const sampleTooShort =
+        needsSampleAudio &&
+        sampleDurationSec != null &&
+        sampleDurationSec > 0 &&
+        sampleDurationSec < minSampleSeconds;
+    const sampleAnalyzing = needsSampleAudio && Boolean(sampleAudio) && sampleDurationSec == null;
 
     const canGenerate =
         Boolean(text.trim()) &&
         hasEnoughTokens &&
-        (needsSampleAudio ? Boolean(sampleAudio) : Boolean(selectedVoice?.voice_key));
+        (needsSampleAudio
+            ? Boolean(sampleAudio) && !sampleTooShort && !sampleAnalyzing
+            : Boolean(selectedVoice?.voice_key));
 
     const stopPreview = () => {
         if (previewAudioRef.current) {
@@ -325,6 +338,9 @@ export default function VoiceLabCreateForm({
         setSampleAudio(null);
         setSampleDurationSec(null);
         if (audioInputRef.current) audioInputRef.current.value = '';
+        if (needsSampleAudio) {
+            setMode('clone');
+        }
     }, [selectedModelRecord?.endpoint_id, needsSampleAudio]);
 
     useEffect(() => {
@@ -332,19 +348,16 @@ export default function VoiceLabCreateForm({
             setSampleDurationSec(null);
             return;
         }
-        const url = URL.createObjectURL(sampleAudio);
-        const audio = new Audio(url);
-        const onMeta = () => {
-            if (Number.isFinite(audio.duration) && audio.duration > 0) {
-                setSampleDurationSec(audio.duration);
+        let cancelled = false;
+        setSampleDurationSec(null);
+        void readVoiceSampleDuration(sampleAudio).then((sec) => {
+            if (!cancelled) {
+                // 0 = analyzed but duration unknown (still allow generate)
+                setSampleDurationSec(sec != null && sec > 0 ? sec : 0);
             }
-            URL.revokeObjectURL(url);
-        };
-        audio.addEventListener('loadedmetadata', onMeta);
-        audio.addEventListener('error', () => URL.revokeObjectURL(url));
+        });
         return () => {
-            audio.removeEventListener('loadedmetadata', onMeta);
-            URL.revokeObjectURL(url);
+            cancelled = true;
         };
     }, [sampleAudio]);
 
@@ -562,7 +575,9 @@ export default function VoiceLabCreateForm({
                                                 {sampleAudio ? `@audio1 · ${sampleAudio.name}` : t('voice.chooseSample')}
                                             </span>
                                             <span className="mt-0.5 block text-[11px] text-white/45">
-                                                {sampleAudio ? formatAudioMeta(sampleAudio, sampleDurationLabel) : t('voice.dropSample')}
+                                                {sampleAudio
+                                                    ? formatAudioMeta(sampleAudio, sampleDurationLabel || null, sampleAnalyzing)
+                                                    : t('voice.dropSample')}
                                             </span>
                                         </span>
                                         <span
@@ -593,6 +608,19 @@ export default function VoiceLabCreateForm({
                                     </button>
                                 )}
                             </div>
+                            {sampleTooShort && (
+                                <p className="rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
+                                    {t('voice.sampleTooShort', {
+                                        duration: sampleDurationLabel || '—',
+                                        min: minSampleSeconds,
+                                    })}
+                                </p>
+                            )}
+                            {sampleAudio && !sampleTooShort && sampleDurationLabel && (
+                                <p className="text-[11px] leading-relaxed text-white/40">
+                                    {t('voice.sampleReady', { duration: sampleDurationLabel })}
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -766,9 +794,16 @@ export default function VoiceLabCreateForm({
                 <div className="mb-2.5 flex items-center justify-between gap-2 px-0.5">
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {needsSampleAudio ? (
-                            <span className="max-w-[140px] truncate rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                                {sampleAudio ? sampleAudio.name : t('voice.cloneBadge')}
-                            </span>
+                            <>
+                                <span className="max-w-[140px] truncate rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
+                                    {sampleAudio ? sampleAudio.name : t('voice.cloneBadge')}
+                                </span>
+                                {sampleDurationLabel && (
+                                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] tabular-nums text-white/65">
+                                        {sampleDurationLabel}
+                                    </span>
+                                )}
+                            </>
                         ) : (
                             selectedVoice && (
                                 <span className="max-w-[140px] truncate rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
@@ -780,14 +815,19 @@ export default function VoiceLabCreateForm({
                             {text.trim().length.toLocaleString()} chars
                         </span>
                     </div>
-                    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium tabular-nums text-orange-200/90">
+                    <span className="inline-flex shrink-0 flex-col items-end gap-0.5 text-[11px] font-medium tabular-nums text-orange-200/90">
                         {creditCost > 0 ? (
-                            <>
+                            <span className="inline-flex items-center gap-1">
                                 <CreditBoltIcon className="h-3.5 w-3.5 text-amber-300" />
                                 {creditCost}
-                            </>
+                            </span>
                         ) : (
                             '—'
+                        )}
+                        {needsSampleAudio && sampleDurationLabel && (
+                            <span className="text-[10px] font-normal text-white/40">
+                                {t('voice.sampleBilledHint', { duration: sampleDurationLabel })}
+                            </span>
                         )}
                     </span>
                 </div>
@@ -830,6 +870,10 @@ export default function VoiceLabCreateForm({
                         <span className="relative text-white/90">{t('voice.needText')}</span>
                     ) : needsSampleAudio && !sampleAudio ? (
                         <span className="relative text-white/90">{t('voice.needSample')}</span>
+                    ) : sampleAnalyzing ? (
+                        <span className="relative text-white/90">{t('voice.analyzingSample')}</span>
+                    ) : sampleTooShort ? (
+                        <span className="relative text-white/90">{t('voice.needLongerSample', { min: minSampleSeconds })}</span>
                     ) : !needsSampleAudio && !selectedVoice?.voice_key ? (
                         <span className="relative text-white/90">{t('voice.needVoice')}</span>
                     ) : (
@@ -860,7 +904,7 @@ export default function VoiceLabCreateForm({
                 onSelect={(m) => {
                     setSelectedBrand(m.brandName);
                     setSelectedModel(m.name);
-                    setMode(m.supports_audio ? 'clone' : 'preset');
+                    setMode(isVoiceCloneModel(m) ? 'clone' : 'preset');
                     setModelOpen(false);
                 }}
             />

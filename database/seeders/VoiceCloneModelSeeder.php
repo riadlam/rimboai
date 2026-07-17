@@ -62,8 +62,9 @@ class VoiceCloneModelSeeder extends Seeder
                 'description' => 'Clone a voice from a 10s+ MP3/WAV sample, then speak your prompt in that identity.',
                 'category' => 'MiniMax',
                 'sort' => 5,
-                'unit' => '1000 characters',
-                'unit_price' => 0.10,
+                // fal: $1.50 / clone + $0.30 / 1k preview characters (estimator adds preview)
+                'unit' => 'generations',
+                'unit_price' => 1.5,
                 'tags' => ['voice-clone', 'sample-audio', 'popular', 'multilingual'],
             ],
             [

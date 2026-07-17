@@ -5,57 +5,161 @@ const DEFAULT_CONFIG: CreditsConfig = {
     usd_per_credit: 0.01,
 };
 
-type VoiceModelPricing = {
+/** MiniMax voice-clone: flat clone fee + preview TTS chars (fal pricing). */
+const MINIMAX_CLONE_FEE_USD = 1.5;
+const MINIMAX_PREVIEW_PER_1000_CHARS_USD = 0.3;
+
+export type VoiceModelPricing = {
     unit_price?: number | string | null;
     unit?: string | null;
     endpoint_id?: string | null;
+    supports_audio?: boolean | null;
+    tags?: string[] | null;
+};
+
+export type VoiceCreditEstimate = {
+    credits: number;
+    falCostUsd: number;
+    billableUnits: number;
+    mode: string;
+    /** Sample seconds used for validation / display (clone models). */
+    sampleSeconds: number | null;
 };
 
 /**
- * Mirror of VoiceGenerationCostEstimator — character-based TTS pricing.
+ * True when this catalog model needs a voice sample (clone / zero-shot).
+ * Uses endpoint + tags as fallback when DB `supports_audio` was never set.
+ */
+export function isVoiceCloneModel(
+    model: Pick<VoiceModelPricing, 'endpoint_id' | 'supports_audio' | 'tags'> | null | undefined,
+): boolean {
+    if (!model) return false;
+    if (model.supports_audio === true) return true;
+
+    const id = String(model.endpoint_id ?? '').toLowerCase();
+    if (id.includes('voice-clone')) return true;
+    if (id.includes('chatterbox') && id.includes('text-to-speech')) return true;
+
+    const tags = (model.tags ?? []).map((t) => String(t).toLowerCase());
+    return tags.includes('voice-clone') || tags.includes('sample-audio');
+}
+
+export function isMiniMaxVoiceClone(endpointId?: string | null): boolean {
+    const id = String(endpointId ?? '').toLowerCase();
+    return id.includes('minimax/voice-clone') || id.endsWith('/voice-clone');
+}
+
+/** MiniMax needs ≥10s; Chatterbox works with shorter clips. */
+export function minVoiceSampleSeconds(endpointId?: string | null): number {
+    return isMiniMaxVoiceClone(endpointId) ? 10 : 3;
+}
+
+/**
+ * Mirror of VoiceGenerationCostEstimator.
+ * Clone MiniMax: $1.50/request + $0.30/1k preview chars.
+ * Chatterbox / preset TTS: character units from catalog.
  */
 export function estimateVoiceCredits(
     model: VoiceModelPricing | null | undefined,
     characterCount: number,
     config: CreditsConfig = DEFAULT_CONFIG,
-): { credits: number; falCostUsd: number; billableUnits: number } {
+    options: { sampleSeconds?: number | null } = {},
+): VoiceCreditEstimate {
     const chars = Math.max(0, characterCount);
+    const sampleSeconds =
+        typeof options.sampleSeconds === 'number' && Number.isFinite(options.sampleSeconds) && options.sampleSeconds > 0
+            ? options.sampleSeconds
+            : null;
+
     const rawPrice = model?.unit_price;
     const unitPrice =
         typeof rawPrice === 'number'
             ? rawPrice
             : Math.max(0, Number(String(rawPrice ?? '').replace(/[^0-9.\-eE]/g, '')) || 0);
     const unitRaw = String(model?.unit ?? '').toLowerCase().trim();
+    const endpointId = model?.endpoint_id ?? '';
+
+    if (isMiniMaxVoiceClone(endpointId)) {
+        const cloneFee = unitRaw.includes('generation') && unitPrice > 0 ? unitPrice : MINIMAX_CLONE_FEE_USD;
+        const previewChars = Math.max(chars, 1);
+        const previewUsd = (previewChars / 1000) * MINIMAX_PREVIEW_PER_1000_CHARS_USD;
+        const falCostUsd = Math.round((cloneFee + previewUsd) * 1e6) / 1e6;
+        const credits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
+
+        return {
+            falCostUsd,
+            billableUnits: 1,
+            credits,
+            mode: 'minimax_voice_clone',
+            sampleSeconds,
+        };
+    }
 
     if (unitPrice <= 0 || chars <= 0) {
-        return { credits: 0, falCostUsd: 0, billableUnits: 0 };
+        return { credits: 0, falCostUsd: 0, billableUnits: 0, mode: 'zero', sampleSeconds };
     }
 
     let billableUnits = 0;
     let falCostUsd = 0;
+    let mode = 'fallback_per_1000_characters';
 
     if (unitRaw.includes('1000') && unitRaw.includes('char')) {
         billableUnits = chars / 1000;
         falCostUsd = billableUnits * unitPrice;
+        mode = 'per_1000_characters';
     } else if (unitRaw.includes('char') && !unitRaw.includes('1000')) {
         billableUnits = chars;
         falCostUsd = billableUnits * unitPrice;
+        mode = 'per_character';
     } else if (unitRaw.includes('second') || unitRaw.includes('compute')) {
         billableUnits = Math.max(1, chars / 15);
         falCostUsd = billableUnits * unitPrice;
+        mode = 'per_compute_second';
+    } else if (unitRaw.includes('generation')) {
+        billableUnits = 1;
+        falCostUsd = unitPrice;
+        mode = 'per_generation';
     } else {
-        // Default TTS billing: per 1000 characters
         billableUnits = chars / 1000;
         falCostUsd = billableUnits * unitPrice;
     }
 
     falCostUsd = Math.round(falCostUsd * 1e6) / 1e6;
-    const credits = creditsFromFalUsd(falCostUsd, config);
+    const credits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
 
     return {
         falCostUsd,
         billableUnits,
-        // Any billable job should show at least 1 credit once text exists
-        credits: falCostUsd > 0 ? Math.max(1, credits) : 0,
+        credits,
+        mode,
+        sampleSeconds,
     };
+}
+
+/** Read duration (seconds) from a local audio File. */
+export function readVoiceSampleDuration(file: File): Promise<number | null> {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const audio = document.createElement('audio');
+        audio.preload = 'metadata';
+        const done = (value: number | null) => {
+            URL.revokeObjectURL(url);
+            resolve(value);
+        };
+        audio.onloadedmetadata = () => {
+            const d = audio.duration;
+            done(Number.isFinite(d) && d > 0 ? d : null);
+        };
+        audio.onerror = () => done(null);
+        audio.src = url;
+    });
+}
+
+export function formatVoiceSampleDuration(seconds: number | null | undefined): string {
+    if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return '';
+    const total = Math.round(seconds);
+    if (total < 60) return `${total}s`;
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
 }

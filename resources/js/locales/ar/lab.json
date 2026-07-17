@@ -125,7 +125,12 @@
     "chooseSample": "اختر عينة صوت",
     "dropSample": "أسقط أو تصفح · MP3، WAV…",
     "needSample": "ارفع عينة صوت",
-    "clonedVoice": "صوت مستنسخ"
+    "clonedVoice": "صوت مستنسخ",
+    "sampleTooShort": "العينة قصيرة جداً ({{duration}}). يلزم على الأقل {{min}} ثانية من كلام واضح.",
+    "sampleReady": "تم تحليل العينة · {{duration}} — يتم تحديث التوكنات حسب طول النص.",
+    "sampleBilledHint": "عينة {{duration}}",
+    "analyzingSample": "جاري تحليل العينة…",
+    "needLongerSample": "استخدم عينة لا تقل عن {{min}} ثانية"
   },
   "music": {
     "title": "موسيقى",

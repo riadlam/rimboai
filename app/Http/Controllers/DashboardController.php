@@ -375,6 +375,20 @@ class DashboardController extends Controller
                             $payload['supports_audio'] = (bool) ($m->supports_audio ?? false);
                         }
 
+                        // Voice clone models: always expose supports_audio when endpoint needs a sample
+                        // (covers DBs where the column exists but the flag was never seeded).
+                        if ($isVoiceCatalog) {
+                            $voiceEndpoint = strtolower((string) $endpointId);
+                            if (
+                                str_contains($voiceEndpoint, 'voice-clone')
+                                || (str_contains($voiceEndpoint, 'chatterbox') && str_contains($voiceEndpoint, 'text-to-speech'))
+                                || in_array('voice-clone', $tags, true)
+                                || in_array('sample-audio', $tags, true)
+                            ) {
+                                $payload['supports_audio'] = true;
+                            }
+                        }
+
                         if ($hasSupportsVocals) {
                             $payload['supports_vocals'] = (bool) ($m->supports_vocals ?? false);
                         }
