@@ -95,6 +95,7 @@ class VideoGenerationController extends Controller
                 'audio_urls' => ['nullable', 'array', 'max:3'],
                 'audio_urls.*' => ['string', 'max:2048'],
                 'frame_mode' => ['nullable', 'string', Rule::in(['first_last'])],
+                'negative_prompt' => ['nullable', 'string', 'max:500'],
             ]);
         } catch (ValidationException $e) {
             $first = collect($e->errors())->flatten()->first();
@@ -224,8 +225,11 @@ class VideoGenerationController extends Controller
             'audio' => count($audioUrls),
         ]);
 
+        $negativePrompt = trim((string) ($data['negative_prompt'] ?? ''));
+
         $built = $inputBuilder->build($submitEndpoint, [
             'prompt' => $providerPrompt,
+            'negative_prompt' => $negativePrompt,
             'aspect' => $data['aspect'] ?? '16:9',
             'resolution' => $data['resolution'] ?? '720p',
             'duration' => $data['duration'] ?? null,
@@ -281,6 +285,7 @@ class VideoGenerationController extends Controller
                     'endpoint_id' => $submitEndpoint,
                     'model_name' => $model->name,
                     'prompt' => $data['prompt'],
+                    'negative_prompt' => $negativePrompt !== '' ? $negativePrompt : null,
                     'input_assets' => $inputAssets ?: null,
                     'settings' => [
                         'aspect' => $built['aspect_ratio'],
@@ -288,6 +293,7 @@ class VideoGenerationController extends Controller
                         'duration' => $data['duration'] ?? $built['duration_value'],
                         'speed' => $data['speed'] ?? 'pro',
                         'audio' => $withAudio,
+                        'negative_prompt' => $negativePrompt !== '' ? $negativePrompt : null,
                         'catalog_endpoint' => $model->endpoint_id,
                         'fal_input' => $falInput,
                         'fal_endpoint' => $submitEndpoint,

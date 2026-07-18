@@ -477,6 +477,10 @@ class FalToolInputBuilder
             'prompt' => $prompt,
             'duration' => $duration,
         ]);
+        $negative = trim((string) ($settings['negative_prompt'] ?? $defaults['negative_prompt'] ?? ''));
+        if ($negative !== '') {
+            $input['negative_prompt'] = mb_substr($negative, 0, 500);
+        }
 
         return $this->onlyKeys($input, ['image_url', 'prompt', 'duration', 'cfg_scale', 'negative_prompt']);
     }
@@ -722,6 +726,10 @@ class FalToolInputBuilder
             'prompt' => $prompt,
             'duration' => max(1.0, min(30.0, $duration)),
         ]);
+        $negative = trim((string) ($settings['negative_prompt'] ?? $defaults['negative_prompt'] ?? ''));
+        if ($negative !== '') {
+            $input['negative_prompt'] = mb_substr($negative, 0, 500);
+        }
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'duration', 'num_steps', 'cfg_strength', 'negative_prompt', 'seed',

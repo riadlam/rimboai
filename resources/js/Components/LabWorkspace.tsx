@@ -949,6 +949,9 @@ function LabWorkspaceInner({
                 if (options?.frameMode === 'first_last') {
                     form.append('frame_mode', 'first_last');
                 }
+                if (options?.negativePrompt?.trim()) {
+                    form.append('negative_prompt', options.negativePrompt.trim());
+                }
 
                 const data = await apiPostForm<CreationResponse>('/lab/video/generate', form);
                 syncTokenBalance(data.token_balance);

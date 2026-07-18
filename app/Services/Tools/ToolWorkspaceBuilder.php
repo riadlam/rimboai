@@ -310,6 +310,7 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
+                $this->negativePromptControl($defaults),
                 [
                     'type' => 'choice',
                     'key' => 'duration',
@@ -409,6 +410,7 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
+                $this->negativePromptControl($defaults),
             ],
 
             default => [],
@@ -729,6 +731,26 @@ class ToolWorkspaceBuilder
         $mode = (string) ($defaults['mode'] ?? 'end');
 
         return $mode === 'start' ? 'backward' : 'forward';
+    }
+
+    /**
+     * Optional negative prompt for Fal endpoints that accept it (Wan I2V, Kling I2V, MMAudio).
+     *
+     * @param  array<string, mixed>  $defaults
+     * @return array<string, mixed>
+     */
+    private function negativePromptControl(array $defaults): array
+    {
+        return [
+            'type' => 'textarea',
+            'key' => 'negative_prompt',
+            'label_key' => 'negativePrompt',
+            'placeholder_key' => 'negativePromptPlaceholder',
+            'default' => (string) ($defaults['negative_prompt'] ?? ''),
+            'required' => false,
+            'optional' => true,
+            'max_length' => 500,
+        ];
     }
 
     /**

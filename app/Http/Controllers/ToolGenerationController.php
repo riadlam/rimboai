@@ -116,6 +116,7 @@ class ToolGenerationController extends Controller
                 'settings.filter' => ['nullable', 'string', 'max:32'],
                 // Shared / prompt-driven
                 'settings.prompt' => ['nullable', 'string', 'max:2000'],
+                'settings.negative_prompt' => ['nullable', 'string', 'max:500'],
                 'settings.resolution' => ['nullable', 'string', 'max:16'],
                 'settings.aspect_ratio' => ['nullable', 'string', 'max:16'],
                 // Legacy keys (kept for backward compatibility)

@@ -527,4 +527,54 @@ class VideoModelCapabilities
             'last_frame_param' => $lastFrameParam,
         ];
     }
+
+    /**
+     * Whether a Fal submit endpoint accepts an optional negative_prompt field.
+     */
+    public static function endpointSupportsNegativePrompt(string $endpointId): bool
+    {
+        $id = strtolower(trim($endpointId));
+        if ($id === '') {
+            return false;
+        }
+
+        if (str_contains($id, 'wan/')) {
+            return str_contains($id, 'text-to-video')
+                || str_contains($id, 'image-to-video')
+                || str_contains($id, 'reference-to-video');
+        }
+
+        if (str_contains($id, 'kling') && str_contains($id, 'image-to-video')) {
+            return true;
+        }
+
+        if (str_contains($id, 'mmaudio')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * True when the catalog row or any sibling route (I2V / R2V / FLF) supports negative prompts.
+     */
+    public function catalogSupportsNegativePrompt(string $endpointId): bool
+    {
+        if (self::endpointSupportsNegativePrompt($endpointId)) {
+            return true;
+        }
+
+        $caps = $this->for($endpointId);
+        foreach ([
+            $caps['reference_endpoint_id'] ?? null,
+            $caps['first_frame_endpoint_id'] ?? null,
+            $caps['first_last_frame_endpoint_id'] ?? null,
+        ] as $related) {
+            if (is_string($related) && $related !== '' && self::endpointSupportsNegativePrompt($related)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

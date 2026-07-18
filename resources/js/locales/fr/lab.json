@@ -87,7 +87,10 @@
     "noCompatible": "Aucun modèle compatible",
     "blockPrompt": "Ajoutez un prompt pour générer.",
     "blockAudioAlone": "Ajoutez une image ou une vidéo — l'audio ne peut pas être utilisé seul.",
-    "blockMix": "Aucun modèle ne prend en charge ce mélange de médias. Retirez certaines références."
+    "blockMix": "Aucun modèle ne prend en charge ce mélange de médias. Retirez certaines références.",
+    "negativePrompt": "Prompt négatif",
+    "negativePromptSub": "Optionnel — décrivez ce qu'il faut éviter dans la vidéo",
+    "negativePromptPlaceholder": "flou, basse qualité, texte, filigrane, visages déformés…"
   },
   "voice": {
     "title": "Voix off",

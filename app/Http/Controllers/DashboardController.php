@@ -608,6 +608,7 @@ class DashboardController extends Controller
                                 $caps['supports_last_frame'] = true;
                             }
                             $payload['media_capabilities'] = $caps;
+                            $payload['supports_negative_prompt'] = $videoCaps->catalogSupportsNegativePrompt($endpointId);
                         }
 
                         if ($isVoiceCatalog) {

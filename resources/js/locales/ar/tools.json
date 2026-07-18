@@ -93,6 +93,8 @@
     "uploadDriveVideo": "فيديو رقص مرجعي",
     "motionPrompt": "وصف الحركة",
     "motionPromptPlaceholder": "صف كيف يجب أن تتحرك الصورة…",
+    "negativePrompt": "الوصف السلبي",
+    "negativePromptPlaceholder": "ما يجب تجنبه — ضبابي، جودة منخفضة، نص، علامة مائية…",
     "animeDetailPrompt": "تفاصيل الأسلوب (اختياري)",
     "animeDetailPlaceholder": "تفاصيل إضافية لأسلوب الأنمي…",
     "soundPrompt": "صف الصوت",

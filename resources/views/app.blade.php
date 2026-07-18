@@ -7,6 +7,10 @@
 
     <title inertia>{{ config('app.name', 'AI Studio') }}</title>
 
+    <link rel="icon" href="/storage/ai_icons/logo_icon_only.png" type="image/png">
+    <link rel="shortcut icon" href="/storage/ai_icons/logo_icon_only.png" type="image/png">
+    <link rel="apple-touch-icon" href="/storage/ai_icons/logo_icon_only.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">

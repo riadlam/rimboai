@@ -40,6 +40,7 @@ export type VideoGenerateOptions = {
     modelName?: string;
     routeMode?: 'text-to-video' | 'image-to-video' | 'reference-to-video' | 'first-last-frame-to-video';
     frameMode?: 'first_last';
+    negativePrompt?: string;
     imageFiles?: File[];
     videoFiles?: File[];
     audioFiles?: File[];
@@ -155,6 +156,7 @@ export default function VideoLabCreateForm({
     const { t } = useTranslation('lab');
     const resolvedPlaceholder = placeholder ?? t('video.placeholder');
     const [prompt, setPrompt] = useState('');
+    const [negativePrompt, setNegativePrompt] = useState('');
     const [expanded, setExpanded] = useState(false);
     const [modelOpen, setModelOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(true);
@@ -322,6 +324,7 @@ export default function VideoLabCreateForm({
     const durationLabel = duration === 'auto' ? t('auto') : `${duration}s`;
 
     const supportsAudio = selectedModelRecord?.supports_audio === true;
+    const supportsNegativePrompt = selectedModelRecord?.supports_negative_prompt === true;
     const effectiveAudio = supportsAudio && audioOn;
 
     const creditEstimate = useMemo(
@@ -1242,6 +1245,30 @@ export default function VideoLabCreateForm({
                         </div>
                     </div>
 
+                    {supportsNegativePrompt && (
+                        <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
+                            <div className="px-4 pb-2 pt-3.5">
+                                <p className="text-sm font-semibold text-white">{t('video.negativePrompt')}</p>
+                                <p className="mt-0.5 text-[11px] text-white/35">{t('video.negativePromptSub')}</p>
+                            </div>
+                            <div className="px-3 pb-3">
+                                <textarea
+                                    value={negativePrompt}
+                                    onChange={(e) => setNegativePrompt(e.target.value.slice(0, 500))}
+                                    rows={3}
+                                    maxLength={500}
+                                    placeholder={t('video.negativePromptPlaceholder')}
+                                    className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm"
+                                />
+                                <div className="mt-1.5 flex justify-end px-1">
+                                    <span className={`text-[11px] ${negativePrompt.length > 420 ? 'text-orange-300' : 'text-white/30'}`}>
+                                        {negativePrompt.length}/500
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Settings */}
                     <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-transparent">
                         <button
@@ -1448,6 +1475,7 @@ export default function VideoLabCreateForm({
                             modelName: selectedMeta.name,
                             routeMode: routeMode ?? undefined,
                             frameMode: framesMode ? 'first_last' : undefined,
+                            negativePrompt: supportsNegativePrompt ? negativePrompt.trim() || undefined : undefined,
                             imageFiles: framesMode
                                 ? [firstFrame, lastFrame].filter(Boolean).map((m) => m!.file)
                                 : media.filter((m) => m.kind === 'image').map((m) => m.file),
@@ -1657,6 +1685,11 @@ export default function VideoLabCreateForm({
                                                             {tag}
                                                         </span>
                                                     ))}
+                                                    {'supports_negative_prompt' in m && m.supports_negative_prompt ? (
+                                                        <span className="rounded px-1.5 py-0.5 text-[9px] font-medium text-violet-100 bg-violet-500/15 ring-1 ring-violet-400/25">
+                                                            {t('video.negativePrompt')}
+                                                        </span>
+                                                    ) : null}
                                                 </div>
                                                 <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">
                                                     {isTool

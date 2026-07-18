@@ -74,6 +74,8 @@ export type BrandModel = {
     examples?: BrandMusicExample[];
     /** Voice lab: available voices for this model */
     voices?: BrandVoice[];
+    /** Whether this model accepts an optional negative prompt (Wan T2V/I2V/R2V, etc.) */
+    supports_negative_prompt?: boolean;
     /** Video lab: which reference media types this catalog model can accept */
     media_capabilities?: {
         supports_ref_images: boolean;

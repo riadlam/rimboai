@@ -93,6 +93,8 @@
     "uploadDriveVideo": "Reference Dance Video",
     "motionPrompt": "Motion prompt",
     "motionPromptPlaceholder": "Describe how the image should move…",
+    "negativePrompt": "Negative prompt",
+    "negativePromptPlaceholder": "What to avoid — blurry, low quality, text, watermark…",
     "animeDetailPrompt": "Style details (optional)",
     "animeDetailPlaceholder": "e.g. Ghibli look, 90s shonen — face & character stay the same",
     "soundPrompt": "Describe the sound",

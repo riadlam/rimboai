@@ -106,7 +106,10 @@
     "framesUnsupported": "This model doesn’t support first & last frame. Pick another model or turn the toggle off.",
     "framesSwitchedModel": "Switched to {{model}} for first & last frames",
     "framesModelsOnly": "First & last frame models ({{count}})",
-    "framesNoModels": "No models support first & last frames right now."
+    "framesNoModels": "No models support first & last frames right now.",
+    "negativePrompt": "Negative prompt",
+    "negativePromptSub": "Optional — describe what to avoid in the video",
+    "negativePromptPlaceholder": "blurry, low quality, text, watermark, distorted faces…"
   },
   "voice": {
     "title": "Voiceover",

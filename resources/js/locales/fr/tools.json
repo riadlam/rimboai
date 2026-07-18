@@ -93,6 +93,8 @@
     "uploadDriveVideo": "Vidéo de danse de référence",
     "motionPrompt": "Prompt de mouvement",
     "motionPromptPlaceholder": "Décrivez comment l'image doit bouger…",
+    "negativePrompt": "Prompt négatif",
+    "negativePromptPlaceholder": "À éviter — flou, basse qualité, texte, filigrane…",
     "animeDetailPrompt": "Détails de style (facultatif)",
     "animeDetailPlaceholder": "Détails de style anime supplémentaires…",
     "soundPrompt": "Décrivez le son",
