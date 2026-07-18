@@ -289,6 +289,7 @@ class FalVideoInputBuilder
         }
 
         $input = $this->applyWanPromptDefaults($endpointId, $input, $options);
+        $input = $this->applyNegativePrompt($endpointId, $input, $options);
 
         return [
             'input' => $input,
@@ -329,17 +330,35 @@ class FalVideoInputBuilder
             $input['enable_prompt_expansion'] = (bool) ($options['enable_prompt_expansion'] ?? false);
         }
 
+        return $input;
+    }
+
+    /**
+     * Attach negative_prompt when the Fal endpoint accepts it (Wan T2V/I2V/R2V, Kling I2V).
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    private function applyNegativePrompt(string $endpointId, array $input, array $options): array
+    {
         $negative = trim((string) ($options['negative_prompt'] ?? ''));
-        if (
-            $negative !== ''
-            && (
-                str_contains($id, 'text-to-video')
-                || str_contains($id, 'image-to-video')
-                || str_contains($id, 'reference-to-video')
-            )
-        ) {
-            $input['negative_prompt'] = mb_substr($negative, 0, 500);
+        if ($negative === '') {
+            return $input;
         }
+
+        // Strip a leading "negative prompt:" label users sometimes paste from other UIs.
+        $negative = preg_replace('/^\s*negative\s*prompts?\s*:\s*/i', '', $negative) ?? $negative;
+        $negative = trim($negative);
+        if ($negative === '') {
+            return $input;
+        }
+
+        if (! VideoModelCapabilities::endpointSupportsNegativePrompt($endpointId)) {
+            return $input;
+        }
+
+        $input['negative_prompt'] = mb_substr($negative, 0, 500);
 
         return $input;
     }

@@ -240,7 +240,11 @@ class VideoModelCapabilities
                 maxAudios: 0,
                 reference: null,
                 firstFrameEndpoint: $i2v,
-                firstFrameParam: str_contains($id, '/o3/') ? 'image_url' : 'start_image_url',
+                // v2.5-turbo + O3 use image_url; v3 / v2.6 / O1 use start_image_url.
+                firstFrameParam: (
+                    str_contains($id, '/o3/')
+                    || str_contains($id, 'v2.5-turbo')
+                ) ? 'image_url' : 'start_image_url',
                 firstLastEndpoint: null,
                 lastFrameParam: null,
             );
