@@ -392,7 +392,7 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
                             src={videoSrc}
                             poster={videoPoster}
                             playOnHover={false}
-                            autoPreviewSeconds={5}
+                            autoLoop
                             className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                         />
                     ) : showImage ? (
@@ -502,7 +502,8 @@ function TemplateDetailModal({
                     <LabVideoPlayer
                         src={tmpl.video_url || tmpl.cover}
                         poster={tmpl.thumbnail_url || undefined}
-                        previewSeconds={5}
+                        loop
+                        autoPlay
                         objectFit={isMobile ? 'contain' : 'cover'}
                         className="!rounded-none"
                     />

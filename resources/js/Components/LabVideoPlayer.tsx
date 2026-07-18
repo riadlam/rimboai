@@ -7,7 +7,9 @@ type Props = {
     poster?: string;
     className?: string;
     autoPlay?: boolean;
-    /** Muted teaser: play from 0 then pause at this second (user Play continues full clip). */
+    /** When true, clip loops until the user pauses. */
+    loop?: boolean;
+    /** Muted teaser: play from 0 then pause at this second (user Play continues full clip). Ignored when `loop` is set. */
     previewSeconds?: number;
     objectFit?: 'cover' | 'contain';
 };
@@ -20,12 +22,16 @@ export default function LabVideoPlayer({
     poster,
     className = '',
     autoPlay = false,
+    loop = false,
     previewSeconds,
     objectFit = 'contain',
 }: Props) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerRef = useRef<Plyr | null>(null);
     const previewDoneRef = useRef(false);
+
+    const teaserSeconds = loop ? undefined : previewSeconds;
+    const shouldAutoplay = Boolean(teaserSeconds) || autoPlay || loop;
 
     useEffect(() => {
         const el = videoRef.current;
@@ -49,18 +55,19 @@ export default function LabVideoPlayer({
             speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
             hideControls: true,
             resetOnEnd: false,
+            loop: { active: loop },
             keyboard: { focused: true, global: false },
             tooltips: { controls: true, seek: true },
             autopause: true,
             storage: { enabled: false },
-            muted: Boolean(previewSeconds) || autoPlay,
-            autoplay: Boolean(previewSeconds) || autoPlay,
+            muted: shouldAutoplay,
+            autoplay: shouldAutoplay,
         });
 
         const player = playerRef.current;
         const onTimeUpdate = () => {
-            if (!previewSeconds || previewDoneRef.current) return;
-            if (player.currentTime >= previewSeconds) {
+            if (!teaserSeconds || previewDoneRef.current) return;
+            if (player.currentTime >= teaserSeconds) {
                 previewDoneRef.current = true;
                 player.pause();
                 player.currentTime = 0;
@@ -76,7 +83,7 @@ export default function LabVideoPlayer({
         player.on('timeupdate', onTimeUpdate);
         player.on('play', onPlay);
 
-        if (previewSeconds || autoPlay) {
+        if (shouldAutoplay) {
             void player.play().catch(() => undefined);
         }
 
@@ -86,7 +93,7 @@ export default function LabVideoPlayer({
             player.destroy();
             playerRef.current = null;
         };
-    }, [src, autoPlay, previewSeconds]);
+    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay]);
 
     return (
         <div className={`lab-plyr h-full w-full overflow-hidden rounded-[5px] bg-black ${className}`}>
@@ -95,9 +102,10 @@ export default function LabVideoPlayer({
                 key={src}
                 className={`h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
                 playsInline
+                loop={loop}
                 poster={poster || undefined}
                 preload="metadata"
-                muted={Boolean(previewSeconds) || autoPlay}
+                muted={shouldAutoplay}
             >
                 <source src={src} type="video/mp4" />
             </video>

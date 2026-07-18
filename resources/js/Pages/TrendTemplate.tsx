@@ -113,6 +113,24 @@ function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation | UserTrendLa
     return ('cover_url' in c ? c.cover_url : null) || c.preview_url || null;
 }
 
+async function downloadAsset(url: string, filename: string) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('fetch failed');
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+    } catch {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+}
+
 export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const { t } = useTranslation('trends');
     const { props } = usePage<PageProps>();
@@ -133,6 +151,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const [exampleOverride, setExampleOverride] = useState<RemakeCreation | UserTrendLatest | null>(
         (workspace.user_remake_count ?? 0) > 1 ? (workspace.user_latest ?? null) : null,
     );
+    const [downloading, setDownloading] = useState(false);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const remakeCountRef = useRef(workspace.user_remake_count ?? 0);
 
@@ -309,6 +328,30 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         setModalOpen(false);
         setCreating(false);
         setDetailsOpen(false);
+        setDownloading(false);
+    };
+
+    const handleDownloadResult = async () => {
+        if (!job || downloading) return;
+        const url =
+            workspace.type === 'music'
+                ? job.audio_url || job.preview_url || null
+                : resultSrc(workspace.type, job);
+        if (!url) return;
+
+        const filename =
+            workspace.type === 'video'
+                ? `video-${job.id}.mp4`
+                : workspace.type === 'music'
+                  ? `music-${job.id}.mp3`
+                  : `image-${job.id}.jpg`;
+
+        setDownloading(true);
+        try {
+            await downloadAsset(url, filename);
+        } finally {
+            setDownloading(false);
+        }
     };
 
     const replaceExample = completedRemakeCount > 1 && exampleOverride != null;
@@ -523,7 +566,8 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                 <LabVideoPlayer
                                                     src={exampleVideoSrc}
                                                     poster={examplePoster}
-                                                    previewSeconds={5}
+                                                    loop
+                                                    autoPlay
                                                     objectFit="contain"
                                                 />
                                             </div>
@@ -662,7 +706,8 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                     <LabVideoPlayer
                                                         src={doneSrc}
                                                         poster={job?.thumbnail_url || undefined}
-                                                        previewSeconds={5}
+                                                        loop
+                                                        autoPlay
                                                         objectFit="cover"
                                                         className="!rounded-none"
                                                     />
@@ -693,12 +738,34 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                 {t('viewDetails')}
                                             </button>
                                         </div>
-                                        <Link
-                                            href="/history"
-                                            className="flex h-11 w-full items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] text-sm font-medium text-white/85"
-                                        >
-                                            {t('viewHistory')}
-                                        </Link>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Link
+                                                href="/history"
+                                                className="flex h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] text-sm font-medium text-white/85"
+                                            >
+                                                {t('viewHistory')}
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleDownloadResult()}
+                                                disabled={
+                                                    downloading ||
+                                                    !(
+                                                        workspace.type === 'music'
+                                                            ? job?.audio_url || job?.preview_url
+                                                            : doneSrc
+                                                    )
+                                                }
+                                                className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-orange-400/35 bg-orange-500/15 text-sm font-semibold text-orange-100 transition enabled:hover:bg-orange-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                                                    <path d="M12 3v12" />
+                                                    <path d="m7 10 5 5 5-5" />
+                                                    <path d="M5 19h14" />
+                                                </svg>
+                                                {downloading ? t('downloading') : t('download')}
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>

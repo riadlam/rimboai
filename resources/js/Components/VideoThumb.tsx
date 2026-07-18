@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent, type VideoHTMLAttributes } from 'react';
 
-type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'> & {
+type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls' | 'loop'> & {
     /** Seconds into the clip to freeze as the thumbnail frame. Defaults to first scene. */
     seekTo?: number;
     /** Play on hover (desktop). Defaults to true. */
@@ -10,6 +10,11 @@ type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'
      * while the card is in view — used on Trends feed.
      */
     autoPreviewSeconds?: number;
+    /**
+     * When true (and playOnHover is false), muted-autoplay the full clip in a loop
+     * while the card is in view until the user navigates away.
+     */
+    autoLoop?: boolean;
 };
 
 /** Module cache so scrolling a grid of videos doesn't re-capture the same first frame. */
@@ -54,6 +59,7 @@ export default function VideoThumb({
     seekTo = 0.15,
     playOnHover = true,
     autoPreviewSeconds,
+    autoLoop = false,
     muted = true,
     playsInline = true,
     preload = 'auto',
@@ -72,7 +78,12 @@ export default function VideoThumb({
         src && !poster ? framePosterCache.get(src) ?? null : null,
     );
 
-    const previewMode = typeof autoPreviewSeconds === 'number' && autoPreviewSeconds > 0 && !playOnHover;
+    const previewMode =
+        !playOnHover && (autoLoop || (typeof autoPreviewSeconds === 'number' && autoPreviewSeconds > 0));
+    const clipPreviewSeconds =
+        !autoLoop && typeof autoPreviewSeconds === 'number' && autoPreviewSeconds > 0
+            ? autoPreviewSeconds
+            : undefined;
     const effectivePoster = poster || capturedPoster || undefined;
     const stillOnly = Boolean(effectivePoster) && !playOnHover && !previewMode;
     const framedSrc = useMemo(() => (src ? withTimeFragment(src, seekTo) : undefined), [src, seekTo]);
@@ -186,9 +197,9 @@ export default function VideoThumb({
     };
 
     const handleTimeUpdate = (e: SyntheticEvent<HTMLVideoElement>) => {
-        if (!previewMode || !autoPreviewSeconds) return;
+        if (!previewMode || !clipPreviewSeconds) return;
         const video = e.currentTarget;
-        if (video.currentTime >= autoPreviewSeconds) {
+        if (video.currentTime >= clipPreviewSeconds) {
             try {
                 video.currentTime = 0;
             } catch {
@@ -198,6 +209,17 @@ export default function VideoThumb({
                 void video.play().catch(() => undefined);
             }
         }
+    };
+
+    const handleEnded = (e: SyntheticEvent<HTMLVideoElement>) => {
+        if (!previewMode || !autoLoop || !inView) return;
+        const video = e.currentTarget;
+        try {
+            video.currentTime = 0;
+        } catch {
+            /* ignore */
+        }
+        void video.play().catch(() => undefined);
     };
 
     if (stillOnly) {
@@ -236,6 +258,7 @@ export default function VideoThumb({
                 poster={effectivePoster}
                 muted={muted}
                 playsInline={playsInline}
+                loop={autoLoop}
                 preload={preload}
                 className={`absolute inset-0 size-full ${fit} transition-opacity duration-200 ${
                     playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
@@ -244,6 +267,7 @@ export default function VideoThumb({
                 onLoadedData={(e) => freezeAt(e.currentTarget)}
                 onCanPlay={(e) => freezeAt(e.currentTarget)}
                 onTimeUpdate={handleTimeUpdate}
+                onEnded={handleEnded}
                 onMouseEnter={(e) => {
                     if (playOnHover) {
                         void e.currentTarget
