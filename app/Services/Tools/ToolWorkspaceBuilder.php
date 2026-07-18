@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Builds a client-safe tool workspace from video_tools_models.
- * Never exposes Fal model names / endpoint_ids to the browser.
+ * Exposes product model names (not raw Fal endpoint IDs) for the picker.
  */
 class ToolWorkspaceBuilder
 {
@@ -17,6 +17,7 @@ class ToolWorkspaceBuilder
      *   available: bool,
      *   tool_slug: string,
      *   model_id: int|null,
+     *   models: list<array<string, mixed>>,
      *   billing: array<string, mixed>|null,
      *   uploads: list<array<string, mixed>>,
      *   controls: list<array<string, mixed>>,
@@ -25,13 +26,15 @@ class ToolWorkspaceBuilder
      */
     public function build(string $toolSlug): array
     {
-        $primary = $this->primaryModel($toolSlug);
+        $models = $this->activeModels($toolSlug);
+        $primary = $models->first();
 
         if (! $primary) {
             return [
                 'available' => false,
                 'tool_slug' => $toolSlug,
                 'model_id' => null,
+                'models' => [],
                 'billing' => null,
                 'uploads' => [['key' => 'video', 'accept' => 'video/*', 'required' => true, 'label_key' => 'upload']],
                 'controls' => [],
@@ -46,35 +49,24 @@ class ToolWorkspaceBuilder
             'available' => true,
             'tool_slug' => $toolSlug,
             'model_id' => (int) $primary->id,
-            'billing' => [
-                'unit' => (string) ($primary->unit ?? 'seconds'),
-                'unit_price' => (float) ($primary->unit_price ?? 0),
-                // Fal tiers that change $/s (or flat $/clip) by output resolution.
-                'unit_price_by_resolution' => self::unitPriceByResolution(
-                    (string) $primary->endpoint_id,
-                    (string) ($primary->unit ?? 'seconds'),
-                ),
-                'max_duration' => $primary->max_duration !== null ? (int) $primary->max_duration : null,
-                'ref_duration_seconds' => $primary->ref_duration_seconds !== null
-                    ? (int) $primary->ref_duration_seconds
-                    : 5,
-                'duration_enums' => self::durationEnumsFor(
-                    $toolSlug,
-                    $enums,
-                    $defaults,
-                    $primary->max_duration !== null ? (int) $primary->max_duration : null,
-                ),
-            ],
+            'models' => $models
+                ->map(fn ($row) => $this->serializeModelOption($row))
+                ->values()
+                ->all(),
+            'billing' => $this->billingFor($primary, $toolSlug, $enums, $defaults),
             'uploads' => $this->uploadsFor($toolSlug),
             'controls' => $this->controlsFor($toolSlug, $enums, $defaults),
             'notices' => $this->noticesFor($toolSlug, $primary),
         ];
     }
 
-    private function primaryModel(string $toolSlug): ?object
+    /**
+     * @return Collection<int, object>
+     */
+    private function activeModels(string $toolSlug): Collection
     {
         if (! Schema::hasTable('video_tools_models')) {
-            return null;
+            return collect();
         }
 
         return DB::table('video_tools_models')
@@ -82,7 +74,60 @@ class ToolWorkspaceBuilder
             ->where('status', 'active')
             ->orderByDesc('is_primary')
             ->orderBy('sort')
-            ->first();
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeModelOption(object $row): array
+    {
+        $enums = $this->decodeJson($row->enums);
+        $defaults = $this->decodeJson($row->defaults);
+        $toolSlug = (string) ($row->tool_slug ?? '');
+
+        return [
+            'id' => (int) $row->id,
+            'name' => (string) ($row->name ?: 'Model'),
+            'description' => (string) ($row->description ?? ''),
+            'is_primary' => (bool) ($row->is_primary ?? false),
+            'image_url' => is_string($row->image_url ?? null) ? $row->image_url : null,
+            'billing' => $this->billingFor($row, $toolSlug, $enums, $defaults),
+        ];
+    }
+
+    /**
+     * @param  list<mixed>|null  $enums
+     * @param  array<string, mixed>  $defaults
+     * @return array<string, mixed>
+     */
+    private function billingFor(object $row, string $toolSlug, ?array $enums, array $defaults): array
+    {
+        return [
+            'unit' => (string) ($row->unit ?? 'seconds'),
+            'unit_price' => (float) ($row->unit_price ?? 0),
+            // Fal tiers that change $/s (or flat $/clip) by output resolution.
+            'unit_price_by_resolution' => self::unitPriceByResolution(
+                (string) $row->endpoint_id,
+                (string) ($row->unit ?? 'seconds'),
+            ),
+            'max_duration' => $row->max_duration !== null ? (int) $row->max_duration : null,
+            'ref_duration_seconds' => $row->ref_duration_seconds !== null
+                ? (int) $row->ref_duration_seconds
+                : 5,
+            'duration_enums' => self::durationEnumsFor(
+                $toolSlug,
+                $enums,
+                $defaults,
+                $row->max_duration !== null ? (int) $row->max_duration : null,
+            ),
+        ];
+    }
+
+    private function primaryModel(string $toolSlug): ?object
+    {
+        return $this->activeModels($toolSlug)->first();
     }
 
     /**

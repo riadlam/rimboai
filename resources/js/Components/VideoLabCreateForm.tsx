@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { router } from '@inertiajs/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Brand } from '@/types';
@@ -15,6 +16,8 @@ import {
     getMediaCaps,
     mediaTotal,
     resolveMediaRouteMode,
+    resolveUploadLimits,
+    trimMediaToUploadLimits,
     supportsMediaMix,
     type MediaCounts,
 } from '@/lib/videoMediaCaps';
@@ -76,8 +79,6 @@ const PROMPT_CHIPS = [
 ] as const;
 
 type MediaItem = { id: string; url: string; kind: 'image' | 'video' | 'audio'; name: string; file: File };
-
-const MEDIA_LIMITS = { image: 9, video: 3, audio: 3 } as const;
 
 type DurationSelection = number | 'auto';
 
@@ -232,25 +233,39 @@ export default function VideoLabCreateForm({
     const modelsForPicker = useMemo(() => {
         const frameMode = framesMode ? 'first_last' : 'default';
         const compatible = allModels.filter((m) => {
+            // Tool catalog rows always appear (except FLF mode) — picking opens /tools/{slug}.
+            if (m.tool_slug) return !framesMode;
             // Frames toggle on → only models that can do first+last, even before images are added.
             if (framesMode && !getMediaCaps(m).supports_last_frame) return false;
             return supportsMediaMix(m, mediaCounts, frameMode);
         });
-        // Rank safest / best-fit models first in the picker.
+        // Rank safest / best-fit models first in the picker (tools sink to the bottom).
         return [...compatible].sort((a, b) => {
+            if (!!a.tool_slug !== !!b.tool_slug) return a.tool_slug ? 1 : -1;
             const sa = pickBestVideoModel([a], mediaCounts, prompt)?.score ?? 0;
             const sb = pickBestVideoModel([b], mediaCounts, prompt)?.score ?? 0;
             return sb - sa;
         });
     }, [allModels, mediaCounts, prompt, framesMode]);
 
+    const labModelsForPicker = useMemo(
+        () => modelsForPicker.filter((m) => !m.tool_slug),
+        [modelsForPicker],
+    );
+
     const selectedModelRecord = useMemo(
         () => allModels.find((m) => m.name === selectedModel),
         [allModels, selectedModel],
     );
 
+    const uploadLimits = useMemo(
+        () => resolveUploadLimits(selectedModelRecord?.tool_slug ? null : selectedModelRecord),
+        [selectedModelRecord],
+    );
+
     const selectedMeta =
         selectedModelRecord ||
+        labModelsForPicker[0] ||
         modelsForPicker[0] ||
         allModels[0] ||
         ({
@@ -381,9 +396,9 @@ export default function VideoLabCreateForm({
 
     // Auto-switch to a safer model for this media + prompt (hides incompatible in picker).
     useEffect(() => {
-        if (modelsForPicker.length === 0) return;
+        if (labModelsForPicker.length === 0) return;
 
-        const best = pickBestVideoModel(modelsForPicker, mediaCounts, prompt);
+        const best = pickBestVideoModel(labModelsForPicker, mediaCounts, prompt);
         if (!best) return;
 
         const decision = shouldAutoSwitchVideoModel(
@@ -402,7 +417,7 @@ export default function VideoLabCreateForm({
         setSwitchNotice(
             decision.reason.replace(best.model.name, formatModelName(best.model.name)),
         );
-    }, [modelsForPicker, mediaCounts, prompt, selectedModel, selectedBrand, selectedModelRecord]);
+    }, [labModelsForPicker, mediaCounts, prompt, selectedModel, selectedBrand, selectedModelRecord]);
 
     // Auto-hide switch banner; clear immediately when all refs are removed
     useEffect(() => {
@@ -637,13 +652,54 @@ export default function VideoLabCreateForm({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draft?.id]);
 
-    const chooseModel = (m: { name: string; brandName: string }) => {
+    const chooseModel = (m: {
+        name: string;
+        brandName: string;
+        tool_slug?: string | null;
+        media_capabilities?: (typeof allModels)[number]['media_capabilities'];
+    }) => {
+        if (m.tool_slug) {
+            setModelOpen(false);
+            router.visit(`/tools/${m.tool_slug}`);
+            return;
+        }
         userModelLocked.current = true;
         setSelectedBrand(m.brandName);
         setSelectedModel(m.name);
-        setSwitchNotice(null);
+
+        // If this model only allows 3–4 refs (etc.), drop extras so generate stays valid.
+        const limits = resolveUploadLimits(m);
+        const { items, trimmed } = trimMediaToUploadLimits(mediaRef.current, limits, (url) => {
+            URL.revokeObjectURL(url);
+        });
+        if (trimmed > 0) {
+            mediaRef.current = items;
+            setMedia(items);
+            setMediaNotice(
+                `Trimmed ${trimmed} reference${trimmed === 1 ? '' : 's'} — ${m.name} allows up to ${limits.image} images, ${limits.video} videos, ${limits.audio} audio.`,
+            );
+            setSwitchNotice(null);
+        } else {
+            setSwitchNotice(null);
+        }
         setModelOpen(false);
     };
+
+    // Keep attachments inside the selected model's ref ceiling (manual pick + auto-switch).
+    useEffect(() => {
+        if (!selectedModelRecord || selectedModelRecord.tool_slug) return;
+        const limits = resolveUploadLimits(selectedModelRecord);
+        const prev = mediaRef.current;
+        const { items, trimmed } = trimMediaToUploadLimits(prev, limits, (url) => {
+            URL.revokeObjectURL(url);
+        });
+        if (trimmed === 0) return;
+        mediaRef.current = items;
+        setMedia(items);
+        setMediaNotice(
+            `Trimmed ${trimmed} reference${trimmed === 1 ? '' : 's'} — ${selectedModelRecord.name} allows up to ${limits.image} images, ${limits.video} videos, ${limits.audio} audio.`,
+        );
+    }, [selectedModelRecord]);
 
     const addMedia = (files: FileList | null) => {
         if (!files || files.length === 0) return;
@@ -657,6 +713,7 @@ export default function VideoLabCreateForm({
         const next: MediaItem[] = [];
         let skippedUnsupported = 0;
         let skippedLimit = 0;
+        let skippedType = 0;
 
         for (const file of Array.from(files)) {
             const kind = detectMediaKind(file);
@@ -664,7 +721,11 @@ export default function VideoLabCreateForm({
                 skippedUnsupported += 1;
                 continue;
             }
-            if (counts[kind] >= MEDIA_LIMITS[kind]) {
+            if (uploadLimits[kind] <= 0) {
+                skippedType += 1;
+                continue;
+            }
+            if (counts[kind] >= uploadLimits[kind]) {
                 skippedLimit += 1;
                 continue;
             }
@@ -686,9 +747,13 @@ export default function VideoLabCreateForm({
 
         if (skippedUnsupported > 0) {
             setMediaNotice('Only JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, MP3, or WAV files are supported.');
+        } else if (skippedType > 0) {
+            setMediaNotice(
+                `${selectedModelRecord?.name || 'This model'} doesn’t accept that media type. Pick a multimodal model or remove unsupported files.`,
+            );
         } else if (skippedLimit > 0) {
             setMediaNotice(
-                `Some files were skipped — limits are ${MEDIA_LIMITS.image} images, ${MEDIA_LIMITS.video} videos, ${MEDIA_LIMITS.audio} audio.`,
+                `Some files were skipped — ${selectedModelRecord?.name || 'this model'} allows up to ${uploadLimits.image} images, ${uploadLimits.video} videos, ${uploadLimits.audio} audio.`,
             );
         } else {
             setMediaNotice(null);
@@ -956,8 +1021,11 @@ export default function VideoLabCreateForm({
                                 <div className="text-center">
                                     <p className="text-sm font-semibold text-white">{t('video.uploadMedia')}</p>
                                     <p className="mt-1 text-xs text-white/40">
-                                        Image, video, or audio · up to {MEDIA_LIMITS.image} images / {MEDIA_LIMITS.video} videos /{' '}
-                                        {MEDIA_LIMITS.audio} audio
+                                        Image, video, or audio · up to {uploadLimits.image} images / {uploadLimits.video}{' '}
+                                        videos / {uploadLimits.audio} audio
+                                        {selectedModelRecord?.name
+                                            ? ` for ${formatModelName(selectedModelRecord.name)}`
+                                            : ''}
                                     </p>
                                 </div>
                             </label>
@@ -967,9 +1035,9 @@ export default function VideoLabCreateForm({
                                     <span className="text-xs font-medium text-white/60">
                                         Media · {mediaCounts.images}img · {mediaCounts.videos}vid · {mediaCounts.audios}aud
                                     </span>
-                                    {(mediaCounts.images < MEDIA_LIMITS.image ||
-                                        mediaCounts.videos < MEDIA_LIMITS.video ||
-                                        mediaCounts.audios < MEDIA_LIMITS.audio) && (
+                                    {(mediaCounts.images < uploadLimits.image ||
+                                        mediaCounts.videos < uploadLimits.video ||
+                                        mediaCounts.audios < uploadLimits.audio) && (
                                         <label
                                             htmlFor={mediaInputId}
                                             className="cursor-pointer text-[11px] font-medium text-orange-300 hover:text-orange-200"
@@ -1546,8 +1614,11 @@ export default function VideoLabCreateForm({
                                             },
                                         ]
                                 ).map((m) => {
-                                    const active = selectedModel === m.name;
-                                    const tags = 'tags' in m && Array.isArray(m.tags) ? m.tags : [];
+                                    const active = selectedModel === m.name && !('tool_slug' in m && m.tool_slug);
+                                    const isTool = Boolean('tool_slug' in m && m.tool_slug);
+                                    const tags = ('tags' in m && Array.isArray(m.tags) ? m.tags : []).filter(
+                                        (tag) => tag !== 'tool' && tag !== (m.tool_slug ?? ''),
+                                    );
                                     const modelCredits = estimateVideoCredits(
                                         m,
                                         {
@@ -1573,6 +1644,11 @@ export default function VideoLabCreateForm({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <p className="text-[13px] font-medium text-zinc-100">{formatModelName(m.name)}</p>
+                                                    {isTool ? (
+                                                        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-100 bg-sky-500/20 ring-1 ring-sky-400/30">
+                                                            Tool
+                                                        </span>
+                                                    ) : null}
                                                     {tags.slice(0, 2).map((tag) => (
                                                         <span
                                                             key={tag}
@@ -1582,20 +1658,29 @@ export default function VideoLabCreateForm({
                                                         </span>
                                                     ))}
                                                 </div>
-                                                <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">{m.description || m.brandName}</p>
+                                                <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">
+                                                    {isTool
+                                                        ? `Open ${m.brandName} tool`
+                                                        : m.description || m.brandName}
+                                                </p>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-1.5">
-                                                {modelCredits > 0 && (
+                                                {!isTool && modelCredits > 0 && (
                                                     <span className="inline-flex items-center gap-1 rounded-md border border-orange-400/25 bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-orange-200">
                                                         <CreditBoltIcon className="h-3 w-3 text-amber-300" />
                                                         {modelCredits}
                                                     </span>
                                                 )}
-                                                {active && (
+                                                {isTool ? (
+                                                    <svg className="h-4 w-4 shrink-0 text-sky-300/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M7 17 17 7" />
+                                                        <path d="M8 7h9v9" />
+                                                    </svg>
+                                                ) : active ? (
                                                     <svg className="h-4 w-4 shrink-0 text-[#FF5733]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                                         <path d="M20 6 9 17l-5-5" />
                                                     </svg>
-                                                )}
+                                                ) : null}
                                             </div>
                                         </button>
                                     );

@@ -6,6 +6,7 @@ import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
 import { estimateToolCredits, snapBillableDuration } from '@/lib/toolCredits';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import type { PageProps, Tool, ToolControlSpec, ToolUploadSpec, ToolWorkspace } from '@/types';
+import { LabModelPickerModal, LabModelPickerTrigger } from '@/Components/LabModelPicker';
 
 type FileSlot = {
     file: File | null;
@@ -97,12 +98,23 @@ export default function ToolCreatePanel({
     );
     const [slots, setSlots] = useState<Record<string, FileSlot>>(() => initSlots(workspace.uploads));
     const [settingsOpen, setSettingsOpen] = useState(true);
+    const [modelOpen, setModelOpen] = useState(false);
+    const [selectedModelId, setSelectedModelId] = useState<number | null>(workspace.model_id);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const modelOptions = workspace.models ?? [];
+    const selectedModel =
+        modelOptions.find((m) => m.id === selectedModelId) ??
+        modelOptions.find((m) => m.id === workspace.model_id) ??
+        modelOptions[0] ??
+        null;
+    const activeBilling = selectedModel?.billing ?? workspace.billing;
+    const activeModelId = selectedModel?.id ?? workspace.model_id;
 
     useEffect(() => {
         setValues(initControlValues(workspace.controls));
@@ -112,6 +124,7 @@ export default function ToolCreatePanel({
             });
             return initSlots(workspace.uploads);
         });
+        setSelectedModelId(workspace.model_id);
         setError(null);
         setStatusMessage(null);
     }, [workspace.tool_slug, workspace.model_id]);
@@ -183,17 +196,17 @@ export default function ToolCreatePanel({
             : null;
 
     const requiresVideoDuration = workspace.uploads.some((u) => u.key === 'video' && u.required);
-    const durationEnums = workspace.billing?.duration_enums ?? null;
+    const durationEnums = activeBilling?.duration_enums ?? null;
 
     /** Placeholder duration used for the instant estimate (before real media length is known). */
     const estimatedSourceDuration = useMemo(() => {
-        const ref = workspace.billing?.ref_duration_seconds ?? 5;
+        const ref = activeBilling?.ref_duration_seconds ?? 5;
         if (durationEnums && durationEnums.length > 0) {
             if (durationEnums.includes(ref)) return ref;
             return durationEnums[0];
         }
         return ref;
-    }, [workspace.billing?.ref_duration_seconds, durationEnums]);
+    }, [activeBilling?.ref_duration_seconds, durationEnums]);
 
     /** Measured / selected length — null until we know the real billable source. */
     const sourceDuration = useMemo(() => {
@@ -225,16 +238,16 @@ export default function ToolCreatePanel({
         return snapBillableDuration(
             sourceDuration ?? estimatedSourceDuration,
             durationEnums,
-            workspace.billing?.max_duration,
+            activeBilling?.max_duration,
         );
-    }, [sourceDuration, estimatedSourceDuration, durationEnums, workspace.billing?.max_duration]);
+    }, [sourceDuration, estimatedSourceDuration, durationEnums, activeBilling?.max_duration]);
 
     const creditEstimate = useMemo(() => {
         if (!(billDuration > 0)) {
-            return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: workspace.billing?.unit || 'seconds' };
+            return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: activeBilling?.unit || 'seconds' };
         }
         return estimateToolCredits(
-            workspace.billing,
+            activeBilling,
             {
                 durationSeconds: billDuration,
                 resolution:
@@ -246,7 +259,7 @@ export default function ToolCreatePanel({
             },
             creditsConfig,
         );
-    }, [workspace.billing, billDuration, values.resolution, values.scale, creditsConfig]);
+    }, [activeBilling, billDuration, values.resolution, values.scale, creditsConfig]);
 
     const requiredReady = workspace.uploads.every((u) => {
         if (!u.required) return true;
@@ -273,7 +286,7 @@ export default function ToolCreatePanel({
             window.location.href = '/login';
             return;
         }
-        if (!workspace.available || !workspace.model_id) return;
+        if (!workspace.available || !activeModelId) return;
         if (isDurationEstimate || !(billDuration > 0)) return;
 
         setError(null);
@@ -303,7 +316,7 @@ export default function ToolCreatePanel({
             }
 
             const data = await apiPost<ToolCreationResponse>('/tools/generate', {
-                model_id: workspace.model_id,
+                model_id: activeModelId,
                 tool_slug: workspace.tool_slug,
                 duration_seconds: billDuration,
                 settings,
@@ -333,6 +346,7 @@ export default function ToolCreatePanel({
             setError(message);
         }
     }, [
+        activeModelId,
         billDuration,
         isDurationEstimate,
         isGuest,
@@ -343,7 +357,6 @@ export default function ToolCreatePanel({
         t,
         values,
         workspace.available,
-        workspace.model_id,
         workspace.tool_slug,
         workspace.uploads,
     ]);
@@ -383,6 +396,7 @@ export default function ToolCreatePanel({
     const mainControls = workspace.controls.filter((c) => c.type !== 'toggle');
 
     return (
+        <>
         <motion.aside
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
@@ -420,6 +434,24 @@ export default function ToolCreatePanel({
                             </h1>
                             <p className="mt-1.5 text-[13px] leading-relaxed text-white/45">{description}</p>
                         </div>
+
+                        {modelOptions.length > 0 && selectedModel && (
+                            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-medium uppercase tracking-wider text-white/35">
+                                        {t('detail.aiModel', { defaultValue: 'AI Model' })}
+                                    </p>
+                                    <p className="truncate text-[13px] font-medium text-white/85">{selectedModel.name}</p>
+                                </div>
+                                {modelOptions.length > 1 ? (
+                                    <LabModelPickerTrigger
+                                        modelName={selectedModel.name}
+                                        icon={selectedModel.image_url}
+                                        onClick={() => setModelOpen(true)}
+                                    />
+                                ) : null}
+                            </div>
+                        )}
                     </div>
 
                     {!workspace.available && (
@@ -428,9 +460,9 @@ export default function ToolCreatePanel({
                         </div>
                     )}
 
-                    {workspace.notices.includes('max_duration') && workspace.billing?.max_duration && (
+                    {workspace.notices.includes('max_duration') && activeBilling?.max_duration && (
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-white/45">
-                            {t('detail.maxDurationNotice', { seconds: workspace.billing.max_duration })}
+                            {t('detail.maxDurationNotice', { seconds: activeBilling.max_duration })}
                         </div>
                     )}
 
@@ -599,6 +631,35 @@ export default function ToolCreatePanel({
                 </div>
             </div>
         </motion.aside>
+        <LabModelPickerModal
+            open={modelOpen}
+            models={modelOptions.map((m) => ({
+                name: m.name,
+                description: m.description,
+                icon: m.image_url ?? null,
+                image_cover: m.image_url ?? null,
+                endpoint_id: String(m.id),
+                unit_price: m.billing.unit_price,
+                unit: m.billing.unit,
+                max_duration: m.billing.max_duration ?? null,
+                enums: null,
+                duration: null,
+                credits: null,
+                tags: m.is_primary ? ['Primary'] : [],
+                brandName: tool.name,
+                brandIcon: null,
+            }))}
+            selectedName={selectedModel?.name ?? ''}
+            onSelect={(m) => {
+                const match = modelOptions.find((opt) => opt.name === m.name);
+                if (match) setSelectedModelId(match.id);
+                setModelOpen(false);
+            }}
+            onClose={() => setModelOpen(false)}
+            title={t('detail.aiModel', { defaultValue: 'AI Model' })}
+            subtitle={t('detail.selectModelSub', { defaultValue: 'Pick a model for this tool' })}
+        />
+        </>
     );
 }
 

@@ -30,6 +30,7 @@ class FalPricingService
             'text_to_video_models',
             'text_to_voice_models',
             'text_to_music_models',
+            'video_tools_models',
         ] as $table) {
             if (! Schema::hasTable($table)) {
                 continue;

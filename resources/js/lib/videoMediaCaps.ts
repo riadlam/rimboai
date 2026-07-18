@@ -57,6 +57,94 @@ export function mediaTotal(counts: MediaCounts): number {
     return counts.images + counts.videos + counts.audios;
 }
 
+/** Absolute ceiling across the catalog (Seedance-class multimodal). */
+export const CATALOG_MEDIA_LIMITS = { image: 9, video: 3, audio: 3 } as const;
+
+export type UploadLimits = {
+    image: number;
+    video: number;
+    audio: number;
+};
+
+/**
+ * Per-model upload ceilings from media_capabilities.
+ * Falls back to catalog max when a type is supported but max_* is null.
+ * Unsupported types → 0 so they can't be added while that model is selected.
+ */
+export function resolveUploadLimits(
+    model: Pick<BrandModel, 'media_capabilities'> | null | undefined,
+): UploadLimits {
+    const caps = getMediaCaps(model);
+    const total = mediaTotal({
+        images: caps.max_ref_images ?? 0,
+        videos: caps.max_ref_videos ?? 0,
+        audios: caps.max_ref_audios ?? 0,
+    });
+
+    // No caps payload / empty model → allow catalog defaults (text-to-video start).
+    if (!model?.media_capabilities && total === 0) {
+        return { ...CATALOG_MEDIA_LIMITS };
+    }
+
+    const imageSupported = caps.supports_ref_images || caps.supports_first_frame || caps.supports_last_frame;
+    const videoSupported = caps.supports_ref_videos;
+    const audioSupported = caps.supports_ref_audio;
+
+    let image = 0;
+    if (imageSupported) {
+        if (caps.max_ref_images !== null) {
+            image = caps.max_ref_images;
+        } else if (caps.supports_ref_images) {
+            image = CATALOG_MEDIA_LIMITS.image;
+        } else {
+            // First-frame / FLF only — one (or two with last frame) image(s).
+            image = caps.supports_last_frame ? 2 : 1;
+        }
+    }
+
+    const video =
+        videoSupported
+            ? caps.max_ref_videos !== null
+                ? caps.max_ref_videos
+                : CATALOG_MEDIA_LIMITS.video
+            : 0;
+
+    const audio =
+        audioSupported
+            ? caps.max_ref_audios !== null
+                ? caps.max_ref_audios
+                : CATALOG_MEDIA_LIMITS.audio
+            : 0;
+
+    return { image, video, audio };
+}
+
+/**
+ * Keep the earliest refs per kind that fit within limits; revoke URLs for dropped items.
+ * @returns trimmed count (number of items removed)
+ */
+export function trimMediaToUploadLimits<T extends { kind: 'image' | 'video' | 'audio'; url?: string }>(
+    items: T[],
+    limits: UploadLimits,
+    revokeUrl: (url: string) => void = () => undefined,
+): { items: T[]; trimmed: number } {
+    const kept = { image: 0, video: 0, audio: 0 };
+    const out: T[] = [];
+    let trimmed = 0;
+
+    for (const item of items) {
+        if (kept[item.kind] >= limits[item.kind]) {
+            if (item.url) revokeUrl(item.url);
+            trimmed += 1;
+            continue;
+        }
+        kept[item.kind] += 1;
+        out.push(item);
+    }
+
+    return { items: out, trimmed };
+}
+
 /** Mirrors App\Services\VideoModelCapabilities::supportsMediaMix */
 export function supportsMediaMix(
     model: Pick<BrandModel, 'media_capabilities'> | null | undefined,
@@ -187,19 +275,15 @@ export function describeMediaGuidance(counts: MediaCounts, compatibleCount: numb
         };
     }
 
-    if (images > 3) {
-        return {
-            tone: 'warn',
-            title: 'Many image references',
-            body: '4+ images only work with multi-reference models. Lower-limit models are hidden so you don’t waste credits.',
-        };
-    }
-
     if (images > 1) {
+        const maxHint =
+            images > 3
+                ? '4+ images only work with multi-reference models. Lower-limit models are hidden so you don’t waste credits.'
+                : 'We’ll keep models that can use multiple images. Prefer a simple motion prompt — avoid exact cut timing or long character sequences.';
         return {
-            tone: 'info',
-            title: 'Multi-image references',
-            body: 'We’ll keep models that can use multiple images. Prefer a simple motion prompt — avoid exact cut timing or long character sequences.',
+            tone: images > 3 ? 'warn' : 'info',
+            title: images > 3 ? 'Many image references' : 'Multi-image references',
+            body: maxHint,
         };
     }
 

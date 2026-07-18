@@ -50,6 +50,7 @@ class FalSyncPricing extends Command
         'image_to_video_models',
         'text_to_voice_models',
         'text_to_music_models',
+        'video_tools_models',
     ];
 
     public function handle(): int

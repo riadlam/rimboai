@@ -209,12 +209,134 @@ class DashboardController extends Controller
             'title' => $config['title'],
             'backHref' => '/',
             'placeholder' => $config['placeholder'],
-            'brands' => $this->loadBrands($config['models'], $config['categories']),
+            'brands' => $this->loadBrands($config['models'], $config['categories'])
+                ->when(
+                    $config['resolved'] === 'text-to-video',
+                    fn ($brands) => $brands->concat($this->loadVideoToolBrands($brands))->values()
+                ),
             'creditsConfig' => [
                 'markup' => (float) config('credits.markup', 1.25),
                 'usd_per_credit' => (float) config('credits.usd_per_credit', 0.01),
             ],
         ]);
+    }
+
+    /**
+     * Append active video_tools_models into the lab picker (grouped by tool).
+     * These are specialized processors — selecting one routes the user to /tools/{slug}.
+     *
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $existingBrands
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function loadVideoToolBrands(\Illuminate\Support\Collection $existingBrands): \Illuminate\Support\Collection
+    {
+        if (! Schema::hasTable('video_tools_models')) {
+            return collect();
+        }
+
+        $existingEndpoints = $existingBrands
+            ->flatMap(fn ($brand) => collect($brand['models'] ?? [])->pluck('endpoint_id'))
+            ->filter(fn ($id) => is_string($id) && $id !== '')
+            ->map(fn ($id) => strtolower($id))
+            ->unique()
+            ->all();
+
+        $rows = DB::table('video_tools_models')
+            ->where('status', 'active')
+            ->whereNotNull('endpoint_id')
+            ->where('endpoint_id', '!=', '')
+            ->orderBy('tool_name')
+            ->orderByDesc('is_primary')
+            ->orderBy('sort')
+            ->orderBy('name')
+            ->get([
+                'id',
+                'tool_slug',
+                'tool_name',
+                'endpoint_id',
+                'name',
+                'description',
+                'image_url',
+                'image_cover',
+                'tags',
+                'unit',
+                'unit_price',
+                'max_duration',
+                'enums',
+                'sort',
+                'is_primary',
+            ]);
+
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        $videoCaps = app(VideoModelCapabilities::class);
+
+        return $rows
+            ->groupBy('tool_name')
+            ->map(function ($group) use ($existingEndpoints, $videoCaps) {
+                $first = $group->first();
+                $toolSlug = (string) ($first->tool_slug ?? '');
+                $toolName = (string) ($first->tool_name ?? $toolSlug);
+
+                $models = $group
+                    ->filter(function ($m) use ($existingEndpoints) {
+                        $endpoint = strtolower((string) ($m->endpoint_id ?? ''));
+
+                        // Skip duplicates already listed under a lab brand.
+                        return $endpoint !== '' && ! in_array($endpoint, $existingEndpoints, true);
+                    })
+                    ->map(function ($m) use ($toolSlug, $videoCaps) {
+                        $endpointId = (string) ($m->endpoint_id ?? '');
+                        $tags = [];
+                        if (isset($m->tags) && $m->tags !== null && $m->tags !== '') {
+                            $decoded = is_string($m->tags) ? json_decode($m->tags, true) : $m->tags;
+                            $tags = is_array($decoded) ? array_values($decoded) : [];
+                        }
+                        $tags[] = 'tool';
+                        if ($toolSlug !== '') {
+                            $tags[] = $toolSlug;
+                        }
+
+                        $icon = PublicMediaUrl::normalize(
+                            is_string($m->image_url ?? null) ? $m->image_url : null
+                        );
+                        $imageCover = PublicMediaUrl::normalize(
+                            is_string($m->image_cover ?? null) ? $m->image_cover : null
+                        );
+
+                        return [
+                            'name' => $m->name ?: ($endpointId ?: 'Untitled'),
+                            'icon' => $icon,
+                            'description' => $m->description ?? '',
+                            'endpoint_id' => $endpointId,
+                            'unit_price' => $m->unit_price ?? null,
+                            'unit' => $m->unit ?? null,
+                            'max_duration' => $m->max_duration ?? null,
+                            'enums' => isset($m->enums) ? (is_string($m->enums) ? json_decode($m->enums, true) : $m->enums) : null,
+                            'duration' => null,
+                            'credits' => null,
+                            'tags' => array_values(array_unique($tags)),
+                            'image_cover' => $imageCover,
+                            'sort' => $m->sort ?? 999,
+                            'tool_slug' => $toolSlug,
+                            'tool_model_id' => (int) $m->id,
+                            'media_capabilities' => $videoCaps->for($endpointId),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
+                return [
+                    'name' => $toolName,
+                    'icon' => null,
+                    'sort' => 9000 + (int) ($first->sort ?? 0),
+                    'models' => $models,
+                ];
+            })
+            ->filter(fn ($brand) => count($brand['models']) > 0)
+            ->values();
     }
 
     private function loadBrands(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection

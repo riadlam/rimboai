@@ -91,6 +91,9 @@ export type BrandModel = {
         first_last_frame_endpoint_id?: string | null;
         last_frame_param?: string | null;
     };
+    /** Present when this row comes from video_tools_models — picking it opens the tool page */
+    tool_slug?: string | null;
+    tool_model_id?: number | null;
 };
 
 export type Brand = {
@@ -144,10 +147,20 @@ export type ToolBilling = {
     duration_enums?: number[] | null;
 };
 
+export type ToolModelOption = {
+    id: number;
+    name: string;
+    description: string;
+    is_primary: boolean;
+    image_url?: string | null;
+    billing: ToolBilling;
+};
+
 export type ToolWorkspace = {
     available: boolean;
     tool_slug: string;
     model_id: number | null;
+    models?: ToolModelOption[];
     billing: ToolBilling | null;
     uploads: ToolUploadSpec[];
     controls: ToolControlSpec[];
