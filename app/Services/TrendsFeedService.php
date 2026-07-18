@@ -203,20 +203,43 @@ class TrendsFeedService
         foreach ($inputAssets as $index => $asset) {
             $kind = $asset['kind'];
             $n = $index + 1;
-            $label = match ($kind) {
-                'video' => "Video {$n}",
-                'audio' => "Audio {$n}",
-                default => "Image {$n}",
-            };
             $uploads[] = [
                 'key' => "asset_{$index}",
                 'kind' => $kind,
-                'label' => $label,
+                'label_key' => match ($kind) {
+                    'video' => 'uploadVideo',
+                    'audio' => 'uploadAudio',
+                    default => 'uploadImage',
+                },
+                'label' => match ($kind) {
+                    'video' => $n > 1 ? "Video {$n}" : 'Upload video',
+                    'audio' => $n > 1 ? "Audio {$n}" : 'Upload audio',
+                    default => $n > 1 ? "Image {$n}" : 'Upload image',
+                },
                 'accept' => match ($kind) {
                     'video' => 'video/*',
                     'audio' => 'audio/*',
                     default => 'image/*',
                 },
+                'required' => true,
+            ];
+        }
+
+        // Image / I2V templates with no stored assets still need a reference image slot.
+        if (
+            $uploads === []
+            && (
+                $type === 'image'
+                || str_contains($mode, 'image-to-video')
+                || str_contains($mode, 'reference-to-video')
+            )
+        ) {
+            $uploads[] = [
+                'key' => 'asset_0',
+                'kind' => 'image',
+                'label_key' => 'uploadImage',
+                'label' => 'Upload image',
+                'accept' => 'image/*',
                 'required' => true,
             ];
         }

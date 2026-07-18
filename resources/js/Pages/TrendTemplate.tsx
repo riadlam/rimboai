@@ -1,6 +1,6 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import { ApiError, apiPost, apiPostForm } from '@/lib/api';
@@ -10,6 +10,7 @@ type TrendUpload = {
     key: string;
     kind: 'image' | 'video' | 'audio';
     label: string;
+    label_key?: string;
     accept: string;
     required: boolean;
 };
@@ -60,13 +61,23 @@ function isAudioUrl(url?: string | null): boolean {
 export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const { t } = useTranslation('trends');
     const { props } = usePage<PageProps>();
+    const isGuest = props.auth.user === null;
     const tmpl = workspace.template;
 
     const [slots, setSlots] = useState<Record<string, FileSlot>>(() =>
         Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])),
     );
+    const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
+        setError(null);
+        setCreating(false);
+        // Only reset when navigating to a different template.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workspace.key]);
 
     useEffect(() => {
         return () => {
@@ -77,32 +88,41 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const requiredReady = workspace.uploads.every((u) => {
-        if (!u.required) return true;
-        return Boolean(slots[u.key]?.file);
-    });
+    const requiredReady =
+        workspace.uploads.length === 0 ||
+        workspace.uploads.every((u) => !u.required || Boolean(slots[u.key]?.file));
 
     const credits = workspace.credits > 0 ? workspace.credits : tmpl.credits;
-    const canCreate = requiredReady && !creating;
+    const canCreate = requiredReady && !creating && !isGuest;
 
-    const assignFile = (key: string, file: File | null) => {
+    const assignFile = (key: string, file?: File) => {
+        if (!file) return;
         setSlots((prev) => {
             const old = prev[key]?.preview;
             if (old) URL.revokeObjectURL(old);
+            const isVisual = file.type.startsWith('image/') || file.type.startsWith('video/');
             return {
                 ...prev,
                 [key]: {
                     file,
-                    preview: file && file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+                    preview: isVisual ? URL.createObjectURL(file) : null,
                 },
             };
         });
         setError(null);
     };
 
+    const clearFile = (key: string) => {
+        setSlots((prev) => {
+            const old = prev[key]?.preview;
+            if (old) URL.revokeObjectURL(old);
+            return { ...prev, [key]: { file: null, preview: null } };
+        });
+    };
+
     const startCreate = async () => {
         if (!canCreate) return;
-        if (!props.auth.user) {
+        if (isGuest) {
             router.visit('/?login');
             return;
         }
@@ -182,117 +202,229 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
 
     return (
-        <AppLayout>
+        <AppLayout flush>
             <Head title={tmpl.name || t('useTemplate')} />
-            <div className="flex min-h-[calc(100dvh-4rem)] flex-col gap-0 md:flex-row md:overflow-hidden">
-                {/* Left: uploads only */}
-                <aside className="flex w-full shrink-0 flex-col border-b border-white/[0.06] bg-[#0a0a0e] md:w-[360px] md:border-b-0 md:border-e xl:w-[420px]">
-                    <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3.5">
-                        <Link
-                            href="/trends"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-                            aria-label={t('back')}
+            <div className="flex w-full min-w-0 flex-col md:h-full md:min-h-0 [&_a]:cursor-pointer [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_label]:cursor-pointer">
+                <div className="flex flex-col rounded-xl bg-[#070708] md:min-h-0 md:flex-1 md:overflow-hidden">
+                    <div className="flex flex-col md:min-h-0 md:flex-1 md:overflow-hidden md:flex-row">
+                        {/* Left panel — same shell as ToolCreatePanel */}
+                        <motion.aside
+                            initial={{ opacity: 0, x: -12 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                            className="relative flex w-full shrink-0 flex-col border-b border-white/[0.06] bg-[#0a0a0f] md:h-full md:min-h-0 md:w-[380px] md:overflow-hidden md:border-b-0 md:border-r xl:w-[420px]"
                         >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path d="M15 18l-6-6 6-6" />
-                            </svg>
-                        </Link>
-                        <div className="min-w-0">
-                            <p className="truncate text-[15px] font-semibold text-white">{t('useTemplate')}</p>
-                            <p className="truncate text-[12px] text-white/40">{tmpl.name}</p>
-                        </div>
-                    </div>
+                            <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(ellipse_at_top,rgba(255,87,51,0.2),transparent_70%)]" />
+                            <div className="pointer-events-none absolute inset-x-6 top-24 h-24 rounded-full bg-[#FF5733]/10 blur-3xl" />
 
-                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 scrollbar-thin">
-                        {workspace.uploads.length === 0 ? (
-                            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-[13px] leading-relaxed text-zinc-400">
-                                {t('noUploadsNeeded')}
-                            </p>
-                        ) : (
-                            workspace.uploads.map((upload) => (
-                                <UploadSlot
-                                    key={upload.key}
-                                    upload={upload}
-                                    slot={slots[upload.key] ?? { file: null, preview: null }}
-                                    onFile={(file) => assignFile(upload.key, file)}
-                                    labelUpload={t('uploadAsset')}
-                                    labelReplace={t('replaceAsset')}
-                                />
-                            ))
-                        )}
+                            <div className="relative flex min-h-0 flex-1 flex-col">
+                                <div className="relative min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 scrollbar-thin md:pb-4">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Link
+                                                href="/trends"
+                                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 transition hover:border-orange-400/35 hover:bg-orange-500/10 hover:text-orange-100"
+                                                aria-label={t('back')}
+                                            >
+                                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                                </svg>
+                                            </Link>
+                                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+                                                {t('templateBadge')}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <h1 className="font-[family-name:Outfit,sans-serif] text-[22px] font-semibold leading-tight tracking-tight text-white">
+                                                {t('useTemplate')}
+                                            </h1>
+                                            <p className="mt-1.5 text-[13px] leading-relaxed text-white/45">
+                                                {t('templateHint')}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                        {error && (
-                            <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-200">
-                                {error}
-                            </p>
-                        )}
-                    </div>
+                                    {workspace.uploads.map((upload) => (
+                                        <UploadSlot
+                                            key={upload.key}
+                                            upload={upload}
+                                            slot={slots[upload.key]}
+                                            dragging={draggingKey === upload.key}
+                                            label={
+                                                upload.label_key
+                                                    ? t(upload.label_key, { defaultValue: upload.label })
+                                                    : upload.label
+                                            }
+                                            hint={
+                                                upload.kind === 'audio'
+                                                    ? t('uploadAudioTypes')
+                                                    : upload.kind === 'video'
+                                                      ? t('uploadVideoTypes')
+                                                      : t('uploadImageTypes')
+                                            }
+                                            changeLabel={t('changeFile')}
+                                            uploadHint={t('uploadHint')}
+                                            onDragState={(on) => setDraggingKey(on ? upload.key : null)}
+                                            onFile={(file) => assignFile(upload.key, file)}
+                                            onClear={() => clearFile(upload.key)}
+                                        />
+                                    ))}
+                                </div>
 
-                    <div className="shrink-0 border-t border-white/[0.06] p-4">
-                        <div className="mb-2 flex items-center justify-between text-[12px] text-white/40">
-                            <span>{t('stats.credits')}</span>
-                            <span className="tabular-nums text-white/70">
-                                {credits > 0 ? t('credits', { count: credits }) : '—'}
-                                {tokenBalance >= 0 && (
-                                    <span className="ms-2 text-white/35">· {tokenBalance} bal.</span>
-                                )}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            disabled={!canCreate}
-                            onClick={() => void startCreate()}
-                            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#E04520] text-[14px] font-semibold text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
-                        >
-                            {creating ? t('creating') : t('create')}
-                        </button>
-                    </div>
-                </aside>
+                                <div className="relative shrink-0 border-t border-white/[0.07] bg-[#0a0a0f]/95 p-3 backdrop-blur-xl">
+                                    <div className="mb-2.5 flex items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] capitalize text-white/65">
+                                                {tmpl.type}
+                                            </span>
+                                            <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
+                                                {tmpl.uses} {t('stats.uses').toLowerCase()}
+                                            </span>
+                                        </div>
+                                        <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
+                                            <svg className="h-3 w-3 text-[#FF8A65]" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z" />
+                                            </svg>
+                                            <span>{credits > 0 ? credits : '—'}</span>
+                                            <span className="text-white/35">{t('stats.credits')}</span>
+                                        </div>
+                                    </div>
 
-                {/* Right: example */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="relative flex min-h-[50vh] min-w-0 flex-1 flex-col bg-[#08080d] md:min-h-0"
-                >
-                    <div className="absolute start-4 top-4 z-10 rounded-full border border-white/10 bg-black/50 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-white/70 backdrop-blur-md">
-                        {t('example')}
-                    </div>
-                    <div className="relative min-h-0 flex-1 overflow-hidden">
-                        {showVideo ? (
-                            <video
-                                src={tmpl.video_url || tmpl.cover}
-                                className="size-full object-contain"
-                                autoPlay
-                                muted
-                                loop
-                                playsInline
-                                controls
-                            />
-                        ) : tmpl.type === 'music' ? (
-                            <div className="flex size-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#1c1226] via-[#12121a] to-[#0b1a17] p-6">
-                                {tmpl.cover && !isAudioUrl(tmpl.cover) ? (
-                                    <img
-                                        src={tmpl.cover}
-                                        alt=""
-                                        className="h-52 w-52 rounded-3xl object-cover shadow-2xl ring-1 ring-white/10"
-                                    />
-                                ) : (
-                                    <span className="flex h-52 w-52 items-center justify-center rounded-3xl bg-white/[0.04] ring-1 ring-white/10">
-                                        <svg className="h-16 w-16 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                            <path d="M9 18V5l12-2v13" />
-                                            <circle cx="6" cy="18" r="3" />
-                                            <circle cx="18" cy="16" r="3" />
-                                        </svg>
-                                    </span>
-                                )}
-                                {tmpl.audio_url && <audio src={tmpl.audio_url} controls autoPlay className="w-full max-w-md" />}
+                                    {error && (
+                                        <p className="mb-2 text-[11px] leading-snug text-red-300/90">{error}</p>
+                                    )}
+                                    {isGuest && (
+                                        <p className="mb-2 text-[11px] text-white/40">{t('signInToCreate')}</p>
+                                    )}
+                                    {tokenBalance > 0 && credits > tokenBalance && !isGuest && (
+                                        <p className="mb-2 text-[11px] text-amber-200/80">{t('insufficientCredits')}</p>
+                                    )}
+
+                                    <motion.button
+                                        type="button"
+                                        whileTap={canCreate ? { scale: 0.98 } : undefined}
+                                        disabled={!canCreate}
+                                        onClick={() => {
+                                            if (!canCreate) return;
+                                            void startCreate();
+                                        }}
+                                        className="group relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white shadow-[0_10px_30px_rgba(255,87,51,0.35)] transition disabled:cursor-not-allowed disabled:opacity-45"
+                                    >
+                                        {!creating && (
+                                            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-full" />
+                                        )}
+                                        {creating ? (
+                                            <>
+                                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                                <span>{t('creating')}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                                                </svg>
+                                                <span>
+                                                    {isGuest
+                                                        ? t('signInToCreate')
+                                                        : `${t('create')} · ${credits > 0 ? credits : '—'} ${t('stats.credits')}`}
+                                                </span>
+                                            </>
+                                        )}
+                                    </motion.button>
+                                </div>
                             </div>
-                        ) : (
-                            <img src={tmpl.cover} alt={tmpl.name} className="size-full object-contain" />
-                        )}
+                        </motion.aside>
+
+                        {/* Right panel — same preview shell as ToolDetail */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.08, duration: 0.4 }}
+                            className="relative flex min-h-[50vh] min-w-0 w-full flex-col md:min-h-0 md:flex-1 md:overflow-hidden"
+                        >
+                            <div aria-hidden className="pointer-events-none absolute inset-0">
+                                <div className="absolute left-1/2 top-1/3 h-80 w-80 -translate-x-1/2 rounded-full bg-[#FF5733]/12 blur-[120px]" />
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.035),transparent_55%)]" />
+                            </div>
+
+                            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/[0.05] px-4 py-3 md:px-5">
+                                <div>
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
+                                        {t('example')}
+                                    </p>
+                                    <p className="mt-0.5 text-[13px] text-white/70">{t('exampleHint')}</p>
+                                </div>
+                                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/50">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                                    {t('demoLive')}
+                                </div>
+                            </div>
+
+                            <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center p-4 md:p-6">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                                    className="relative w-full max-w-4xl"
+                                >
+                                    <div className="absolute -inset-px rounded-[1.35rem] bg-gradient-to-b from-white/15 via-white/5 to-transparent opacity-70" />
+                                    <div className="relative overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-black/50 shadow-[0_40px_100px_-40px_rgba(0,0,0,0.9)]">
+                                        {showVideo ? (
+                                            <div className="aspect-video w-full">
+                                                <video
+                                                    src={tmpl.video_url || tmpl.cover}
+                                                    poster={tmpl.thumbnail_url || undefined}
+                                                    className="h-full w-full object-cover"
+                                                    playsInline
+                                                    loop
+                                                    muted
+                                                    autoPlay
+                                                    controls
+                                                    preload="metadata"
+                                                />
+                                            </div>
+                                        ) : tmpl.type === 'music' ? (
+                                            <div className="flex aspect-video w-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#1c1226] via-[#12121a] to-[#0b1a17] p-6">
+                                                {tmpl.cover && !isAudioUrl(tmpl.cover) ? (
+                                                    <img
+                                                        src={tmpl.cover}
+                                                        alt=""
+                                                        className="h-40 w-40 rounded-3xl object-cover shadow-2xl ring-1 ring-white/10"
+                                                    />
+                                                ) : (
+                                                    <span className="flex h-40 w-40 items-center justify-center rounded-3xl bg-white/[0.04] ring-1 ring-white/10">
+                                                        <svg className="h-14 w-14 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                                            <path d="M9 18V5l12-2v13" />
+                                                            <circle cx="6" cy="18" r="3" />
+                                                            <circle cx="18" cy="16" r="3" />
+                                                        </svg>
+                                                    </span>
+                                                )}
+                                                {tmpl.audio_url && (
+                                                    <audio src={tmpl.audio_url} controls autoPlay className="w-full max-w-md" />
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex aspect-square w-full max-h-[70vh] items-center justify-center bg-black/40 sm:aspect-video">
+                                                <img
+                                                    src={tmpl.cover}
+                                                    alt={tmpl.name}
+                                                    className="max-h-full max-w-full object-contain"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent" />
+                                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+                                        <div className="absolute start-4 top-4 rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white/80 backdrop-blur-md">
+                                            {t('example')}
+                                        </div>
+                                    </div>
+                                    <p className="mt-4 text-center text-[12px] text-white/35">{t('exampleFooter')}</p>
+                                </motion.div>
+                            </div>
+                        </motion.div>
                     </div>
-                </motion.div>
+                </div>
             </div>
         </AppLayout>
     );
@@ -301,79 +433,101 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
 function UploadSlot({
     upload,
     slot,
+    dragging,
+    label,
+    hint,
+    changeLabel,
+    uploadHint,
+    onDragState,
     onFile,
-    labelUpload,
-    labelReplace,
+    onClear,
 }: {
     upload: TrendUpload;
-    slot: FileSlot;
-    onFile: (file: File | null) => void;
-    labelUpload: string;
-    labelReplace: string;
+    slot?: FileSlot;
+    dragging: boolean;
+    label: string;
+    hint: string;
+    changeLabel: string;
+    uploadHint: string;
+    onDragState: (on: boolean) => void;
+    onFile: (file?: File) => void;
+    onClear: () => void;
 }) {
     const inputRef = useRef<HTMLInputElement>(null);
-    const [dragOver, setDragOver] = useState(false);
+    const isImage = upload.accept.startsWith('image');
+    const isAudio = upload.accept.startsWith('audio');
 
     const onDrop = (e: DragEvent) => {
         e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files?.[0] ?? null;
-        if (file) onFile(file);
+        onDragState(false);
+        onFile(e.dataTransfer.files[0]);
     };
 
-    const previewLabel = useMemo(() => {
-        if (!slot.file) return null;
-        return slot.file.name;
-    }, [slot.file]);
-
     return (
-        <div className="space-y-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">{upload.label}</p>
-            <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
+        <section className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
+                {slot?.file && (
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        className="text-[11px] text-white/35 transition hover:text-white/70"
+                    >
+                        Remove
+                    </button>
+                )}
+            </div>
+            <div
                 onDragOver={(e) => {
                     e.preventDefault();
-                    setDragOver(true);
+                    onDragState(true);
                 }}
-                onDragLeave={() => setDragOver(false)}
+                onDragLeave={(e) => {
+                    e.preventDefault();
+                    onDragState(false);
+                }}
                 onDrop={onDrop}
-                className={`relative flex w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed px-4 py-8 transition ${
-                    dragOver
-                        ? 'border-[#FF5733]/60 bg-[#FF5733]/10'
-                        : slot.file
-                          ? 'border-white/15 bg-white/[0.03]'
-                          : 'border-white/10 bg-white/[0.02] hover:border-white/25'
+                onClick={() => inputRef.current?.click()}
+                className={`group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed px-4 py-6 transition ${
+                    dragging
+                        ? 'border-[#FF5733]/60 bg-orange-500/[0.08]'
+                        : 'border-white/15 bg-gradient-to-b from-white/[0.05] to-white/[0.02] hover:border-orange-400/40 hover:bg-orange-500/[0.04]'
                 }`}
             >
-                {slot.preview ? (
-                    <img src={slot.preview} alt="" className="mb-1 h-28 w-auto max-w-full rounded-xl object-cover" />
-                ) : slot.file && upload.kind === 'video' ? (
-                    <span className="mb-1 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.06] text-white/50">
-                        <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z" />
-                        </svg>
-                    </span>
-                ) : null}
-                <span className="text-[13px] font-medium text-white/80">{slot.file ? labelReplace : labelUpload}</span>
-                {previewLabel && <span className="max-w-full truncate text-[11px] text-white/35">{previewLabel}</span>}
-            </button>
-            <input
-                ref={inputRef}
-                type="file"
-                accept={upload.accept}
-                className="hidden"
-                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-            />
-            {slot.file && (
-                <button
-                    type="button"
-                    onClick={() => onFile(null)}
-                    className="text-[12px] text-white/40 transition hover:text-white/70"
-                >
-                    Remove
-                </button>
-            )}
-        </div>
+                {slot?.preview && !isAudio ? (
+                    <div className="relative w-full">
+                        {isImage ? (
+                            <img src={slot.preview} alt="" className="mx-auto max-h-40 rounded-xl object-contain" />
+                        ) : (
+                            <video src={slot.preview} className="mx-auto max-h-40 rounded-xl object-contain" muted playsInline />
+                        )}
+                        <p className="mt-2 truncate text-center text-[12px] font-medium text-zinc-200">{slot.file?.name}</p>
+                        <p className="text-center text-[11px] text-white/35">{changeLabel}</p>
+                    </div>
+                ) : slot?.file && isAudio ? (
+                    <div className="text-center">
+                        <p className="text-[13px] font-medium text-zinc-100">{slot.file.name}</p>
+                        <p className="mt-1 text-[11px] text-white/35">{changeLabel}</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
+                            <svg className="h-5 w-5 text-[#FF8A65]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                        </div>
+                        <p className="text-[13px] font-medium text-zinc-100">{uploadHint}</p>
+                        <p className="mt-1 text-[11px] text-white/35">{hint}</p>
+                    </>
+                )}
+                <input
+                    ref={inputRef}
+                    type="file"
+                    accept={upload.accept}
+                    className="hidden"
+                    onChange={(e) => onFile(e.target.files?.[0])}
+                />
+            </div>
+        </section>
     );
 }
