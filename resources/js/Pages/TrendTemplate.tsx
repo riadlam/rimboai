@@ -20,6 +20,7 @@ type TrendTemplateCard = {
     creation_id: number;
     type: 'image' | 'video' | 'music';
     name: string;
+    trend_title?: string | null;
     creator: string;
     avatar: string;
     cover: string;
@@ -200,10 +201,11 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     };
 
     const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
+    const displayTitle = (tmpl.trend_title || tmpl.name || '').trim() || t('useTemplate');
 
     return (
         <AppLayout flush>
-            <Head title={tmpl.name || t('useTemplate')} />
+            <Head title={displayTitle} />
             <div className="flex w-full min-w-0 flex-col md:h-full md:min-h-0 [&_a]:cursor-pointer [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_label]:cursor-pointer">
                 <div className="flex flex-col rounded-xl bg-[#070708] md:min-h-0 md:flex-1 md:overflow-hidden">
                     <div className="flex flex-col md:min-h-0 md:flex-1 md:overflow-hidden md:flex-row">
@@ -239,7 +241,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                 {t('useTemplate')}
                                             </h1>
                                             <p className="mt-1.5 text-[13px] leading-relaxed text-white/45">
-                                                {t('templateHint')}
+                                                {displayTitle}
                                             </p>
                                         </div>
                                     </div>
@@ -348,15 +350,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                             </div>
 
                             <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/[0.05] px-4 py-3 md:px-5">
-                                <div>
-                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
-                                        {t('example')}
-                                    </p>
-                                    <p className="mt-0.5 text-[13px] text-white/70">{t('exampleHint')}</p>
-                                </div>
-                                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/50">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                                    {t('demoLive')}
+                                <div className="min-w-0">
+                                    <h2 className="truncate font-[family-name:Outfit,sans-serif] text-[17px] font-semibold tracking-tight text-white md:text-[18px]">
+                                        {displayTitle}
+                                    </h2>
                                 </div>
                             </div>
 
@@ -408,18 +405,14 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                             <div className="flex aspect-square w-full max-h-[70vh] items-center justify-center bg-black/40 sm:aspect-video">
                                                 <img
                                                     src={tmpl.cover}
-                                                    alt={tmpl.name}
+                                                    alt={displayTitle}
                                                     className="max-h-full max-w-full object-contain"
                                                 />
                                             </div>
                                         )}
                                         <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent" />
                                         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
-                                        <div className="absolute start-4 top-4 rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white/80 backdrop-blur-md">
-                                            {t('example')}
-                                        </div>
                                     </div>
-                                    <p className="mt-4 text-center text-[12px] text-white/35">{t('exampleFooter')}</p>
                                 </motion.div>
                             </div>
                         </motion.div>

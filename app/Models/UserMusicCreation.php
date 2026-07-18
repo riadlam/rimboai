@@ -37,6 +37,7 @@ class UserMusicCreation extends Model
         'error_type',
         'credits_charged',
         'trend_cost',
+        'trend_title',
         'fal_wallet_balance_before',
         'fal_wallet_balance_after',
         'deducted_amount_from_main_wallet',

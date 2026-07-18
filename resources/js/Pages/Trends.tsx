@@ -11,6 +11,7 @@ export type TrendTemplate = {
     creation_id: number;
     type: 'image' | 'video' | 'music';
     name: string;
+    trend_title?: string | null;
     category: 'Images' | 'Videos' | 'Music' | string;
     creator: string;
     avatar: string;

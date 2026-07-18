@@ -415,7 +415,7 @@ class TrendsFeedService
         $uses = (int) ($creation->uses_count ?? 0);
 
         return $this->baseCard($creation, 'image', [
-            'name' => $this->titleFromPrompt($creation->prompt, 'Image'),
+            'name' => $this->trendDisplayTitle($creation, 'Image'),
             'category' => 'Images',
             'cover' => $cover,
             'coverType' => 'image',
@@ -464,7 +464,7 @@ class TrendsFeedService
         }
 
         return $this->baseCard($creation, 'video', [
-            'name' => $this->titleFromPrompt($creation->prompt, 'Video'),
+            'name' => $this->trendDisplayTitle($creation, 'Video'),
             'category' => 'Videos',
             // Prefer a still thumbnail for the cover; keep the playable URL on video_url.
             'cover' => ($creation->thumbnail_url ?: $creation->result_preview_url) ?: ($videoUrl ?: $cover),
@@ -498,9 +498,14 @@ class TrendsFeedService
 
         $cover = $creation->cover_url ?: $creation->result_preview_url ?: $audioUrl;
         $uses = (int) ($creation->uses_count ?? 0);
-        $title = trim((string) ($creation->title ?: ''));
-        if ($title === '') {
-            $title = $this->titleFromPrompt($creation->prompt, 'Track');
+        $manual = trim((string) ($creation->trend_title ?? ''));
+        if ($manual !== '') {
+            $title = $manual;
+        } else {
+            $title = trim((string) ($creation->title ?: ''));
+            if ($title === '') {
+                $title = $this->titleFromPrompt($creation->prompt, 'Track');
+            }
         }
 
         return $this->baseCard($creation, 'music', [
@@ -550,9 +555,26 @@ class TrendsFeedService
             )),
             'model' => $creation->model_name ?: 'AI Model',
             'endpoint_id' => $creation->endpoint_id,
+            'trend_title' => $this->manualTrendTitle($creation),
             'created_at' => $creation->completed_at?->toIso8601String()
                 ?: $creation->created_at?->toIso8601String(),
         ], $extra);
+    }
+
+    private function manualTrendTitle(Model $creation): ?string
+    {
+        $manual = trim((string) ($creation->trend_title ?? ''));
+
+        return $manual !== '' ? $manual : null;
+    }
+
+    private function trendDisplayTitle(Model $creation, string $fallback): string
+    {
+        return $this->manualTrendTitle($creation)
+            ?? $this->titleFromPrompt(
+                is_string($creation->prompt ?? null) ? $creation->prompt : null,
+                $fallback,
+            );
     }
 
     /**
