@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
+import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { ApiError, apiGet, apiPostForm } from '@/lib/api';
 import type { PageProps } from '@/types';
 
@@ -461,16 +462,11 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                     <div className="relative overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-black/50 shadow-[0_40px_100px_-40px_rgba(0,0,0,0.9)]">
                                         {showVideo ? (
                                             <div className="aspect-video w-full">
-                                                <video
+                                                <LabVideoPlayer
                                                     src={tmpl.video_url || tmpl.cover}
                                                     poster={tmpl.thumbnail_url || undefined}
-                                                    className="h-full w-full object-cover"
-                                                    playsInline
-                                                    loop
-                                                    muted
-                                                    autoPlay
-                                                    controls
-                                                    preload="metadata"
+                                                    previewSeconds={5}
+                                                    objectFit="contain"
                                                 />
                                             </div>
                                         ) : tmpl.type === 'music' ? (
@@ -602,37 +598,43 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                             </h3>
                                             <p className="mt-1 text-[12px] text-white/45">{t('tapForDetails')}</p>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setDetailsOpen(true)}
-                                            className="group relative w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40 text-left ring-1 ring-white/5 transition hover:border-orange-400/35"
-                                        >
+                                        <div className="space-y-3">
                                             {workspace.type === 'video' && doneSrc ? (
-                                                <video
-                                                    src={doneSrc}
-                                                    poster={job?.thumbnail_url || undefined}
-                                                    className="aspect-[9/16] max-h-[52vh] w-full object-cover"
-                                                    muted
-                                                    playsInline
-                                                    loop
-                                                    autoPlay
-                                                />
+                                                <div className="aspect-[9/16] max-h-[52vh] w-full overflow-hidden rounded-2xl border border-white/10">
+                                                    <LabVideoPlayer
+                                                        src={doneSrc}
+                                                        poster={job?.thumbnail_url || undefined}
+                                                        previewSeconds={5}
+                                                        objectFit="cover"
+                                                        className="!rounded-none"
+                                                    />
+                                                </div>
                                             ) : workspace.type === 'music' ? (
-                                                <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#1c1226] to-[#0b1a17] p-4">
+                                                <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#1c1226] to-[#0b1a17] p-4">
                                                     {job?.cover_url && (
                                                         <img src={job.cover_url} alt="" className="h-24 w-24 rounded-2xl object-cover" />
                                                     )}
                                                     {job?.audio_url && (
-                                                        <audio src={job.audio_url} controls className="w-full" onClick={(e) => e.stopPropagation()} />
+                                                        <audio src={job.audio_url} controls className="w-full" />
                                                     )}
                                                 </div>
                                             ) : doneSrc ? (
-                                                <img src={doneSrc} alt="" className="max-h-[52vh] w-full object-contain" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDetailsOpen(true)}
+                                                    className="w-full overflow-hidden rounded-2xl border border-white/10"
+                                                >
+                                                    <img src={doneSrc} alt="" className="max-h-[52vh] w-full object-contain" />
+                                                </button>
                                             ) : null}
-                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                                                <span className="text-[12px] font-medium text-white/90">{t('viewDetails')}</span>
-                                            </div>
-                                        </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDetailsOpen(true)}
+                                                className="flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white"
+                                            >
+                                                {t('viewDetails')}
+                                            </button>
+                                        </div>
                                         <Link
                                             href="/history"
                                             className="flex h-11 w-full items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] text-sm font-medium text-white/85"

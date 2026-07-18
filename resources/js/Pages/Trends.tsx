@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
+import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import VideoThumb from '@/Components/VideoThumb';
 import type { PageProps } from '@/types';
 
@@ -391,6 +392,7 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
                             src={videoSrc}
                             poster={videoPoster}
                             playOnHover={false}
+                            autoPreviewSeconds={5}
                             className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                         />
                     ) : showImage ? (
@@ -496,15 +498,15 @@ function TemplateDetailModal({
     const mediaEl = (
         <>
             {showVideo ? (
-                <video
-                    src={tmpl.video_url || tmpl.cover}
-                    className={`size-full ${isMobile ? 'object-contain' : 'object-cover'}`}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    controls
-                />
+                <div className="size-full">
+                    <LabVideoPlayer
+                        src={tmpl.video_url || tmpl.cover}
+                        poster={tmpl.thumbnail_url || undefined}
+                        previewSeconds={5}
+                        objectFit={isMobile ? 'contain' : 'cover'}
+                        className="!rounded-none"
+                    />
+                </div>
             ) : tmpl.type === 'music' ? (
                 <div className="flex size-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#1c1226] via-[#12121a] to-[#0b1a17] p-6">
                     {tmpl.cover && !isAudioUrl(tmpl.cover) ? (
