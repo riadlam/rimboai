@@ -165,6 +165,165 @@ class TrendsFeedService
     }
 
     /**
+     * Full workspace for /trends/{type}-{id}: example media + upload slots + locked settings.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function workspace(string $type, int $id): ?array
+    {
+        $creation = $this->findPublicCompleted($type, $id);
+        if (! $creation) {
+            return null;
+        }
+
+        $creation->loadMissing('user:id,name,email');
+
+        $card = match ($type) {
+            'image' => $this->mapImage($creation),
+            'video' => $this->mapVideo($creation),
+            'music' => $this->mapMusic($creation),
+            default => null,
+        };
+
+        if (! $card) {
+            return null;
+        }
+
+        $mode = (string) ($creation->mode ?? '');
+        if (str_starts_with($mode, 'tool:')) {
+            return null;
+        }
+
+        $settings = is_array($creation->settings) ? $creation->settings : [];
+        $inputAssets = $this->normalizeInputAssets(
+            is_array($creation->input_assets) ? $creation->input_assets : null
+        );
+
+        $uploads = [];
+        foreach ($inputAssets as $index => $asset) {
+            $kind = $asset['kind'];
+            $n = $index + 1;
+            $label = match ($kind) {
+                'video' => "Video {$n}",
+                'audio' => "Audio {$n}",
+                default => "Image {$n}",
+            };
+            $uploads[] = [
+                'key' => "asset_{$index}",
+                'kind' => $kind,
+                'label' => $label,
+                'accept' => match ($kind) {
+                    'video' => 'video/*',
+                    'audio' => 'audio/*',
+                    default => 'image/*',
+                },
+                'required' => true,
+            ];
+        }
+
+        $locked = match ($type) {
+            'image' => [
+                'prompt' => (string) ($creation->prompt ?? ''),
+                'endpoint_id' => $creation->endpoint_id,
+                'model_name' => $creation->model_name,
+                'aspect' => $settings['aspect'] ?? '1:1',
+                'resolution' => $settings['resolution'] ?? '1K',
+                'quantity' => max(1, min(4, (int) ($settings['quantity'] ?? 1))),
+                'image_mode' => ($settings['mode'] ?? null) === 'variations' ? 'variations' : 'create',
+                'mode' => $mode !== '' ? $mode : 'text-to-image',
+            ],
+            'video' => [
+                'prompt' => (string) ($creation->prompt ?? ''),
+                'endpoint_id' => $creation->endpoint_id,
+                'model_name' => $creation->model_name,
+                'aspect' => $creation->aspect_ratio ?? ($settings['aspect'] ?? '16:9'),
+                'resolution' => $creation->resolution ?? ($settings['resolution'] ?? '720p'),
+                'duration' => $creation->duration_value
+                    ?? ($settings['duration'] ?? ($creation->duration_seconds !== null ? (string) $creation->duration_seconds : '5')),
+                'audio' => (bool) ($creation->with_audio ?? $settings['audio'] ?? true),
+                'mode' => $mode !== '' ? $mode : 'text-to-video',
+                'frame_mode' => $settings['frame_mode'] ?? null,
+            ],
+            'music' => [
+                'prompt' => (string) ($creation->prompt ?? ''),
+                'lyrics' => $creation->lyrics,
+                'endpoint_id' => $creation->endpoint_id,
+                'model_name' => $creation->model_name,
+                'mode' => $mode !== '' ? $mode : 'text-to-music',
+            ],
+            default => [],
+        };
+
+        $trendCost = $creation->trend_cost ?? null;
+        $credits = (int) round((float) (
+            $trendCost !== null ? $trendCost : ($creation->credits_charged ?? 0)
+        ));
+
+        return [
+            'key' => "{$type}-{$id}",
+            'type' => $type,
+            'creation_id' => $id,
+            'template' => $card,
+            'uploads' => $uploads,
+            'locked' => $locked,
+            'credits' => $credits,
+            'generate_url' => match ($type) {
+                'image' => '/lab/image/generate',
+                'video' => '/lab/video/generate',
+                'music' => '/lab/music/generate',
+                default => '/lab/video/generate',
+            },
+            'lab_href' => match ($type) {
+                'image' => '/lab?type=text-to-image',
+                'video' => '/lab?type=text-to-video',
+                'music' => '/lab?type=text-to-music',
+                default => '/lab',
+            },
+        ];
+    }
+
+    /**
+     * @param  array<int, mixed>|null  $assets
+     * @return list<array{url: string, kind: string, name: string|null}>
+     */
+    private function normalizeInputAssets(?array $assets): array
+    {
+        if ($assets === null || $assets === []) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($assets as $asset) {
+            if (! is_array($asset)) {
+                continue;
+            }
+
+            $candidates = [];
+            foreach (['fal_url', 'url', 'local_url'] as $key) {
+                $value = $asset[$key] ?? null;
+                if (is_string($value) && $value !== '' && ! in_array($value, $candidates, true)) {
+                    $candidates[] = $value;
+                }
+            }
+            if ($candidates === []) {
+                continue;
+            }
+
+            $type = (string) ($asset['type'] ?? $asset['kind'] ?? 'image');
+            $kind = in_array($type, ['image', 'video', 'audio'], true) ? $type : 'image';
+            $name = $asset['original_name'] ?? $asset['name'] ?? null;
+
+            $out[] = [
+                'url' => $candidates[0],
+                'kind' => $kind,
+                'name' => is_string($name) ? $name : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Owner-only visibility / featured flags.
      *
      * @return array<string, mixed>|null
@@ -361,7 +520,11 @@ class TrendsFeedService
             'avatar' => $this->avatarUrl($username),
             'uses' => $uses,
             'rating' => null,
-            'credits' => (int) round((float) ($creation->credits_charged ?? 0)),
+            'credits' => (int) round((float) (
+                ($creation->trend_cost ?? null) !== null
+                    ? $creation->trend_cost
+                    : ($creation->credits_charged ?? 0)
+            )),
             'model' => $creation->model_name ?: 'AI Model',
             'endpoint_id' => $creation->endpoint_id,
             'created_at' => $creation->completed_at?->toIso8601String()

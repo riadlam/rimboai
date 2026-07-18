@@ -41,6 +41,25 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function showTrend(string $key, TrendsFeedService $trends, Request $request): Response
+    {
+        if (! preg_match('/^(image|video|music)-(\d+)$/', $key, $m)) {
+            abort(404);
+        }
+
+        $workspace = $trends->workspace($m[1], (int) $m[2]);
+        if (! $workspace) {
+            abort(404);
+        }
+
+        $user = $request->user();
+
+        return Inertia::render('TrendTemplate', [
+            'workspace' => $workspace,
+            'tokenBalance' => $user ? (int) ($user->tokens ?? 0) : 0,
+        ]);
+    }
+
     public function innovation(): Response
     {
         return Inertia::render('Innovation', [

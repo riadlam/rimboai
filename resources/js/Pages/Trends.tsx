@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import VideoThumb from '@/Components/VideoThumb';
-import { apiPost } from '@/lib/api';
-import { saveLabReuseDraft, type LabReuseDraft } from '@/lib/labReuse';
 import type { PageProps } from '@/types';
 
 export type TrendTemplate = {
@@ -63,34 +61,8 @@ export default function Trends({ templates: initialTemplates = [] }: Props) {
     );
 }
 
-function labHrefForType(type: TrendTemplate['type']): string {
-    if (type === 'video') return '/lab?type=text-to-video';
-    if (type === 'music') return '/lab?type=text-to-music';
-    return '/lab?type=text-to-image';
-}
-
 function isAudioUrl(url?: string | null): boolean {
     return Boolean(url && /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(url));
-}
-
-function buildTrendLabDraft(t: TrendTemplate): LabReuseDraft {
-    const lab = t.type === 'video' ? 'video' : t.type === 'music' ? 'music' : 'image';
-    return {
-        id: `trend-${t.id}-${Date.now()}`,
-        lab,
-        intent: 'reuse-settings',
-        prompt: (t.prompt || '').trim(),
-        lyrics: t.lyrics ?? null,
-        modelName: t.model || null,
-        endpointId: t.endpoint_id || null,
-        aspect: t.aspect ?? (lab === 'video' ? '16:9' : lab === 'image' ? '1:1' : null),
-        resolution: t.resolution ?? (lab === 'video' ? '720p' : lab === 'image' ? '1K' : null),
-        duration: t.duration ?? (lab === 'video' ? 5 : null),
-        audio: lab === 'video' ? Boolean(t.generate_audio ?? true) : null,
-        quantity: t.quantity ?? 1,
-        imageMode: lab === 'image' ? (t.image_mode === 'variations' ? 'variations' : 'create') : null,
-        media: [],
-    };
 }
 
 function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate[] }) {
@@ -102,7 +74,6 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
     const [model, setModel] = useState('__all__');
     const [sort, setSort] = useState<SortId>('popular');
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [usingId, setUsingId] = useState<string | null>(null);
 
     useEffect(() => {
         setTemplates(initialTemplates);
@@ -164,26 +135,13 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
     const open = (id: string) => setSelectedId(id);
     const selected = selectedId ? templates.find((row) => row.id === selectedId) ?? null : null;
 
-    const useInLab = async (row: TrendTemplate) => {
+    const useInLab = (row: TrendTemplate) => {
         if (!props.auth.user) {
             router.visit('/?login');
             return;
         }
-        if (usingId) return;
-        setUsingId(row.id);
-        try {
-            const res = await apiPost<{ ok: boolean; uses: number; item: TrendTemplate }>('/trends/use', {
-                type: row.type,
-                id: row.creation_id,
-            });
-            const updated = { ...(res.item ?? row), uses: res.uses };
-            setTemplates((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
-            saveLabReuseDraft(buildTrendLabDraft(updated));
-            setSelectedId(null);
-            router.visit(labHrefForType(row.type));
-        } catch {
-            setUsingId(null);
-        }
+        setSelectedId(null);
+        router.visit(`/trends/${row.id}`);
     };
 
     useEffect(() => {
@@ -340,9 +298,9 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
                 {selected && (
                     <TemplateDetailModal
                         template={selected}
-                        using={usingId === selected.id}
+                        using={false}
                         onClose={() => setSelectedId(null)}
-                        onUse={() => void useInLab(selected)}
+                        onUse={() => useInLab(selected)}
                     />
                 )}
             </AnimatePresence>
@@ -641,7 +599,7 @@ function TemplateDetailModal({
                             >
                                 <IconWand className="h-4 w-4" />
                             </motion.span>
-                            {using ? t('openingLab') : t('useTemplate')}
+                            {using ? t('openingTemplate') : t('useTemplate')}
                         </motion.button>
                     </div>
                 </motion.div>
@@ -733,32 +691,6 @@ function TemplateDetailModal({
                                 <Stat label={t('stats.type')} value={tmpl.type} />
                                 <Stat label={t('stats.credits')} value={tmpl.credits > 0 ? String(tmpl.credits) : '—'} />
                             </motion.div>
-
-                            {tmpl.description && (
-                                <motion.div custom={2} variants={contentReveal} initial="hidden" animate="show" className="space-y-1.5">
-                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">{t('prompt')}</p>
-                                    <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-[13px] leading-relaxed text-zinc-300">
-                                        {tmpl.description}
-                                    </p>
-                                </motion.div>
-                            )}
-
-                            <motion.div custom={3} variants={contentReveal} initial="hidden" animate="show" className="flex flex-wrap gap-1.5">
-                                <Chip>{tmpl.model}</Chip>
-                                {tmpl.aspect && <Chip>{tmpl.aspect}</Chip>}
-                                {tmpl.resolution && <Chip>{tmpl.resolution}</Chip>}
-                                {tmpl.duration != null && tmpl.duration !== '' && (
-                                    <Chip>
-                                        {tmpl.duration === 'auto'
-                                            ? t('auto')
-                                            : `${tmpl.duration}${typeof tmpl.duration === 'number' || /^\d+$/.test(String(tmpl.duration)) ? 's' : ''}`}
-                                    </Chip>
-                                )}
-                                {tmpl.type === 'video' && tmpl.generate_audio != null && (
-                                    <Chip>{tmpl.generate_audio ? t('audioOn') : t('audioOff')}</Chip>
-                                )}
-                                {tmpl.type === 'image' && tmpl.quantity && tmpl.quantity > 1 && <Chip>×{tmpl.quantity}</Chip>}
-                            </motion.div>
                         </div>
 
                         <motion.div
@@ -775,21 +707,13 @@ function TemplateDetailModal({
                                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#E04520] text-[14px] font-semibold text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
                             >
                                 <IconWand className="h-4 w-4" />
-                                {using ? t('openingLab') : t('useTemplate')}
+                                {using ? t('openingTemplate') : t('useTemplate')}
                             </button>
                         </motion.div>
                     </div>
                 </motion.div>
             )}
         </motion.div>
-    );
-}
-
-function Chip({ children }: { children: ReactNode }) {
-    return (
-        <span className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs font-semibold capitalize text-zinc-300">
-            {children}
-        </span>
     );
 }
 
