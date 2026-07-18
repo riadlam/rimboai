@@ -84,6 +84,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/trends/use', [TrendsController::class, 'useTemplate'])
         ->middleware('throttle:60,1')
         ->name('trends.use');
+    Route::post('/trends/remake', [TrendsController::class, 'remake'])
+        ->middleware('throttle:20,1')
+        ->name('trends.remake');
     Route::post('/trends/visibility', [TrendsController::class, 'setVisibility'])
         ->middleware('throttle:30,1')
         ->name('trends.visibility');

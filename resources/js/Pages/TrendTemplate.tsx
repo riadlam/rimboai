@@ -1,9 +1,10 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { motion } from 'framer-motion';
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
-import { ApiError, apiPost, apiPostForm } from '@/lib/api';
+import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
+import { ApiError, apiGet, apiPostForm } from '@/lib/api';
 import type { PageProps } from '@/types';
 
 type TrendUpload = {
@@ -55,8 +56,47 @@ type FileSlot = {
     preview: string | null;
 };
 
+type RemakeCreation = {
+    id: number;
+    status: string;
+    progress_percent?: number | null;
+    progress_message?: string | null;
+    prompt?: string;
+    model_name?: string | null;
+    video_url?: string | null;
+    thumbnail_url?: string | null;
+    preview_url?: string | null;
+    images?: string[];
+    audio_url?: string | null;
+    cover_url?: string | null;
+    aspect?: string | null;
+    resolution?: string | null;
+    duration?: string | number | null;
+    audio?: boolean | null;
+    mode?: string | null;
+    error?: string | null;
+    created_at?: string | null;
+};
+
 function isAudioUrl(url?: string | null): boolean {
     return Boolean(url && /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(url));
+}
+
+function isMobileViewport(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+}
+
+function statusUrl(type: TrendWorkspace['type'], id: number): string {
+    if (type === 'image') return `/lab/image/creations/${id}/status`;
+    if (type === 'music') return `/lab/music/creations/${id}/status`;
+    return `/lab/video/creations/${id}/status`;
+}
+
+function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation): string | null {
+    if (type === 'video') return c.video_url || c.preview_url || null;
+    if (type === 'image') return c.images?.[0] || c.preview_url || null;
+    return c.cover_url || c.preview_url || null;
 }
 
 export default function TrendTemplate({ workspace, tokenBalance }: Props) {
@@ -72,11 +112,18 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [modalOpen, setModalOpen] = useState(false);
+    const [job, setJob] = useState<RemakeCreation | null>(null);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
     useEffect(() => {
         setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
         setError(null);
         setCreating(false);
-        // Only reset when navigating to a different template.
+        setModalOpen(false);
+        setJob(null);
+        setDetailsOpen(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workspace.key]);
 
@@ -85,9 +132,44 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
             Object.values(slots).forEach((s) => {
                 if (s.preview) URL.revokeObjectURL(s.preview);
             });
+            if (pollRef.current) clearInterval(pollRef.current);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const stopPoll = useCallback(() => {
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, []);
+
+    const startPoll = useCallback(
+        (creationId: number) => {
+            stopPoll();
+            pollRef.current = setInterval(async () => {
+                try {
+                    const data = await apiGet<RemakeCreation>(statusUrl(workspace.type, creationId));
+                    setJob(data);
+                    if (data.status === 'completed') {
+                        stopPoll();
+                        setCreating(false);
+                        return;
+                    }
+                    if (data.status === 'failed' || data.status === 'cancelled') {
+                        stopPoll();
+                        setCreating(false);
+                        setError(data.error || t('createFailed'));
+                    }
+                } catch (e) {
+                    stopPoll();
+                    setCreating(false);
+                    setError(e instanceof ApiError ? e.message : t('createFailed'));
+                }
+            }, 2500);
+        },
+        [stopPoll, t, workspace.type],
+    );
 
     const requiredReady =
         workspace.uploads.length === 0 ||
@@ -132,14 +214,6 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         setError(null);
 
         try {
-            await apiPost('/trends/use', {
-                type: workspace.type,
-                id: workspace.creation_id,
-            });
-
-            const form = new FormData();
-            const locked = workspace.locked;
-
             const uploadOne = async (file: File) => {
                 const up = new FormData();
                 up.append('file', file);
@@ -147,46 +221,35 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                 return uploaded.url;
             };
 
-            if (workspace.type === 'image') {
-                form.append('prompt', String(locked.prompt ?? ''));
-                if (locked.endpoint_id) form.append('endpoint_id', String(locked.endpoint_id));
-                if (locked.aspect) form.append('aspect', String(locked.aspect));
-                if (locked.resolution) form.append('resolution', String(locked.resolution));
-                if (locked.quantity) form.append('quantity', String(locked.quantity));
-                form.append('mode', String(locked.image_mode ?? 'create'));
-                for (const u of workspace.uploads) {
-                    const file = slots[u.key]?.file;
-                    if (file) form.append('references[]', file);
-                }
-            } else if (workspace.type === 'video') {
-                form.append('prompt', String(locked.prompt ?? ''));
-                if (locked.endpoint_id) form.append('endpoint_id', String(locked.endpoint_id));
-                if (locked.aspect) form.append('aspect', String(locked.aspect));
-                if (locked.resolution) form.append('resolution', String(locked.resolution));
-                if (locked.duration != null) form.append('duration', String(locked.duration));
-                form.append('audio', locked.audio ? '1' : '0');
-                if (locked.frame_mode) form.append('frame_mode', String(locked.frame_mode));
+            const form = new FormData();
+            form.append('type', workspace.type);
+            form.append('id', String(workspace.creation_id));
 
-                for (const u of workspace.uploads) {
-                    const file = slots[u.key]?.file;
-                    if (!file) continue;
-                    const url = await uploadOne(file);
-                    if (!url) continue;
-                    if (u.kind === 'video') form.append('video_urls[]', url);
-                    else if (u.kind === 'audio') form.append('audio_urls[]', url);
-                    else form.append('image_urls[]', url);
-                }
-            } else {
-                form.append('prompt', String(locked.prompt ?? ''));
-                if (locked.endpoint_id) form.append('endpoint_id', String(locked.endpoint_id));
-                if (locked.lyrics) form.append('lyrics', String(locked.lyrics));
-                for (const u of workspace.uploads) {
-                    const file = slots[u.key]?.file;
-                    if (file && u.kind === 'audio') form.append('audio', file);
-                }
+            for (const u of workspace.uploads) {
+                const file = slots[u.key]?.file;
+                if (!file) continue;
+                const url = await uploadOne(file);
+                if (!url) continue;
+                if (u.kind === 'video') form.append('video_urls[]', url);
+                else if (u.kind === 'audio') form.append('audio_urls[]', url);
+                else form.append('image_urls[]', url);
             }
 
-            await apiPostForm(workspace.generate_url, form);
+            const data = await apiPostForm<RemakeCreation & { ok?: boolean; type?: string }>('/trends/remake', form);
+            const mobile = isMobileViewport();
+
+            if (mobile) {
+                setJob(data);
+                setModalOpen(true);
+                if (data.status !== 'completed' && data.status !== 'failed') {
+                    startPoll(data.id);
+                } else {
+                    setCreating(false);
+                }
+                return;
+            }
+
+            setCreating(false);
             router.visit(workspace.lab_href);
         } catch (e) {
             const message =
@@ -200,8 +263,42 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         }
     };
 
+    const closeModal = () => {
+        stopPoll();
+        setModalOpen(false);
+        setCreating(false);
+        setDetailsOpen(false);
+    };
+
     const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
     const displayTitle = (tmpl.trend_title || tmpl.name || '').trim() || t('useTemplate');
+    const progress = Math.max(5, Math.min(99, job?.progress_percent ?? 12));
+    const jobDone = job?.status === 'completed';
+    const jobFailed = job?.status === 'failed' || job?.status === 'cancelled';
+    const doneSrc = job ? resultSrc(workspace.type, job) : null;
+
+    const previewItem: ImageLabPreviewItem | null = (() => {
+        if (!job || job.status !== 'completed') return null;
+        const src = resultSrc(workspace.type, job);
+        if (!src && workspace.type !== 'music') return null;
+        const method =
+            workspace.type === 'image'
+                ? 'image-to-image'
+                : (job.mode as ImageLabPreviewItem['method']) || 'image-to-video';
+        return {
+            id: `trend-remake-${job.id}`,
+            prompt: job.prompt || displayTitle,
+            src: src || job.cover_url || tmpl.cover,
+            favorite: false,
+            aspect: job.aspect || undefined,
+            resolution: job.resolution || undefined,
+            duration: job.duration ?? null,
+            audio: job.audio ?? null,
+            modelName: job.model_name ?? null,
+            method: method as ImageLabPreviewItem['method'],
+            videoUrl: workspace.type === 'video' ? job.video_url || src || undefined : undefined,
+        };
+    })();
 
     return (
         <AppLayout flush>
@@ -209,7 +306,6 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
             <div className="flex w-full min-w-0 flex-col md:h-full md:min-h-0 [&_a]:cursor-pointer [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_label]:cursor-pointer">
                 <div className="flex flex-col rounded-xl bg-[#070708] md:min-h-0 md:flex-1 md:overflow-hidden">
                     <div className="flex flex-col md:min-h-0 md:flex-1 md:overflow-hidden md:flex-row">
-                        {/* Left panel — same shell as ToolCreatePanel */}
                         <motion.aside
                             initial={{ opacity: 0, x: -12 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -240,9 +336,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                             <h1 className="font-[family-name:Outfit,sans-serif] text-[22px] font-semibold leading-tight tracking-tight text-white">
                                                 {t('useTemplate')}
                                             </h1>
-                                            <p className="mt-1.5 text-[13px] leading-relaxed text-white/45">
-                                                {displayTitle}
-                                            </p>
+                                            <p className="mt-1.5 text-[13px] leading-relaxed text-white/45">{displayTitle}</p>
                                         </div>
                                     </div>
 
@@ -292,7 +386,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         </div>
                                     </div>
 
-                                    {error && (
+                                    {error && !modalOpen && (
                                         <p className="mb-2 text-[11px] leading-snug text-red-300/90">{error}</p>
                                     )}
                                     {isGuest && (
@@ -337,7 +431,6 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                             </div>
                         </motion.aside>
 
-                        {/* Right panel — same preview shell as ToolDetail */}
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -419,6 +512,150 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                     </div>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {modalOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center md:hidden"
+                        onClick={closeModal}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, y: 28, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101016] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(ellipse_at_top,rgba(255,87,51,0.28),transparent_70%)]" />
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                className="absolute end-3 top-3 z-10 rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
+                                aria-label={t('close')}
+                            >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                    <path d="M18 6 6 18" />
+                                    <path d="m6 6 12 12" />
+                                </svg>
+                            </button>
+
+                            <div className="relative space-y-4 p-5 pt-6">
+                                {!jobDone && !jobFailed && (
+                                    <>
+                                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                                            <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#FF5733]" />
+                                        </div>
+                                        <div className="text-center">
+                                            <h3 className="font-[family-name:Outfit,sans-serif] text-lg font-semibold text-white">
+                                                {t('generatingTitle')}
+                                            </h3>
+                                            <p className="mt-2 text-[13px] leading-relaxed text-white/50">
+                                                {t('generatingBody')}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between text-[11px] text-white/45">
+                                                <span>{job?.progress_message || t('creating')}</span>
+                                                <span>{progress}%</span>
+                                            </div>
+                                            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                                                <motion.div
+                                                    className="h-full rounded-full bg-gradient-to-r from-[#FF6A45] to-[#FF5733]"
+                                                    initial={{ width: '8%' }}
+                                                    animate={{ width: `${progress}%` }}
+                                                    transition={{ duration: 0.4 }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <Link
+                                            href="/history"
+                                            className="flex h-11 w-full items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] text-sm font-medium text-white/85 transition hover:border-orange-400/35 hover:bg-orange-500/10"
+                                        >
+                                            {t('viewHistory')}
+                                        </Link>
+                                    </>
+                                )}
+
+                                {jobFailed && (
+                                    <div className="space-y-4 text-center">
+                                        <h3 className="text-lg font-semibold text-rose-100">{t('createFailed')}</h3>
+                                        <p className="text-[13px] text-rose-100/70">{job?.error || error}</p>
+                                        <button
+                                            type="button"
+                                            onClick={closeModal}
+                                            className="h-11 w-full rounded-xl bg-white/10 text-sm font-medium text-white"
+                                        >
+                                            {t('close')}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {jobDone && (
+                                    <div className="space-y-4">
+                                        <div className="text-center">
+                                            <h3 className="font-[family-name:Outfit,sans-serif] text-lg font-semibold text-white">
+                                                {t('resultReady')}
+                                            </h3>
+                                            <p className="mt-1 text-[12px] text-white/45">{t('tapForDetails')}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setDetailsOpen(true)}
+                                            className="group relative w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40 text-left ring-1 ring-white/5 transition hover:border-orange-400/35"
+                                        >
+                                            {workspace.type === 'video' && doneSrc ? (
+                                                <video
+                                                    src={doneSrc}
+                                                    poster={job?.thumbnail_url || undefined}
+                                                    className="aspect-[9/16] max-h-[52vh] w-full object-cover"
+                                                    muted
+                                                    playsInline
+                                                    loop
+                                                    autoPlay
+                                                />
+                                            ) : workspace.type === 'music' ? (
+                                                <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#1c1226] to-[#0b1a17] p-4">
+                                                    {job?.cover_url && (
+                                                        <img src={job.cover_url} alt="" className="h-24 w-24 rounded-2xl object-cover" />
+                                                    )}
+                                                    {job?.audio_url && (
+                                                        <audio src={job.audio_url} controls className="w-full" onClick={(e) => e.stopPropagation()} />
+                                                    )}
+                                                </div>
+                                            ) : doneSrc ? (
+                                                <img src={doneSrc} alt="" className="max-h-[52vh] w-full object-contain" />
+                                            ) : null}
+                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                                                <span className="text-[12px] font-medium text-white/90">{t('viewDetails')}</span>
+                                            </div>
+                                        </button>
+                                        <Link
+                                            href="/history"
+                                            className="flex h-11 w-full items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] text-sm font-medium text-white/85"
+                                        >
+                                            {t('viewHistory')}
+                                        </Link>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {detailsOpen && previewItem && (
+                <ImageLabPreviewModal
+                    image={previewItem}
+                    index={0}
+                    total={1}
+                    onClose={() => setDetailsOpen(false)}
+                    hidePrompt={false}
+                />
+            )}
         </AppLayout>
     );
 }
@@ -461,11 +698,7 @@ function UploadSlot({
             <div className="flex items-center justify-between gap-2">
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
                 {slot?.file && (
-                    <button
-                        type="button"
-                        onClick={onClear}
-                        className="text-[11px] text-white/35 transition hover:text-white/70"
-                    >
+                    <button type="button" onClick={onClear} className="text-[11px] text-white/35 transition hover:text-white/70">
                         Remove
                     </button>
                 )}
