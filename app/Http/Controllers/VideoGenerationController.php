@@ -163,8 +163,13 @@ class VideoGenerationController extends Controller
 
         $route = $capabilities->resolveRoute($model->endpoint_id, $counts, $frameMode);
         if ($route === null) {
+            $needsImage = str_contains(strtolower((string) $model->endpoint_id), 'image-to-video')
+                && (int) ($counts['images'] ?? 0) < 1;
+
             return response()->json([
-                'message' => 'Could not resolve a fal endpoint for this model and media mix.',
+                'message' => $needsImage
+                    ? 'This model needs a source image. Upload an image to animate.'
+                    : 'Could not resolve a fal endpoint for this model and media mix.',
             ], 422);
         }
 

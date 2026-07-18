@@ -92,6 +92,7 @@
     "audioSilent": "Silent video",
     "noCompatible": "No compatible models",
     "blockPrompt": "Add a prompt to generate.",
+    "blockNeedImage": "Add an image to animate.",
     "blockAudioAlone": "Add an image or video — audio can't be used alone.",
     "blockMix": "No model supports this media mix. Remove some references.",
     "framesToggle": "Frames",

@@ -163,6 +163,21 @@ class FalVideoInputBuilder
         $durationValue = $this->formatDuration($durationSeconds, $profile['duration_format'] ?? 'string', $options['duration'] ?? null);
         $input['duration'] = $durationValue;
 
+        // Wan 2.2 A14B uses num_frames + frames_per_second (no duration field).
+        if (str_contains(strtolower($endpointId), 'wan/v2.2-a14b')) {
+            unset($input['duration']);
+            $fps = 16;
+            $frames = max(17, min(161, (int) round($durationSeconds * $fps) + 1));
+            // Prefer odd frame counts (Fal examples use 81).
+            if ($frames % 2 === 0) {
+                $frames = min(161, $frames + 1);
+            }
+            $input['num_frames'] = $frames;
+            $input['frames_per_second'] = $fps;
+            $durationSeconds = (int) max(1, round($frames / $fps));
+            $durationValue = (string) $durationSeconds;
+        }
+
         // Seedance / some R2V endpoints accept aspect_ratio "auto"
         if (str_contains(strtolower($endpointId), 'seedance') && str_contains(strtolower($endpointId), 'reference')) {
             $input['aspect_ratio'] = $aspect === '16:9' || $aspect === '9:16' || $aspect === '1:1' ? $aspect : 'auto';
@@ -292,8 +307,17 @@ class FalVideoInputBuilder
         }
 
         // Wan 2.7 I2V schema has no aspect_ratio — framing follows image_url.
-        if (str_contains($id, 'image-to-video')) {
+        // Wan 2.2 A14B I2V accepts aspect_ratio (including auto).
+        if (str_contains($id, 'image-to-video') && str_contains($id, 'wan/v2.7')) {
             unset($input['aspect_ratio']);
+        }
+
+        // Wan 2.2 A14B I2V: keep auto framing from the source image when aspect wasn't explicit.
+        if (str_contains($id, 'wan/v2.2-a14b') && str_contains($id, 'image-to-video')) {
+            $input['aspect_ratio'] = $input['aspect_ratio'] ?? 'auto';
+            if (($options['aspect'] ?? null) === null || ($options['aspect'] ?? '') === '') {
+                $input['aspect_ratio'] = 'auto';
+            }
         }
 
         $supportsExpansion = str_contains($id, 'text-to-video')
@@ -478,6 +502,15 @@ class FalVideoInputBuilder
             return $resolution === '480p' ? '480p' : '720p';
         }
 
+        // Wan 2.2 A14B: 480p / 580p / 720p only.
+        if (str_contains($id, 'wan/v2.2-a14b')) {
+            return match ($resolution) {
+                '480p' => '480p',
+                '580p' => '580p',
+                default => '720p',
+            };
+        }
+
         // Veo accepts 720p / 1080p / 4k
         if (str_contains($id, 'veo')) {
             return match ($resolution) {
@@ -523,6 +556,15 @@ class FalVideoInputBuilder
                 'aspects' => ['16:9', '9:16', '1:1'],
                 'audio' => str_contains($id, 'v3') || str_contains($id, '/o3/') || str_contains($id, 'v2.6'),
                 'audio_field' => 'generate_audio',
+            ];
+        }
+
+        if (str_contains($id, 'wan/v2.2-a14b')) {
+            return [
+                'duration_format' => 'int',
+                'aspects' => ['auto', '16:9', '9:16', '1:1'],
+                'resolution' => true,
+                'i2v_aspect_auto' => true,
             ];
         }
 

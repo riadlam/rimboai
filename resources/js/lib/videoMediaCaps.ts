@@ -193,12 +193,16 @@ export function supportsMediaMix(
 }
 
 export function resolveMediaRouteMode(
-    model: Pick<BrandModel, 'media_capabilities'> | null | undefined,
+    model: Pick<BrandModel, 'media_capabilities' | 'endpoint_id'> | null | undefined,
     counts: MediaCounts,
     frameMode: FrameMode = 'default',
 ): MediaRouteMode | null {
     const total = mediaTotal(counts);
-    if (total === 0) return 'text-to-video';
+    const endpoint = String(model && 'endpoint_id' in model ? model.endpoint_id ?? '' : '');
+    if (total === 0) {
+        if (endpoint.includes('image-to-video')) return null;
+        return 'text-to-video';
+    }
     if (!supportsMediaMix(model, counts, frameMode)) return null;
 
     const caps = getMediaCaps(model);
@@ -312,6 +316,12 @@ export function generateBlockReason(
     frameMode: FrameMode = 'default',
 ): string | null {
     if (!promptOk) return 'Add a prompt to generate.';
+
+    // I2V-only catalog models (e.g. Wan 2.2 A14B) need a source image.
+    const endpoint = 'endpoint_id' in (model ?? {}) ? String((model as BrandModel).endpoint_id ?? '') : '';
+    if (endpoint.includes('image-to-video') && counts.images < 1) {
+        return 'Add an image to animate.';
+    }
 
     if (frameMode === 'first_last') {
         const caps = getMediaCaps(model);

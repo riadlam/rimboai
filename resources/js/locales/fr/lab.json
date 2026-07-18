@@ -86,6 +86,7 @@
     "audioSilent": "Vidéo silencieuse",
     "noCompatible": "Aucun modèle compatible",
     "blockPrompt": "Ajoutez un prompt pour générer.",
+    "blockNeedImage": "Ajoutez une image à animer.",
     "blockAudioAlone": "Ajoutez une image ou une vidéo — l'audio ne peut pas être utilisé seul.",
     "blockMix": "Aucun modèle ne prend en charge ce mélange de médias. Retirez certaines références.",
     "negativePrompt": "Prompt négatif",

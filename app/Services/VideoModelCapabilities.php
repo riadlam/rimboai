@@ -246,6 +246,25 @@ class VideoModelCapabilities
             );
         }
 
+        if (str_contains($id, 'wan/v2.2-a14b/image-to-video')) {
+            return $this->caps(
+                images: false,
+                videos: false,
+                audio: false,
+                firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 1,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: null,
+                firstFrameEndpoint: 'fal-ai/wan/v2.2-a14b/image-to-video',
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+
         if (str_contains($id, 'wan/v2.7/text-to-video')) {
             return $this->caps(
                 images: true,
@@ -392,8 +411,14 @@ class VideoModelCapabilities
         $total = $images + $videos + $audios;
 
         if ($total === 0) {
+            $id = strtolower($endpointId);
+            // Catalog rows that are I2V-only (no T2V sibling) require a source image.
+            if (str_contains($id, 'image-to-video') && ! str_contains($id, 'text-to-video')) {
+                return null;
+            }
+
             // Explicit R2V catalog models still submit to themselves (prompt-only is allowed).
-            $mode = str_contains(strtolower($endpointId), 'reference-to-video')
+            $mode = str_contains($id, 'reference-to-video')
                 ? 'reference-to-video'
                 : 'text-to-video';
 

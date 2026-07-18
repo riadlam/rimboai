@@ -362,6 +362,8 @@ export default function VideoLabCreateForm({
         ? null
         : rawBlockReason === 'Add a prompt to generate.'
           ? t('video.blockPrompt')
+          : rawBlockReason === 'Add an image to animate.'
+            ? t('video.blockNeedImage')
           : rawBlockReason.startsWith('Add an image or video')
             ? t('video.blockAudioAlone')
             : rawBlockReason === 'No model supports this media mix. Remove some references.'
