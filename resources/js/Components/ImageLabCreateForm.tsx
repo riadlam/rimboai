@@ -38,7 +38,7 @@ const aspectMeta: Record<string, { w: number; h: number; label: string }> = {
     '1:1': { w: 14, h: 14, label: 'Square' },
     '16:9': { w: 18, h: 10, label: 'Landscape' },
     '9:16': { w: 10, h: 18, label: 'Portrait' },
-    '4:3': { w: 16, h: 12, label: 'Classic' },
+    '4:5': { w: 12, h: 15, label: 'Social' },
     '3:4': { w: 12, h: 16, label: 'Photo' },
 };
 

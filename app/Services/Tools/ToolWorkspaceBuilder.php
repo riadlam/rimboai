@@ -239,7 +239,7 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
-                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:5', '3:4']),
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
             // 9️⃣ Denoise Video — single Strength slider
@@ -290,7 +290,7 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => false,
                 ],
-                $this->aspectRatioControl($defaults, ['16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->aspectRatioControl($defaults, ['16:9', '9:16', '1:1', '4:5', '3:4']),
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
@@ -304,7 +304,7 @@ class ToolWorkspaceBuilder
                     'default' => 'cinematic',
                     'option_label_prefix' => 'filters',
                 ],
-                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:5', '3:4']),
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
@@ -350,7 +350,7 @@ class ToolWorkspaceBuilder
                     'default' => '',
                     'required' => true,
                 ],
-                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:3', '3:4']),
+                $this->aspectRatioControl($defaults, ['auto', '16:9', '9:16', '1:1', '4:5', '3:4']),
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 

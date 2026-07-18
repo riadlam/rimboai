@@ -40,7 +40,7 @@ class ImageGenerationController extends Controller
         $data = $request->validate([
             'prompt' => ['required', 'string', 'min:2', 'max:2000'],
             'endpoint_id' => ['nullable', 'string', 'max:191'],
-            'aspect' => ['nullable', 'string', Rule::in(['1:1', '16:9', '9:16', '4:3', '3:4'])],
+            'aspect' => ['nullable', 'string', Rule::in(['1:1', '16:9', '9:16', '4:5', '3:4'])],
             'resolution' => ['nullable', 'string', Rule::in(['1K', '2K', '4K'])],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:4'],
             'mode' => ['nullable', 'string', Rule::in(['create', 'variations'])],

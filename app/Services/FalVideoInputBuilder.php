@@ -7,7 +7,7 @@ namespace App\Services;
  */
 class FalVideoInputBuilder
 {
-    private const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4'];
+    private const ASPECTS = ['16:9', '9:16', '1:1', '4:5', '3:4'];
 
     /**
      * @var array<string, array{
@@ -87,17 +87,17 @@ class FalVideoInputBuilder
         ],
         'fal-ai/wan/v2.7/text-to-video' => [
             'duration_format' => 'int',
-            'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+            'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
             'resolution' => true,
         ],
         'fal-ai/wan/v2.7/reference-to-video' => [
             'duration_format' => 'int',
-            'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+            'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
             'resolution' => true,
         ],
         'fal-ai/pixverse/c1/reference-to-video' => [
             'duration_format' => 'int',
-            'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+            'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
             'resolution' => true,
             'audio' => true,
             'audio_field' => 'generate_audio_switch',
@@ -109,7 +109,17 @@ class FalVideoInputBuilder
         ],
         'xai/grok-imagine-video/text-to-video' => [
             'duration_format' => 'int',
-            'aspects' => ['16:9', '9:16', '1:1'],
+            'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3'],
+            'resolution' => true,
+        ],
+        // I2V must keep duration as int — falling through to inferProfile used string "4"
+        // which Fal rejects / mishandles. Aspect defaults to auto so the source image
+        // is not stretched into 9:16/16:9.
+        'xai/grok-imagine-video/image-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['auto', '16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3'],
+            'resolution' => true,
+            'i2v_aspect_auto' => true,
         ],
     ];
 
@@ -156,11 +166,20 @@ class FalVideoInputBuilder
         // Seedance / some R2V endpoints accept aspect_ratio "auto"
         if (str_contains(strtolower($endpointId), 'seedance') && str_contains(strtolower($endpointId), 'reference')) {
             $input['aspect_ratio'] = $aspect === '16:9' || $aspect === '9:16' || $aspect === '1:1' ? $aspect : 'auto';
+        } elseif (! empty($profile['i2v_aspect_auto']) && $mode === 'image-to-video') {
+            // Grok I2V: preserve the source image framing (Fal default). Forcing 9:16
+            // on a square logo / portrait photo is what made outputs look "ugly".
+            $input['aspect_ratio'] = 'auto';
         } else {
             $input['aspect_ratio'] = $aspect;
         }
 
-        if (! empty($profile['resolution']) || str_contains(strtolower($endpointId), 'seedance') || str_contains(strtolower($endpointId), 'veo')) {
+        if (
+            ! empty($profile['resolution'])
+            || str_contains(strtolower($endpointId), 'seedance')
+            || str_contains(strtolower($endpointId), 'veo')
+            || str_contains(strtolower($endpointId), 'grok-imagine-video')
+        ) {
             $input['resolution'] = $this->mapResolutionForFal($resolution, $endpointId);
         }
 
@@ -355,15 +374,23 @@ class FalVideoInputBuilder
      */
     private function normalizeAspect(?string $aspect, array $allowed): string
     {
-        $aspect = $aspect ? trim($aspect) : '16:9';
+        $aspect = $aspect ? trim($aspect) : (in_array('16:9', $allowed, true) ? '16:9' : ($allowed[0] ?? '16:9'));
         if (in_array($aspect, $allowed, true)) {
             return $aspect;
+        }
+        if ($aspect === 'auto' && in_array('auto', $allowed, true)) {
+            return 'auto';
         }
 
         // Map unsupported ratios onto closest supported ones.
         return match ($aspect) {
-            '4:3' => in_array('16:9', $allowed, true) ? '16:9' : ($allowed[0] ?? '16:9'),
-            '3:4' => in_array('9:16', $allowed, true) ? '9:16' : ($allowed[0] ?? '16:9'),
+            // Legacy UI value — treat as 4:5 social portrait.
+            '4:3', '4:5' => in_array('4:5', $allowed, true)
+                ? '4:5'
+                : (in_array('9:16', $allowed, true) ? '9:16' : (in_array('3:4', $allowed, true) ? '3:4' : ($allowed[0] ?? '16:9'))),
+            '3:4' => in_array('3:4', $allowed, true) ? '3:4' : (in_array('9:16', $allowed, true) ? '9:16' : ($allowed[0] ?? '16:9')),
+            '3:2' => in_array('3:2', $allowed, true) ? '3:2' : (in_array('16:9', $allowed, true) ? '16:9' : ($allowed[0] ?? '16:9')),
+            '2:3' => in_array('2:3', $allowed, true) ? '2:3' : (in_array('9:16', $allowed, true) ? '9:16' : ($allowed[0] ?? '16:9')),
             '1:1' => in_array('1:1', $allowed, true) ? '1:1' : ($allowed[0] ?? '16:9'),
             default => $allowed[0] ?? '16:9',
         };
@@ -385,8 +412,15 @@ class FalVideoInputBuilder
 
     private function mapResolutionForFal(string $resolution, string $endpointId): string
     {
+        $id = strtolower($endpointId);
+
+        // Grok Imagine Video only accepts 480p / 720p.
+        if (str_contains($id, 'grok-imagine-video')) {
+            return $resolution === '480p' ? '480p' : '720p';
+        }
+
         // Veo accepts 720p / 1080p / 4k
-        if (str_contains(strtolower($endpointId), 'veo')) {
+        if (str_contains($id, 'veo')) {
             return match ($resolution) {
                 '4k' => '4k',
                 '1080p' => '1080p',
@@ -407,7 +441,7 @@ class FalVideoInputBuilder
         if (str_contains($id, 'seedance')) {
             return [
                 'duration_format' => 'string',
-                'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+                'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
                 'resolution' => true,
                 'audio' => true,
                 'audio_field' => 'generate_audio',
@@ -436,15 +470,26 @@ class FalVideoInputBuilder
         if (str_contains($id, 'wan/v2.7')) {
             return [
                 'duration_format' => 'int',
-                'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+                'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
                 'resolution' => true,
+            ];
+        }
+
+        if (str_contains($id, 'grok-imagine-video')) {
+            return [
+                'duration_format' => 'int',
+                'aspects' => str_contains($id, 'image-to-video')
+                    ? ['auto', '16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3']
+                    : ['16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3'],
+                'resolution' => true,
+                'i2v_aspect_auto' => str_contains($id, 'image-to-video'),
             ];
         }
 
         if (str_contains($id, 'pixverse')) {
             return [
                 'duration_format' => 'int',
-                'aspects' => ['16:9', '9:16', '1:1', '4:3', '3:4'],
+                'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
                 'resolution' => true,
                 'audio' => true,
                 'audio_field' => 'generate_audio_switch',

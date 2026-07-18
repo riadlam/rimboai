@@ -10,7 +10,7 @@ namespace App\Services;
  */
 class FalImageInputBuilder
 {
-    private const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4'];
+    private const ASPECTS = ['1:1', '16:9', '9:16', '4:5', '3:4'];
 
     private const RESOLUTIONS = ['1K', '2K', '4K'];
 
@@ -203,8 +203,8 @@ class FalImageInputBuilder
 
         if (($profile['mode'] ?? '') === 'gpt_image_legacy') {
             $dims = match ($aspect) {
-                '16:9', '4:3' => ['width' => 1536, 'height' => 1024],
-                '9:16', '3:4' => ['width' => 1024, 'height' => 1536],
+                '16:9' => ['width' => 1536, 'height' => 1024],
+                '9:16', '3:4', '4:5' => ['width' => 1024, 'height' => 1536],
                 default => ['width' => 1024, 'height' => 1024],
             };
         } else {
@@ -243,6 +243,10 @@ class FalImageInputBuilder
     private function normalizeAspect(?string $aspect): string
     {
         $aspect = $aspect ? trim($aspect) : '1:1';
+        // Legacy drafts / reused settings may still send 4:3.
+        if ($aspect === '4:3') {
+            $aspect = '4:5';
+        }
 
         return in_array($aspect, self::ASPECTS, true) ? $aspect : '1:1';
     }
@@ -272,8 +276,9 @@ class FalImageInputBuilder
             return match ($aspect) {
                 '16:9' => 'landscape_16_9',
                 '9:16' => 'portrait_16_9',
-                '4:3' => 'landscape_4_3',
                 '3:4' => 'portrait_4_3',
+                // No standard Fal 4:5 preset — send explicit pixels.
+                '4:5' => $this->dimensionsForAspect('4:5', min(1024, $maxEdge)),
                 default => 'square_hd',
             };
         }
@@ -307,8 +312,8 @@ class FalImageInputBuilder
             return match ($aspect) {
                 '16:9' => 'landscape_16_9',
                 '9:16' => 'portrait_16_9',
-                '4:3' => 'landscape_4_3',
                 '3:4' => 'portrait_4_3',
+                '4:5' => $this->dimensionsForAspect('4:5', 1024),
                 default => 'square_hd',
             };
         }
@@ -326,8 +331,8 @@ class FalImageInputBuilder
     private function toGptImageLegacySize(string $aspect): string
     {
         return match ($aspect) {
-            '16:9', '4:3' => '1536x1024',
-            '9:16', '3:4' => '1024x1536',
+            '16:9' => '1536x1024',
+            '9:16', '3:4', '4:5' => '1024x1536',
             default => '1024x1024',
         };
     }

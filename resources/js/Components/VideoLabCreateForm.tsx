@@ -53,7 +53,7 @@ type Props = {
     draft?: LabReuseDraft | null;
 };
 
-const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4'] as const;
+const ASPECTS = ['16:9', '9:16', '1:1', '4:5', '3:4'] as const;
 const RESOLUTIONS = [
     { id: '720p', sub: 'Standard' },
     { id: '1080p', sub: 'HD' },
@@ -64,7 +64,7 @@ const aspectMeta: Record<string, { w: number; h: number; label: string }> = {
     '16:9': { w: 18, h: 10, label: 'Wide' },
     '9:16': { w: 10, h: 18, label: 'Vertical' },
     '1:1': { w: 14, h: 14, label: 'Square' },
-    '4:3': { w: 16, h: 12, label: 'Classic' },
+    '4:5': { w: 12, h: 15, label: 'Social' },
     '3:4': { w: 12, h: 16, label: 'Photo' },
 };
 

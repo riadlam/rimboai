@@ -76,7 +76,7 @@ class VideoGenerationController extends Controller
             $data = $request->validate([
                 'prompt' => ['required', 'string', 'min:2', 'max:2000'],
                 'endpoint_id' => ['nullable', 'string', 'max:191'],
-                'aspect' => ['nullable', 'string', Rule::in(['16:9', '9:16', '1:1', '4:3', '3:4'])],
+                'aspect' => ['nullable', 'string', Rule::in(['16:9', '9:16', '1:1', '4:5', '3:4'])],
                 'resolution' => ['nullable', 'string', Rule::in(['720p', '1080p', '4K', '4k'])],
                 'duration' => ['nullable'],
                 'audio' => ['nullable', 'boolean'],
