@@ -31,6 +31,27 @@ class VideoModelCapabilities
         $id = strtolower(trim($endpointId));
 
         // Seedance — multimodal R2V + first-frame I2V + optional end frame on I2V
+        if (str_contains($id, 'seedance') && str_contains($id, 'reference-to-video')) {
+            // Catalog row is already the R2V endpoint — keep submit on this endpoint
+            // (don't divert a single image to I2V when the user explicitly picked R2V).
+            return $this->caps(
+                images: true,
+                videos: true,
+                audio: true,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 9,
+                maxVideos: 3,
+                maxAudios: 3,
+                reference: $id,
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+
         if (str_contains($id, 'seedance') && str_contains($id, 'text-to-video')) {
             $fast = str_contains($id, '/fast');
             $i2v = $fast
@@ -117,6 +138,26 @@ class VideoModelCapabilities
                 firstFrameParam: 'start_image_url',
                 firstLastEndpoint: 'fal-ai/kling-video/o1/image-to-video',
                 lastFrameParam: 'end_image_url',
+            );
+        }
+
+        // Kling O3 / O1 video-to-video edit — character / face swap from image onto a source clip.
+        if (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit')) {
+            return $this->caps(
+                images: true,
+                videos: true,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 3,
+                maxVideos: 1,
+                maxAudios: 0,
+                reference: $id,
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
             );
         }
 
@@ -294,6 +335,13 @@ class VideoModelCapabilities
             return false;
         }
 
+        // Kling V2V edit (face/character swap): needs a source video + at least one face/element image.
+        if (str_contains(strtolower($endpointId), 'video-to-video/edit')) {
+            if ($videos < 1 || $images < 1) {
+                return false;
+            }
+        }
+
         if ($videos > 0 && ! $caps['supports_ref_videos']) {
             return false;
         }
@@ -344,9 +392,14 @@ class VideoModelCapabilities
         $total = $images + $videos + $audios;
 
         if ($total === 0) {
+            // Explicit R2V catalog models still submit to themselves (prompt-only is allowed).
+            $mode = str_contains(strtolower($endpointId), 'reference-to-video')
+                ? 'reference-to-video'
+                : 'text-to-video';
+
             return [
                 'endpoint_id' => $endpointId,
-                'mode' => 'text-to-video',
+                'mode' => $mode,
                 'first_frame_param' => null,
                 'last_frame_param' => null,
             ];

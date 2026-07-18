@@ -3,10 +3,10 @@
 namespace App\Services;
 
 /**
- * Converts UI aliases such as @image1 into provider-neutral natural language.
+ * Converts UI aliases such as @image1 into Fal-native @Image1 / @Video1 / @Audio1.
  *
  * The media URLs are still sent through each fal endpoint's real media fields;
- * this only lets the prompt clearly point at an item in those ordered arrays.
+ * Seedance (and similar) R2V prompts bind those ordered arrays via these tags.
  */
 class AssetPromptReferences
 {
@@ -27,7 +27,7 @@ class AssetPromptReferences
                     return $match[0];
                 }
 
-                return "reference {$kind} {$index}";
+                return '@'.ucfirst($kind).$index;
             },
             $prompt,
         ) ?? $prompt;

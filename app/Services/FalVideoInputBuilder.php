@@ -219,7 +219,22 @@ class FalVideoInputBuilder
 
         if ($mode === 'reference-to-video') {
             $id = strtolower($endpointId);
-            if (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video')) {
+            if (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit')) {
+                if ($videoUrls !== [] && $imageUrls !== []) {
+                    $elements = $this->buildKlingElements(array_slice($imageUrls, 0, 3));
+                    $editPrompt = $prompt;
+                    if ($editPrompt === '') {
+                        $editPrompt = 'Replace the person in the video with @Element1, matching face identity, skin tone, and lighting while keeping the original motion, camera, and framing.';
+                    } elseif (! str_contains($editPrompt, '@Element')) {
+                        $editPrompt = 'Replace the person in the video with @Element1. '.$editPrompt;
+                    }
+                    $input['prompt'] = $editPrompt;
+                    $input['video_url'] = $videoUrls[0];
+                    $input['elements'] = $elements;
+                    $input['keep_audio'] = $audio;
+                    unset($input['aspect_ratio'], $input['duration'], $input['resolution'], $input['generate_audio']);
+                }
+            } elseif (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video')) {
                 $limit = (str_contains($id, '/o1/') || str_contains($id, '/4k/')) ? 7 : 4;
                 $elements = $this->buildKlingElements(array_slice($imageUrls, 0, $limit));
                 if ($elements !== []) {
@@ -242,10 +257,14 @@ class FalVideoInputBuilder
             } elseif ($imageUrls !== []) {
                 $input['image_urls'] = array_slice($imageUrls, 0, 9);
             }
-            if ($videoUrls !== [] && ! str_contains($id, 'wan/v2.7/reference-to-video')) {
+            if (
+                $videoUrls !== []
+                && ! str_contains($id, 'wan/v2.7/reference-to-video')
+                && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
+            ) {
                 $input['video_urls'] = array_slice($videoUrls, 0, 3);
             }
-            if ($audioUrls !== []) {
+            if ($audioUrls !== [] && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))) {
                 $input['audio_urls'] = array_slice($audioUrls, 0, 3);
             }
         }

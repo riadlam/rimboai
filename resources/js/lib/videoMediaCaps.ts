@@ -170,6 +170,12 @@ export function supportsMediaMix(
 
     if (audios > 0 && images + videos === 0) return false;
 
+    // Kling V2V edit (face/character swap): needs source video + face/element image.
+    const endpointId = ('endpoint_id' in (model || {}) ? String((model as BrandModel).endpoint_id || '') : '').toLowerCase();
+    if (endpointId.includes('video-to-video/edit')) {
+        if (videos < 1 || images < 1) return false;
+    }
+
     if (videos > 0 && !caps.supports_ref_videos) return false;
     if (audios > 0 && !caps.supports_ref_audio) return false;
     if (images > 1 && !caps.supports_ref_images) return false;

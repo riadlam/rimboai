@@ -11,12 +11,45 @@ class VideoReferenceModelSeeder extends Seeder
     /** @var array<string, array{name: string, sort: int, icon_url?: string}> */
     private const CATEGORIES = [
         'Kling' => ['name' => 'Kling', 'sort' => 10],
+        'Seedance' => [
+            'name' => 'Seedance',
+            'sort' => 20,
+            'icon_url' => '/storage/ai_icons/bytedance-color.svg',
+        ],
         'Wan' => ['name' => 'Wan', 'sort' => 50],
         'PixVerse' => ['name' => 'PixVerse', 'sort' => 70],
     ];
 
     /** @var list<array<string, mixed>> */
     private const TEXT_MODELS = [
+        [
+            'endpoint_id' => 'bytedance/seedance-2.0/reference-to-video',
+            'name' => 'Seedance 2.0 Reference to Video',
+            'description' => 'Multimodal reference-to-video: up to 9 images, 3 videos, and 3 audios. Tag them in the prompt as @Image1 / @Video1 / @Audio1.',
+            'category' => 'Seedance',
+            'sort' => 85,
+            'unit' => 'tokens_per_1000',
+            'unit_price' => 0.014,
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'audio'],
+            'image_url' => '/storage/ai_icons/bytedance-color.svg',
+        ],
+        [
+            'endpoint_id' => 'bytedance/seedance-2.0/fast/reference-to-video',
+            'name' => 'Seedance 2.0 Fast Reference to Video',
+            'description' => 'Faster Seedance reference-to-video tier with the same multimodal caps (9 images / 3 videos / 3 audios).',
+            'category' => 'Seedance',
+            'sort' => 86,
+            'unit' => 'tokens_per_1000',
+            'unit_price' => 0.0112,
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'audio', 'fast'],
+            'image_url' => '/storage/ai_icons/bytedance-color.svg',
+        ],
         [
             'endpoint_id' => 'fal-ai/kling-video/o1/reference-to-video',
             'name' => 'Kling O1 Reference to Video',
@@ -52,6 +85,19 @@ class VideoReferenceModelSeeder extends Seeder
             'max_duration' => 15,
             'enums' => ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
             'tags' => ['text-to-video', 'reference-to-video', 'multi-reference', 'audio'],
+        ],
+        [
+            'endpoint_id' => 'fal-ai/kling-video/o3/standard/video-to-video/edit',
+            'name' => 'Kling O3 Edit (Face / Character)',
+            'description' => 'Edit an existing clip with a reference face/character image. Upload 1 video + 1 image, then prompt with @Element1 (e.g. replace the person with @Element1).',
+            'category' => 'Kling',
+            'sort' => 52,
+            'unit_price' => 0.126,
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+            'tags' => ['video-to-video', 'edit', 'face-swap', 'character-swap', 'elements'],
+            'image_url' => '/storage/ai_icons/kling-color.svg',
         ],
         [
             'endpoint_id' => 'fal-ai/kling-video/o3/4k/reference-to-video',
@@ -93,6 +139,32 @@ class VideoReferenceModelSeeder extends Seeder
 
     /** @var list<array<string, mixed>> */
     private const IMAGE_REFERENCE_ENDPOINTS = [
+        [
+            'endpoint_id' => 'bytedance/seedance-2.0/reference-to-video',
+            'name' => 'Seedance 2.0 Reference to Video',
+            'description' => 'Seedance multimodal reference-to-video sibling (pricing / status sync).',
+            'category' => 'Seedance',
+            'sort' => 110,
+            'unit' => 'tokens_per_1000',
+            'unit_price' => 0.014,
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'audio'],
+        ],
+        [
+            'endpoint_id' => 'bytedance/seedance-2.0/fast/reference-to-video',
+            'name' => 'Seedance 2.0 Fast Reference to Video',
+            'description' => 'Seedance Fast multimodal reference-to-video sibling (pricing / status sync).',
+            'category' => 'Seedance',
+            'sort' => 120,
+            'unit' => 'tokens_per_1000',
+            'unit_price' => 0.0112,
+            'supports_audio' => true,
+            'max_duration' => 15,
+            'enums' => ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'audio', 'fast'],
+        ],
         [
             'endpoint_id' => 'fal-ai/kling-video/o1/reference-to-video',
             'name' => 'Kling O1 Reference to Video',
@@ -217,7 +289,11 @@ class VideoReferenceModelSeeder extends Seeder
     private function upsertModel(string $table, array $model, ?int $categoryId, bool $hidden): void
     {
         $now = now();
-        $imageUrl = $hidden ? null : '/storage/ai_icons/logo_icon_only.png';
+        $imageUrl = $hidden
+            ? null
+            : (is_string($model['image_url'] ?? null) && $model['image_url'] !== ''
+                ? $model['image_url']
+                : '/storage/ai_icons/logo_icon_only.png');
 
         $values = $this->filterColumns($table, [
             'sort' => $model['sort'],
@@ -228,7 +304,7 @@ class VideoReferenceModelSeeder extends Seeder
             'image_cover' => $imageUrl,
             'tags' => json_encode($model['tags']),
             'status' => 'active',
-            'unit' => 'seconds',
+            'unit' => $model['unit'] ?? 'seconds',
             'unit_price' => $model['unit_price'],
             'supports_audio' => $model['supports_audio'],
             'max_duration' => $model['max_duration'],

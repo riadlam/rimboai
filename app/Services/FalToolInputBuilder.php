@@ -30,7 +30,7 @@ class FalToolInputBuilder
             'video-upscaler' => $this->buildUpscaler($endpointId, $defaults, $settings, $videoUrl),
             'video-enhancer', 'anime-video-enhancer' => $this->buildEnhancer($endpointId, $defaults, $settings, $videoUrl),
             'lip-sync' => $this->buildLipSync($defaults, $settings, $videoUrl, $audioUrl),
-            'face-swap-video' => $this->buildFaceSwap($defaults, $settings, $videoUrl, $imageUrl),
+            'face-swap-video' => $this->buildFaceSwap($endpointId, $defaults, $settings, $videoUrl, $imageUrl),
             'video-background-remover' => $this->buildBgRemover($endpointId, $defaults, $settings, $videoUrl),
             'remove-subtitles-from-video' => $this->buildSubtitleRemover($endpointId, $defaults, $settings, $videoUrl),
             'ai-video-extender' => $this->buildExtender($endpointId, $defaults, $settings, $videoUrl),
@@ -162,13 +162,36 @@ class FalToolInputBuilder
      * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
-    private function buildFaceSwap(array $defaults, array $settings, string $videoUrl, ?string $imageUrl): array
+    private function buildFaceSwap(string $endpointId, array $defaults, array $settings, string $videoUrl, ?string $imageUrl): array
     {
         if (! is_string($imageUrl) || $imageUrl === '') {
             throw new \InvalidArgumentException('A face image is required for face swap.');
         }
 
-        // No quality/resolution controls exposed — model handles output automatically.
+        // Kling O3 / O1 V2V edit: video + face as @Element1 (not PixVerse swap fields).
+        if (str_contains($endpointId, 'kling-video')) {
+            $prompt = trim((string) ($settings['prompt'] ?? ''));
+            if ($prompt === '') {
+                $prompt = (string) ($defaults['prompt'] ?? 'Replace the person in the video with @Element1, matching face identity, skin tone, and lighting while keeping the original motion, camera, and framing.');
+            }
+            if (! str_contains($prompt, '@Element')) {
+                $prompt = 'Replace the person in the video with @Element1. '.$prompt;
+            }
+
+            return [
+                'video_url' => $videoUrl,
+                'prompt' => $prompt,
+                'keep_audio' => (bool) ($settings['keep_audio'] ?? $defaults['keep_audio'] ?? true),
+                'elements' => [
+                    [
+                        'frontal_image_url' => $imageUrl,
+                        'reference_image_urls' => [$imageUrl],
+                    ],
+                ],
+            ];
+        }
+
+        // PixVerse Swap — dedicated person/object/background swap.
         $input = array_merge($defaults, [
             'video_url' => $videoUrl,
             'image_url' => $imageUrl,
@@ -325,7 +348,19 @@ class FalToolInputBuilder
             $input = [
                 'video_url' => $videoUrl,
                 'prompt' => $prompt,
+                'keep_audio' => (bool) ($settings['keep_audio'] ?? $defaults['keep_audio'] ?? true),
             ];
+            if (is_string($imageUrl) && $imageUrl !== '') {
+                if (! str_contains($prompt, '@Element')) {
+                    $input['prompt'] = 'Replace the person / subject in the video with @Element1. '.$prompt;
+                }
+                $input['elements'] = [
+                    [
+                        'frontal_image_url' => $imageUrl,
+                        'reference_image_urls' => [$imageUrl],
+                    ],
+                ];
+            }
             if ($strength !== null) {
                 $input['strength'] = $strength;
             }
@@ -333,7 +368,9 @@ class FalToolInputBuilder
                 $input['cfg_scale'] = $guidance;
             }
 
-            return $this->onlyKeys($input, ['video_url', 'prompt', 'strength', 'cfg_scale']);
+            return $this->onlyKeys($input, [
+                'video_url', 'prompt', 'keep_audio', 'elements', 'image_urls', 'strength', 'cfg_scale',
+            ]);
         }
 
         $input = array_merge($defaults, [

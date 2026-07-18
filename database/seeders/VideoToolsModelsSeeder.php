@@ -258,7 +258,10 @@ class VideoToolsModelsSeeder extends Seeder
                 'max_duration' => 15,
                 'enums' => null,
                 'is_primary' => false,
-                'defaults' => null,
+                'defaults' => [
+                    'keep_audio' => true,
+                    'prompt' => 'Replace the person in the video with @Element1, matching face identity, skin tone, and lighting while keeping the original motion, camera, and framing.',
+                ],
                 'tags' => ['faceswap', 'kling', 'edit', 'fallback'],
             ],
 
