@@ -43,7 +43,7 @@ class ToolWorkspaceBuilder
         }
 
         $enums = $this->decodeJson($primary->enums);
-        $defaults = $this->decodeJson($primary->defaults);
+        $defaults = $this->decodeJson($primary->defaults) ?? [];
 
         return [
             'available' => true,
@@ -84,7 +84,7 @@ class ToolWorkspaceBuilder
     private function serializeModelOption(object $row): array
     {
         $enums = $this->decodeJson($row->enums);
-        $defaults = $this->decodeJson($row->defaults);
+        $defaults = $this->decodeJson($row->defaults) ?? [];
         $toolSlug = (string) ($row->tool_slug ?? '');
 
         return [
