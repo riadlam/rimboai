@@ -181,12 +181,22 @@ class FalVideoInputBuilder
         // Seedance / some R2V endpoints accept aspect_ratio "auto"
         if (str_contains(strtolower($endpointId), 'seedance') && str_contains(strtolower($endpointId), 'reference')) {
             $input['aspect_ratio'] = $aspect === '16:9' || $aspect === '9:16' || $aspect === '1:1' ? $aspect : 'auto';
-        } elseif (! empty($profile['i2v_aspect_auto']) && $mode === 'image-to-video') {
+        } elseif (
+            ! empty($profile['i2v_aspect_auto'])
+            && $mode === 'image-to-video'
+            && ! str_contains(strtolower($endpointId), 'wan/v2.2-a14b')
+        ) {
             // Grok I2V: preserve the source image framing (Fal default). Forcing 9:16
             // on a square logo / portrait photo is what made outputs look "ugly".
+            // Wan 2.2 A14B rejects auto for many image sizes — use explicit 16:9 / 9:16 / 1:1.
             $input['aspect_ratio'] = 'auto';
         } else {
             $input['aspect_ratio'] = $aspect;
+        }
+
+        // Wan 2.2 A14B distributed GPUs only accept these three ratios (never auto).
+        if (str_contains(strtolower($endpointId), 'wan/v2.2-a14b')) {
+            $input['aspect_ratio'] = $this->mapWan22Aspect($aspect);
         }
 
         if (
@@ -307,17 +317,8 @@ class FalVideoInputBuilder
         }
 
         // Wan 2.7 I2V schema has no aspect_ratio — framing follows image_url.
-        // Wan 2.2 A14B I2V accepts aspect_ratio (including auto).
         if (str_contains($id, 'image-to-video') && str_contains($id, 'wan/v2.7')) {
             unset($input['aspect_ratio']);
-        }
-
-        // Wan 2.2 A14B I2V: keep auto framing from the source image when aspect wasn't explicit.
-        if (str_contains($id, 'wan/v2.2-a14b') && str_contains($id, 'image-to-video')) {
-            $input['aspect_ratio'] = $input['aspect_ratio'] ?? 'auto';
-            if (($options['aspect'] ?? null) === null || ($options['aspect'] ?? '') === '') {
-                $input['aspect_ratio'] = 'auto';
-            }
         }
 
         $supportsExpansion = str_contains($id, 'text-to-video')
@@ -479,6 +480,19 @@ class FalVideoInputBuilder
         };
     }
 
+    /**
+     * Wan 2.2 A14B only accepts 16:9 / 9:16 / 1:1 on the distributed GPU endpoint.
+     * Portrait Lab ratios (4:5, 3:4) map to 9:16; everything else falls back to 16:9.
+     */
+    private function mapWan22Aspect(string $aspect): string
+    {
+        return match ($aspect) {
+            '9:16', '4:5', '3:4', '2:3' => '9:16',
+            '1:1' => '1:1',
+            default => '16:9',
+        };
+    }
+
     private function normalizeResolution(?string $resolution): string
     {
         $resolution = strtoupper(trim((string) $resolution));
@@ -562,9 +576,9 @@ class FalVideoInputBuilder
         if (str_contains($id, 'wan/v2.2-a14b')) {
             return [
                 'duration_format' => 'int',
-                'aspects' => ['auto', '16:9', '9:16', '1:1'],
+                // Fal distributed GPU rejects "auto" for many image sizes — only these three.
+                'aspects' => ['16:9', '9:16', '1:1'],
                 'resolution' => true,
-                'i2v_aspect_auto' => true,
             ];
         }
 
