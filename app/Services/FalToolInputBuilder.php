@@ -174,7 +174,9 @@ class FalToolInputBuilder
             if ($prompt === '') {
                 $prompt = (string) ($defaults['prompt'] ?? 'Replace the person in the video with @Element1, matching face identity, skin tone, and lighting while keeping the original motion, camera, and framing.');
             }
-            if (! str_contains($prompt, '@Element')) {
+            // Lab chips use @ImageN; this endpoint has no image_urls — remap to @ElementN.
+            $prompt = preg_replace('/@Image(\d+)\b/i', '@Element$1', $prompt) ?? $prompt;
+            if (! preg_match('/@Element\d+\b/i', $prompt)) {
                 $prompt = 'Replace the person in the video with @Element1. '.$prompt;
             }
 
@@ -345,13 +347,15 @@ class FalToolInputBuilder
             : null;
 
         if (str_contains($endpointId, 'kling-video')) {
+            // Lab chips use @ImageN; Kling edit has no image_urls — remap to @ElementN.
+            $prompt = preg_replace('/@Image(\d+)\b/i', '@Element$1', $prompt) ?? $prompt;
             $input = [
                 'video_url' => $videoUrl,
                 'prompt' => $prompt,
                 'keep_audio' => (bool) ($settings['keep_audio'] ?? $defaults['keep_audio'] ?? true),
             ];
             if (is_string($imageUrl) && $imageUrl !== '') {
-                if (! str_contains($prompt, '@Element')) {
+                if (! preg_match('/@Element\d+\b/i', $prompt)) {
                     $input['prompt'] = 'Replace the person / subject in the video with @Element1. '.$prompt;
                 }
                 $input['elements'] = [

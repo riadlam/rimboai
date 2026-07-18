@@ -222,13 +222,7 @@ class FalVideoInputBuilder
             if (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit')) {
                 if ($videoUrls !== [] && $imageUrls !== []) {
                     $elements = $this->buildKlingElements(array_slice($imageUrls, 0, 3));
-                    $editPrompt = $prompt;
-                    if ($editPrompt === '') {
-                        $editPrompt = 'Replace the person in the video with @Element1, matching face identity, skin tone, and lighting while keeping the original motion, camera, and framing.';
-                    } elseif (! str_contains($editPrompt, '@Element')) {
-                        $editPrompt = 'Replace the person in the video with @Element1. '.$editPrompt;
-                    }
-                    $input['prompt'] = $editPrompt;
+                    $input['prompt'] = $this->normalizeKlingEditPrompt($prompt, count($elements));
                     $input['video_url'] = $videoUrls[0];
                     $input['elements'] = $elements;
                     $input['keep_audio'] = $audio;
@@ -519,6 +513,30 @@ class FalVideoInputBuilder
             'duration_format' => 'string',
             'aspects' => ['16:9', '9:16', '1:1'],
         ];
+    }
+
+    /**
+     * Lab chips use @image1 / @video1 (normalized to @Image1 / @Video1).
+     * Kling O3 edit binds faces via `elements` → @ElementN, and the clip via video_url → @Video1.
+     * Leaving @ImageN in the prompt makes Fal look for image_urls and 422s with
+     * "Invalid reference index 1 for image. Only 0 images provided."
+     */
+    private function normalizeKlingEditPrompt(string $prompt, int $elementCount): string
+    {
+        $prompt = trim($prompt);
+
+        // Face/image chips → element tags (we only send images as elements on this route).
+        $prompt = preg_replace('/@Image(\d+)\b/i', '@Element$1', $prompt) ?? $prompt;
+
+        if ($prompt === '') {
+            return 'Replace the person in @Video1 with @Element1, matching face identity, skin tone, and lighting while keeping the original motion, camera, and framing.';
+        }
+
+        if ($elementCount > 0 && ! preg_match('/@Element\d+\b/i', $prompt)) {
+            $prompt = 'Replace the person in the video with @Element1. '.$prompt;
+        }
+
+        return $prompt;
     }
 
     /**
