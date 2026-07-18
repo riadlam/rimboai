@@ -93,6 +93,8 @@ class TrendsController extends Controller
         return response()->json([
             'ok' => true,
             'type' => $result['type'],
+            'user_remake_count' => $result['user_remake_count'] ?? 0,
+            'user_latest' => $result['user_latest'] ?? null,
             ...$result['creation'],
         ], 201);
     }

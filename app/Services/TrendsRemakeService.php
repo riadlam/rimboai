@@ -82,7 +82,13 @@ class TrendsRemakeService
 
         $template->increment('uses_count');
 
-        return $result;
+        $remakes = $this->trends->userRemakesForTrend($type, $id, (int) $user->id);
+
+        return [
+            ...$result,
+            'user_remake_count' => $remakes['count'],
+            'user_latest' => $remakes['latest'],
+        ];
     }
 
     /**

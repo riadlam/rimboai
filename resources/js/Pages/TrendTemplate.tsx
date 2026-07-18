@@ -35,6 +35,16 @@ type TrendTemplateCard = {
     credits: number;
 };
 
+type UserTrendLatest = {
+    id: number;
+    video_url?: string | null;
+    preview_url?: string | null;
+    thumbnail_url?: string | null;
+    images?: string[];
+    audio_url?: string | null;
+    cover_url?: string | null;
+};
+
 type TrendWorkspace = {
     key: string;
     type: 'image' | 'video' | 'music';
@@ -43,6 +53,9 @@ type TrendWorkspace = {
     uploads: TrendUpload[];
     locked: Record<string, unknown>;
     credits: number;
+    /** Completed remakes by this user from this template. Example replaces only when > 1. */
+    user_remake_count?: number;
+    user_latest?: UserTrendLatest | null;
     generate_url: string;
     lab_href: string;
 };
@@ -94,10 +107,10 @@ function statusUrl(type: TrendWorkspace['type'], id: number): string {
     return `/lab/video/creations/${id}/status`;
 }
 
-function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation): string | null {
+function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation | UserTrendLatest): string | null {
     if (type === 'video') return c.video_url || c.preview_url || null;
-    if (type === 'image') return c.images?.[0] || c.preview_url || null;
-    return c.cover_url || c.preview_url || null;
+    if (type === 'image') return ('images' in c && c.images?.[0]) || c.preview_url || null;
+    return ('cover_url' in c ? c.cover_url : null) || c.preview_url || null;
 }
 
 export default function TrendTemplate({ workspace, tokenBalance }: Props) {
@@ -116,7 +129,12 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const [modalOpen, setModalOpen] = useState(false);
     const [job, setJob] = useState<RemakeCreation | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [completedRemakeCount, setCompletedRemakeCount] = useState(workspace.user_remake_count ?? 0);
+    const [exampleOverride, setExampleOverride] = useState<RemakeCreation | UserTrendLatest | null>(
+        (workspace.user_remake_count ?? 0) > 1 ? (workspace.user_latest ?? null) : null,
+    );
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const remakeCountRef = useRef(workspace.user_remake_count ?? 0);
 
     useEffect(() => {
         setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
@@ -125,6 +143,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         setModalOpen(false);
         setJob(null);
         setDetailsOpen(false);
+        const count = workspace.user_remake_count ?? 0;
+        remakeCountRef.current = count;
+        setCompletedRemakeCount(count);
+        setExampleOverride(count > 1 ? (workspace.user_latest ?? null) : null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workspace.key]);
 
@@ -155,6 +177,13 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                     if (data.status === 'completed') {
                         stopPoll();
                         setCreating(false);
+                        const nextCount = remakeCountRef.current + 1;
+                        remakeCountRef.current = nextCount;
+                        setCompletedRemakeCount(nextCount);
+                        // Replace the template example only after the 2nd+ remake.
+                        if (nextCount > 1) {
+                            setExampleOverride(data);
+                        }
                         return;
                     }
                     if (data.status === 'failed' || data.status === 'cancelled') {
@@ -236,13 +265,24 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                 else form.append('image_urls[]', url);
             }
 
-            const data = await apiPostForm<RemakeCreation & { ok?: boolean; type?: string }>('/trends/remake', form);
+            const data = await apiPostForm<
+                RemakeCreation & { ok?: boolean; type?: string; user_remake_count?: number }
+            >('/trends/remake', form);
             const mobile = isMobileViewport();
+            const baseCount = data.user_remake_count ?? remakeCountRef.current;
+            remakeCountRef.current = baseCount;
+            setCompletedRemakeCount(baseCount);
 
             if (mobile) {
                 setJob(data);
                 setModalOpen(true);
-                if (data.status !== 'completed' && data.status !== 'failed') {
+                if (data.status === 'completed') {
+                    const nextCount = baseCount + 1;
+                    remakeCountRef.current = nextCount;
+                    setCompletedRemakeCount(nextCount);
+                    if (nextCount > 1) setExampleOverride(data);
+                    setCreating(false);
+                } else if (data.status !== 'failed') {
                     startPoll(data.id);
                 } else {
                     setCreating(false);
@@ -271,7 +311,25 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         setDetailsOpen(false);
     };
 
-    const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
+    const replaceExample = completedRemakeCount > 1 && exampleOverride != null;
+    const exampleSrc = replaceExample ? resultSrc(workspace.type, exampleOverride) : null;
+    const showVideo = replaceExample
+        ? workspace.type === 'video' && Boolean(exampleSrc)
+        : tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
+    const exampleVideoSrc = replaceExample && exampleSrc ? exampleSrc : tmpl.video_url || tmpl.cover;
+    const examplePoster =
+        replaceExample && exampleOverride && 'thumbnail_url' in exampleOverride
+            ? exampleOverride.thumbnail_url || undefined
+            : tmpl.thumbnail_url || undefined;
+    const exampleImageSrc = replaceExample && exampleSrc ? exampleSrc : tmpl.cover;
+    const exampleAudioSrc =
+        replaceExample && exampleOverride && 'audio_url' in exampleOverride && exampleOverride.audio_url
+            ? exampleOverride.audio_url
+            : tmpl.audio_url;
+    const exampleCoverSrc =
+        replaceExample && exampleOverride && 'cover_url' in exampleOverride && exampleOverride.cover_url
+            ? exampleOverride.cover_url
+            : tmpl.cover;
     const displayTitle = (tmpl.trend_title || tmpl.name || '').trim() || t('useTemplate');
     const progress = Math.max(5, Math.min(99, job?.progress_percent ?? 12));
     const jobDone = job?.status === 'completed';
@@ -463,17 +521,17 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         {showVideo ? (
                                             <div className="aspect-video w-full">
                                                 <LabVideoPlayer
-                                                    src={tmpl.video_url || tmpl.cover}
-                                                    poster={tmpl.thumbnail_url || undefined}
+                                                    src={exampleVideoSrc}
+                                                    poster={examplePoster}
                                                     previewSeconds={5}
                                                     objectFit="contain"
                                                 />
                                             </div>
                                         ) : tmpl.type === 'music' ? (
                                             <div className="flex aspect-video w-full flex-col items-center justify-center gap-5 bg-gradient-to-br from-[#1c1226] via-[#12121a] to-[#0b1a17] p-6">
-                                                {tmpl.cover && !isAudioUrl(tmpl.cover) ? (
+                                                {exampleCoverSrc && !isAudioUrl(exampleCoverSrc) ? (
                                                     <img
-                                                        src={tmpl.cover}
+                                                        src={exampleCoverSrc}
                                                         alt=""
                                                         className="h-40 w-40 rounded-3xl object-cover shadow-2xl ring-1 ring-white/10"
                                                     />
@@ -486,14 +544,14 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                         </svg>
                                                     </span>
                                                 )}
-                                                {tmpl.audio_url && (
-                                                    <audio src={tmpl.audio_url} controls autoPlay className="w-full max-w-md" />
+                                                {exampleAudioSrc && (
+                                                    <audio src={exampleAudioSrc} controls autoPlay className="w-full max-w-md" />
                                                 )}
                                             </div>
                                         ) : (
                                             <div className="flex aspect-square w-full max-h-[70vh] items-center justify-center bg-black/40 sm:aspect-video">
                                                 <img
-                                                    src={tmpl.cover}
+                                                    src={exampleImageSrc}
                                                     alt={displayTitle}
                                                     className="max-h-full max-w-full object-contain"
                                                 />

@@ -282,6 +282,11 @@ class TrendsFeedService
             $trendCost !== null ? $trendCost : ($creation->credits_charged ?? 0)
         ));
 
+        $user = auth()->user();
+        $userRemakes = $user
+            ? $this->userRemakesForTrend($type, $id, (int) $user->id)
+            : ['count' => 0, 'latest' => null];
+
         return [
             'key' => "{$type}-{$id}",
             'type' => $type,
@@ -290,6 +295,10 @@ class TrendsFeedService
             'uploads' => $uploads,
             'locked' => $locked,
             'credits' => $credits,
+            /** Completed remakes by the current user from this template. */
+            'user_remake_count' => $userRemakes['count'],
+            /** Latest completed remake preview — used to replace example when count > 1. */
+            'user_latest' => $userRemakes['latest'],
             'generate_url' => match ($type) {
                 'image' => '/lab/image/generate',
                 'video' => '/lab/video/generate',
@@ -303,6 +312,74 @@ class TrendsFeedService
                 default => '/lab',
             },
         ];
+    }
+
+    /**
+     * Completed remakes the signed-in user made from this Trends template.
+     *
+     * @return array{count: int, latest: array<string, mixed>|null}
+     */
+    public function userRemakesForTrend(string $type, int $trendId, int $userId): array
+    {
+        $modelClass = match ($type) {
+            'image' => UserImageCreation::class,
+            'video' => UserVideoCreation::class,
+            'music' => UserMusicCreation::class,
+            default => null,
+        };
+
+        if ($modelClass === null) {
+            return ['count' => 0, 'latest' => null];
+        }
+
+        $query = $modelClass::query()
+            ->where('user_id', $userId)
+            ->where('status', $modelClass::STATUS_COMPLETED)
+            ->where('settings->from_trend_id', $trendId)
+            ->orderByDesc('id');
+
+        $count = (clone $query)->count();
+        if ($count === 0) {
+            return ['count' => 0, 'latest' => null];
+        }
+
+        /** @var Model $latest */
+        $latest = $query->first();
+        if (! $latest) {
+            return ['count' => $count, 'latest' => null];
+        }
+
+        $payload = match ($type) {
+            'video' => [
+                'id' => $latest->id,
+                'video_url' => $latest->result_video_url,
+                'preview_url' => $latest->result_preview_url ?: $latest->result_video_url,
+                'thumbnail_url' => $latest->thumbnail_url,
+            ],
+            'image' => (static function () use ($latest): array {
+                $assets = is_array($latest->result_assets) ? $latest->result_assets : [];
+                $urls = collect($assets)
+                    ->map(fn ($a) => is_array($a) ? ($a['url'] ?? null) : (is_string($a) ? $a : null))
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $latest->id,
+                    'preview_url' => $latest->result_preview_url ?: ($urls[0] ?? null),
+                    'images' => $urls,
+                ];
+            })(),
+            'music' => [
+                'id' => $latest->id,
+                'audio_url' => $latest->result_audio_url,
+                'preview_url' => $latest->result_preview_url,
+                'cover_url' => $latest->cover_url,
+            ],
+            default => null,
+        };
+
+        return ['count' => $count, 'latest' => $payload];
     }
 
     /**
