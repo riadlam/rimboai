@@ -523,12 +523,16 @@ class FalVideoInputBuilder
 
     /**
      * @param  list<string>  $imageUrls
-     * @return list<array{frontal_image_url: string}>
+     * @return list<array{frontal_image_url: string, reference_image_urls: list<string>}>
      */
     private function buildKlingElements(array $imageUrls): array
     {
         return array_values(array_map(
-            static fn (string $url): array => ['frontal_image_url' => $url],
+            static fn (string $url): array => [
+                'frontal_image_url' => $url,
+                // Fal requires both fields for image elements (O3 edit / R2V).
+                'reference_image_urls' => [$url],
+            ],
             $imageUrls,
         ));
     }
