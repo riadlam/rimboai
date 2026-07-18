@@ -19,6 +19,8 @@ class LabAssetFetchController extends Controller
     {
         $data = $request->validate([
             'url' => ['required', 'string', 'max:4096'],
+            'download' => ['sometimes', 'boolean'],
+            'filename' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $url = $this->normalizeUrl($data['url']);
@@ -26,8 +28,11 @@ class LabAssetFetchController extends Controller
             return response('Asset URL is not allowed.', 422);
         }
 
+        $forceDownload = $request->boolean('download');
+        $downloadName = $this->safeDownloadFilename($data['filename'] ?? null);
+
         // Prefer reading local public disk when the URL points at /storage/...
-        $local = $this->tryLocalStorage($url, $request->header('Range'));
+        $local = $this->tryLocalStorage($url, $request->header('Range'), $forceDownload ? $downloadName : null);
         if ($local !== null) {
             return $local;
         }
@@ -76,6 +81,10 @@ class LabAssetFetchController extends Controller
             if (is_string($value) && $value !== '') {
                 $outHeaders[$h] = $value;
             }
+        }
+
+        if ($forceDownload) {
+            $outHeaders['Content-Disposition'] = 'attachment; filename="'.$downloadName.'"';
         }
 
         return response()->stream(function () use ($body) {
@@ -147,7 +156,18 @@ class LabAssetFetchController extends Controller
         return false;
     }
 
-    private function tryLocalStorage(string $url, ?string $range): ?StreamedResponse
+    private function safeDownloadFilename(?string $name): string
+    {
+        $name = trim((string) $name);
+        $name = str_replace(['"', "\r", "\n", '/', '\\'], '', $name);
+        if ($name === '' || $name === '.' || $name === '..') {
+            return 'download.bin';
+        }
+
+        return Str::limit($name, 180, '');
+    }
+
+    private function tryLocalStorage(string $url, ?string $range, ?string $downloadName = null): ?StreamedResponse
     {
         $path = (string) parse_url($url, PHP_URL_PATH);
         if ($path === '' || ! Str::startsWith($path, '/storage/')) {
@@ -200,6 +220,9 @@ class LabAssetFetchController extends Controller
         ];
         if ($status === 206) {
             $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
+        }
+        if (is_string($downloadName) && $downloadName !== '') {
+            $headers['Content-Disposition'] = 'attachment; filename="'.$downloadName.'"';
         }
 
         return response()->stream(function () use ($fullPath, $start, $length) {

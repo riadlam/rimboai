@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
 import VideoThumb from '@/Components/VideoThumb';
+import { downloadMediaAsset } from '@/lib/downloadMedia';
 import { labCompletingRampMs, labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 
 export type LabImage = {
@@ -217,8 +218,9 @@ export default function ImageLabLibrary({
 
     const downloadSelected = () => {
         const items = images.filter((img) => selected.includes(img.id));
-        items.forEach((img, i) => {
-            window.setTimeout(() => {
+        void (async () => {
+            for (let i = 0; i < items.length; i++) {
+                const img = items[i];
                 const isVideo =
                     img.method === 'text-to-video' ||
                     img.method === 'image-to-video' ||
@@ -226,17 +228,17 @@ export default function ImageLabLibrary({
                     img.method === 'first-last-frame-to-video' ||
                     Boolean(img.videoUrl);
                 const url = (isVideo ? img.videoUrl || img.src : img.src) || '';
-                if (!url) return;
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = isVideo ? `video-${img.id}.mp4` : `image-${img.id}.jpg`;
-                a.target = '_blank';
-                a.rel = 'noreferrer';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            }, i * 120);
-        });
+                if (!url) continue;
+                try {
+                    await downloadMediaAsset(url, isVideo ? `video-${img.id}.mp4` : `image-${img.id}.jpg`);
+                } catch {
+                    /* continue next */
+                }
+                if (i < items.length - 1) {
+                    await new Promise((r) => window.setTimeout(r, 200));
+                }
+            }
+        })();
     };
 
     return (
@@ -709,6 +711,15 @@ export default function ImageLabLibrary({
                                                 )}
                                                 <ImageCardActions
                                                     src={img.videoUrl || img.src}
+                                                    filename={
+                                                        img.videoUrl ||
+                                                        img.method === 'text-to-video' ||
+                                                        img.method === 'image-to-video' ||
+                                                        img.method === 'reference-to-video' ||
+                                                        img.method === 'first-last-frame-to-video'
+                                                            ? `video-${img.id}.mp4`
+                                                            : `image-${img.id}.jpg`
+                                                    }
                                                     favorite={img.favorite}
                                                     onToggleFavorite={() => onToggleFavorite?.(img.id)}
                                                     onDelete={() => onDelete?.([img.id])}
@@ -1053,11 +1064,13 @@ function ToolBtn({
 
 function ImageCardActions({
     src,
+    filename,
     favorite,
     onToggleFavorite,
     onDelete,
 }: {
     src: string;
+    filename: string;
     favorite: boolean;
     onToggleFavorite: () => void;
     onDelete: () => void;
@@ -1070,18 +1083,18 @@ function ImageCardActions({
 
     return (
         <div className="pointer-events-none absolute end-2 top-2 z-10 flex flex-col gap-1">
-            <a
-                href={src}
-                download
-                target="_blank"
-                rel="noreferrer"
+            <button
+                type="button"
                 title="Download"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    void downloadMediaAsset(src, filename).catch(() => {});
+                }}
                 className={`${btn} ${stagger} delay-[0ms] group-hover:delay-[0ms]`}
                 style={{ transitionProperty: 'opacity, transform, background-color, border-color, color, box-shadow' }}
             >
                 <IconDownload className="h-3.5 w-3.5" />
-            </a>
+            </button>
             <button
                 type="button"
                 title="Favorite"

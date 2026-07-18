@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { ApiError, apiGet, apiPostForm } from '@/lib/api';
+import { downloadMediaAsset } from '@/lib/downloadMedia';
 import type { PageProps } from '@/types';
 
 type TrendUpload = {
@@ -111,24 +112,6 @@ function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation | UserTrendLa
     if (type === 'video') return c.video_url || c.preview_url || null;
     if (type === 'image') return ('images' in c && c.images?.[0]) || c.preview_url || null;
     return ('cover_url' in c ? c.cover_url : null) || c.preview_url || null;
-}
-
-async function downloadAsset(url: string, filename: string) {
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('fetch failed');
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
-    } catch {
-        window.open(url, '_blank', 'noopener,noreferrer');
-    }
 }
 
 export default function TrendTemplate({ workspace, tokenBalance }: Props) {
@@ -348,7 +331,9 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
 
         setDownloading(true);
         try {
-            await downloadAsset(url, filename);
+            await downloadMediaAsset(url, filename);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : t('createFailed'));
         } finally {
             setDownloading(false);
         }

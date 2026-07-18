@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import LabVideoPlayer, { type LabVideoPlayerHandle } from '@/Components/LabVideoPlayer';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
+import { downloadMediaAsset } from '@/lib/downloadMedia';
 
 export type ImageLabPreviewItem = {
     id: string;
@@ -63,24 +64,6 @@ function formatModelName(name: string): string {
         .replace(/\bAi\b/g, 'AI');
 }
 
-async function downloadAsset(url: string, filename: string) {
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('fetch failed');
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
-    } catch {
-        window.open(url, '_blank', 'noopener,noreferrer');
-    }
-}
-
 /** Exact image preview used on /lab?type=text-to-image */
 export default function ImageLabPreviewModal({
     image,
@@ -130,7 +113,7 @@ export default function ImageLabPreviewModal({
         if (!mediaUrl || downloading) return;
         setDownloading(true);
         try {
-            await downloadAsset(mediaUrl, downloadName);
+            await downloadMediaAsset(mediaUrl, downloadName);
         } finally {
             setDownloading(false);
         }

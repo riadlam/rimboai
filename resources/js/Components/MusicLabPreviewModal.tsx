@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import LabAudioPlayer, { MUSIC_EQ_BAR_COUNT } from '@/Components/LabAudioPlayer';
+import { downloadMediaAsset } from '@/lib/downloadMedia';
 import { musicPalette } from '@/lib/musicPalette';
 
 export type MusicPreviewTrack = {
@@ -29,21 +30,7 @@ type Props = {
 };
 
 async function downloadAsset(url: string, filename: string) {
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('fetch failed');
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
-    } catch {
-        window.open(url, '_blank', 'noopener,noreferrer');
-    }
+    await downloadMediaAsset(url, filename);
 }
 
 export default function MusicLabPreviewModal({
