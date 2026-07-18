@@ -387,11 +387,14 @@ class FalToolInputBuilder
         if ($guidance !== null) {
             $input['guidance_scale'] = $guidance;
         }
+        if (str_contains($endpointId, 'wan/')) {
+            $input['enable_prompt_expansion'] = (bool) ($settings['enable_prompt_expansion'] ?? $defaults['enable_prompt_expansion'] ?? false);
+        }
         $input = $this->applyClientGeometry($input, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio',
-            'enable_safety_checker', 'strength', 'guidance_scale',
+            'enable_safety_checker', 'enable_prompt_expansion', 'strength', 'guidance_scale',
         ]);
     }
 
@@ -454,8 +457,14 @@ class FalToolInputBuilder
                 'image_url' => $imageUrl,
                 'prompt' => $prompt,
                 'duration' => (int) $duration,
+                // Fal defaults this to true (rewrites prompt). Keep the user prompt literal.
+                'enable_prompt_expansion' => (bool) ($settings['enable_prompt_expansion'] ?? $defaults['enable_prompt_expansion'] ?? false),
             ]);
             $input = $this->applyClientResolution($input, $settings, 'resolution');
+            $negative = trim((string) ($settings['negative_prompt'] ?? $defaults['negative_prompt'] ?? ''));
+            if ($negative !== '') {
+                $input['negative_prompt'] = mb_substr($negative, 0, 500);
+            }
 
             return $this->onlyKeys($input, [
                 'image_url', 'prompt', 'duration', 'resolution', 'negative_prompt', 'enable_prompt_expansion',
@@ -683,10 +692,13 @@ class FalToolInputBuilder
         if ($strength !== null) {
             $input['strength'] = $strength;
         }
+        if (str_contains($endpointId, 'wan/')) {
+            $input['enable_prompt_expansion'] = (bool) ($settings['enable_prompt_expansion'] ?? $defaults['enable_prompt_expansion'] ?? false);
+        }
         $input = $this->applyClientGeometry($input, $settings);
 
         return $this->onlyKeys($input, [
-            'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio', 'enable_safety_checker', 'strength',
+            'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio', 'enable_safety_checker', 'enable_prompt_expansion', 'strength',
         ]);
     }
 

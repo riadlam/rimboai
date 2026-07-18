@@ -546,7 +546,11 @@ class VideoToolsModelsSeeder extends Seeder
                 'max_duration' => 10,
                 'enums' => ['5', '10'],
                 'is_primary' => false,
-                'defaults' => ['duration' => 5, 'resolution' => '720p'],
+                'defaults' => [
+                    'duration' => 5,
+                    'resolution' => '720p',
+                    'enable_prompt_expansion' => false,
+                ],
                 'tags' => ['animate', 'wan', 'i2v', 'fallback'],
             ],
 
@@ -615,6 +619,7 @@ class VideoToolsModelsSeeder extends Seeder
                     'acceleration' => 'regular',
                     'strength' => 0.35,
                     'aspect_ratio' => 'auto',
+                    'enable_prompt_expansion' => false,
                 ],
                 'tags' => ['anime', 'v2v', 'wan', 'fallback'],
             ],

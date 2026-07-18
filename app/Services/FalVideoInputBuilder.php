@@ -263,6 +263,8 @@ class FalVideoInputBuilder
             }
         }
 
+        $input = $this->applyWanPromptDefaults($endpointId, $input, $options);
+
         return [
             'input' => $input,
             'duration_seconds' => $durationSeconds,
@@ -271,6 +273,50 @@ class FalVideoInputBuilder
             'resolution' => $input['resolution'] ?? $resolution,
             'with_audio' => (bool) (($input['generate_audio'] ?? false) || ($input['generate_audio_switch'] ?? false)),
         ];
+    }
+
+    /**
+     * Wan T2V / I2V (and older Wan v2.2 V2V) default enable_prompt_expansion=true on Fal,
+     * which rewrites prompts and invents props/text. Force false unless explicitly opted in.
+     * Wan 2.7 reference-to-video / edit-video do not expose this field.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    private function applyWanPromptDefaults(string $endpointId, array $input, array $options): array
+    {
+        $id = strtolower($endpointId);
+        if (! str_contains($id, 'wan/')) {
+            return $input;
+        }
+
+        // Wan 2.7 I2V schema has no aspect_ratio — framing follows image_url.
+        if (str_contains($id, 'image-to-video')) {
+            unset($input['aspect_ratio']);
+        }
+
+        $supportsExpansion = str_contains($id, 'text-to-video')
+            || str_contains($id, 'image-to-video')
+            || (str_contains($id, 'video-to-video') && ! str_contains($id, 'edit-video'));
+
+        if ($supportsExpansion) {
+            $input['enable_prompt_expansion'] = (bool) ($options['enable_prompt_expansion'] ?? false);
+        }
+
+        $negative = trim((string) ($options['negative_prompt'] ?? ''));
+        if (
+            $negative !== ''
+            && (
+                str_contains($id, 'text-to-video')
+                || str_contains($id, 'image-to-video')
+                || str_contains($id, 'reference-to-video')
+            )
+        ) {
+            $input['negative_prompt'] = mb_substr($negative, 0, 500);
+        }
+
+        return $input;
     }
 
     /**
