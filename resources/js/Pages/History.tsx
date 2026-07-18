@@ -449,10 +449,12 @@ function HistoryWorkspace() {
         router.visit(`/lab?type=${labType}`);
     }, []);
 
-    const sendLastFrameToLab = useCallback(async (item: HistoryItem) => {
+    const sendLastFrameToLab = useCallback(async (item: HistoryItem, frameFile?: File) => {
         const videoUrl = item.videoUrl || item.src;
-        if (!videoUrl) return;
-        const file = await captureVideoLastFrameFile(videoUrl, { name: `last-frame-${item.id}` });
+        if (!videoUrl && !frameFile) return;
+        const file =
+            frameFile ??
+            (await captureVideoLastFrameFile(videoUrl!, { name: `last-frame-${item.id}` }));
         // data: URL survives sessionStorage + navigation; blob: would break after leave History.
         const frameUrl = await fileToDataUrl(file);
         const draft = buildUseLastFrameDraft(toReuseSource(item), frameUrl);
@@ -922,10 +924,10 @@ function HistoryWorkspace() {
                             closePreview();
                             sendToLab(source, 'use-result');
                         }}
-                        onUseLastFrame={async (img) => {
+                        onUseLastFrame={async (img, frameFile) => {
                             const source = items.find((it) => it.id === img.id) ?? preview;
                             if (!source) throw new Error('Missing item');
-                            await sendLastFrameToLab(source);
+                            await sendLastFrameToLab(source, frameFile);
                             closePreview();
                         }}
                     />

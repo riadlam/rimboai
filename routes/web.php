@@ -9,6 +9,7 @@ use App\Http\Controllers\ImageGenerationController;
 use App\Http\Controllers\LabAssetFetchController;
 use App\Http\Controllers\LabCreationsController;
 use App\Http\Controllers\LabMediaUploadController;
+use App\Http\Controllers\LabVideoLastFrameController;
 use App\Http\Controllers\VideoGenerationController;
 use App\Http\Controllers\MusicGenerationController;
 use App\Http\Controllers\TrendsController;
@@ -103,6 +104,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/lab/asset-fetch', LabAssetFetchController::class)
         ->middleware('throttle:60,1')
         ->name('lab.asset.fetch');
+    Route::post('/lab/video/last-frame', LabVideoLastFrameController::class)
+        ->middleware('throttle:30,1')
+        ->name('lab.video.last-frame');
 
     // Text-to-image generation (server-side fal queue proxy)
     Route::post('/lab/image/generate', [ImageGenerationController::class, 'store'])

@@ -501,16 +501,18 @@ function LabWorkspaceInner({
     );
 
     const handleUseLastFrame = useCallback(
-        async (img: LabImage) => {
+        async (img: LabImage, frameFile?: File) => {
             const videoUrl = img.videoUrl || img.src;
-            if (!videoUrl) {
+            if (!videoUrl && !frameFile) {
                 pushError('No video to capture a frame from.');
                 throw new Error('No video');
             }
             try {
-                const file = await captureVideoLastFrameFile(videoUrl, {
-                    name: `last-frame-${img.id}`,
-                });
+                const file =
+                    frameFile ??
+                    (await captureVideoLastFrameFile(videoUrl!, {
+                        name: `last-frame-${img.id}`,
+                    }));
                 const frameUrl = URL.createObjectURL(file);
                 setReuseDraft(buildUseLastFrameDraft(toReuseSource(img), frameUrl));
             } catch (e) {

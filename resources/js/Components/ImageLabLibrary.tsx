@@ -44,7 +44,7 @@ type Props = {
     onDelete?: (ids: string[]) => void;
     onReuseSettings?: (image: LabImage) => void;
     onUseResult?: (image: LabImage) => void;
-    onUseLastFrame?: (image: LabImage) => void | Promise<void>;
+    onUseLastFrame?: (image: LabImage, frameFile?: File) => void | Promise<void>;
     onRevealComplete?: (id: string) => void;
     generating?: boolean;
     /** Tools: hide Albums tab */

@@ -43,6 +43,9 @@ return [
         'webhook_url' => env('FAL_WEBHOOK_URL'),
     ],
 
+    /** Optional absolute path to ffmpeg for "Continue from last frame". */
+    'ffmpeg_path' => env('FFMPEG_PATH'),
+
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'chat_id' => env('TELEGRAM_CHAT_ID'),

@@ -10,7 +10,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Same-origin proxy so the lab UI can turn remote result / reference URLs into File uploads
- * (fal CDN CORS often blocks browser fetch). Reusable from History → Lab later.
+ * (fal CDN CORS often blocks browser fetch). Supports HTTP Range so <video> can seek
+ * without downloading the entire MP4 (needed on hosts without ffmpeg).
  */
 class LabAssetFetchController extends Controller
 {
@@ -26,21 +27,27 @@ class LabAssetFetchController extends Controller
         }
 
         // Prefer reading local public disk when the URL points at /storage/...
-        $local = $this->tryLocalStorage($url);
+        $local = $this->tryLocalStorage($url, $request->header('Range'));
         if ($local !== null) {
             return $local;
         }
 
+        $headers = [
+            'Accept' => '*/*',
+            'User-Agent' => 'ChameleonLabAssetFetch/1.0',
+        ];
+        $range = $request->header('Range');
+        if (is_string($range) && $range !== '') {
+            $headers['Range'] = $range;
+        }
+
         try {
-            $remote = Http::timeout(120)
+            $remote = Http::timeout(180)
                 ->withOptions([
                     'stream' => true,
                     'allow_redirects' => ['max' => 5],
                 ])
-                ->withHeaders([
-                    'Accept' => '*/*',
-                    'User-Agent' => 'ChameleonLabAssetFetch/1.0',
-                ])
+                ->withHeaders($headers)
                 ->get($url);
         } catch (\Throwable $e) {
             report($e);
@@ -48,13 +55,28 @@ class LabAssetFetchController extends Controller
             return response('Could not fetch asset.', 502);
         }
 
-        if (! $remote->successful()) {
+        $status = $remote->status();
+        if (! in_array($status, [200, 206], true)) {
             return response('Could not fetch asset.', 502);
         }
 
         $contentType = $remote->header('Content-Type') ?: 'application/octet-stream';
         $contentType = Str::before($contentType, ';') ?: 'application/octet-stream';
         $body = $remote->toPsrResponse()->getBody();
+
+        $outHeaders = [
+            'Content-Type' => $contentType,
+            'Cache-Control' => 'private, max-age=120',
+            'X-Content-Type-Options' => 'nosniff',
+            'Accept-Ranges' => 'bytes',
+        ];
+
+        foreach (['Content-Length', 'Content-Range', 'Content-Disposition'] as $h) {
+            $value = $remote->header($h);
+            if (is_string($value) && $value !== '') {
+                $outHeaders[$h] = $value;
+            }
+        }
 
         return response()->stream(function () use ($body) {
             while (! $body->eof()) {
@@ -64,11 +86,7 @@ class LabAssetFetchController extends Controller
                 }
                 flush();
             }
-        }, 200, [
-            'Content-Type' => $contentType,
-            'Cache-Control' => 'private, max-age=120',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+        }, $status, $outHeaders);
     }
 
     private function normalizeUrl(string $raw): ?string
@@ -129,7 +147,7 @@ class LabAssetFetchController extends Controller
         return false;
     }
 
-    private function tryLocalStorage(string $url): ?StreamedResponse
+    private function tryLocalStorage(string $url, ?string $range): ?StreamedResponse
     {
         $path = (string) parse_url($url, PHP_URL_PATH);
         if ($path === '' || ! Str::startsWith($path, '/storage/')) {
@@ -145,21 +163,65 @@ class LabAssetFetchController extends Controller
             return null;
         }
 
-        $mime = Storage::disk('public')->mimeType($relative) ?: 'application/octet-stream';
-        $stream = Storage::disk('public')->readStream($relative);
-        if ($stream === false) {
+        $fullPath = Storage::disk('public')->path($relative);
+        $size = filesize($fullPath);
+        if ($size === false) {
             return null;
         }
 
-        return response()->stream(function () use ($stream) {
-            fpassthru($stream);
-            if (is_resource($stream)) {
-                fclose($stream);
+        $mime = Storage::disk('public')->mimeType($relative) ?: 'application/octet-stream';
+        $start = 0;
+        $end = $size - 1;
+        $status = 200;
+
+        if (is_string($range) && preg_match('/bytes=(\d*)-(\d*)/', $range, $m)) {
+            if ($m[1] !== '') {
+                $start = (int) $m[1];
             }
-        }, 200, [
+            if ($m[2] !== '') {
+                $end = (int) $m[2];
+            }
+            $end = min($end, $size - 1);
+            if ($start > $end || $start >= $size) {
+                return response('Range Not Satisfiable', 416, [
+                    'Content-Range' => "bytes */{$size}",
+                ]);
+            }
+            $status = 206;
+        }
+
+        $length = $end - $start + 1;
+        $headers = [
             'Content-Type' => $mime,
             'Cache-Control' => 'private, max-age=120',
             'X-Content-Type-Options' => 'nosniff',
-        ]);
+            'Accept-Ranges' => 'bytes',
+            'Content-Length' => (string) $length,
+        ];
+        if ($status === 206) {
+            $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
+        }
+
+        return response()->stream(function () use ($fullPath, $start, $length) {
+            $handle = fopen($fullPath, 'rb');
+            if ($handle === false) {
+                return;
+            }
+            fseek($handle, $start);
+            $remaining = $length;
+            while ($remaining > 0 && ! feof($handle)) {
+                $chunk = fread($handle, min(1024 * 64, $remaining));
+                if ($chunk === false) {
+                    break;
+                }
+                echo $chunk;
+                $remaining -= strlen($chunk);
+                if (function_exists('ob_flush')) {
+                    @ob_flush();
+                }
+                flush();
+            }
+            fclose($handle);
+        }, $status, $headers);
     }
 }

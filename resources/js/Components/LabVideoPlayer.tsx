@@ -1,6 +1,7 @@
 import Plyr from 'plyr';
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import 'plyr/dist/plyr.css';
+import { captureLastFrameFromVideoElement, sameOriginMediaUrl } from '@/lib/labReuse';
 
 type Props = {
     src: string;
@@ -12,26 +13,81 @@ type Props = {
     /** Muted teaser: play from 0 then pause at this second (user Play continues full clip). Ignored when `loop` is set. */
     previewSeconds?: number;
     objectFit?: 'cover' | 'contain';
+    /**
+     * Proxy remote CDN URLs through same-origin /lab/asset-fetch so canvas
+     * frame capture is not CORS-tainted (Continue from last frame).
+     */
+    sameOriginProxy?: boolean;
+};
+
+export type LabVideoPlayerHandle = {
+    getVideoElement: () => HTMLVideoElement | null;
+    captureLastFrameFile: (name?: string) => Promise<File>;
 };
 
 /**
  * Branded Plyr player for Lab / Trends asset previews.
  */
-export default function LabVideoPlayer({
-    src,
-    poster,
-    className = '',
-    autoPlay = false,
-    loop = false,
-    previewSeconds,
-    objectFit = 'contain',
-}: Props) {
+const LabVideoPlayer = forwardRef<LabVideoPlayerHandle, Props>(function LabVideoPlayer(
+    {
+        src,
+        poster,
+        className = '',
+        autoPlay = false,
+        loop = false,
+        previewSeconds,
+        objectFit = 'contain',
+        sameOriginProxy = false,
+    },
+    ref,
+) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerRef = useRef<Plyr | null>(null);
     const previewDoneRef = useRef(false);
 
+    const playSrc = useMemo(
+        () => (sameOriginProxy ? sameOriginMediaUrl(src) : src),
+        [sameOriginProxy, src],
+    );
+
     const teaserSeconds = loop ? undefined : previewSeconds;
     const shouldAutoplay = Boolean(teaserSeconds) || autoPlay || loop;
+
+    useImperativeHandle(ref, () => ({
+        getVideoElement: () => videoRef.current,
+        captureLastFrameFile: async (name?: string) => {
+            const el = videoRef.current;
+            if (!el) {
+                throw new Error('Video player is not ready yet.');
+            }
+            if (el.readyState < 2) {
+                await new Promise<void>((resolve, reject) => {
+                    const onReady = () => {
+                        cleanup();
+                        resolve();
+                    };
+                    const onError = () => {
+                        cleanup();
+                        reject(new Error('Video failed to load'));
+                    };
+                    const cleanup = () => {
+                        el.removeEventListener('loadeddata', onReady);
+                        el.removeEventListener('canplay', onReady);
+                        el.removeEventListener('error', onError);
+                    };
+                    el.addEventListener('loadeddata', onReady, { once: true });
+                    el.addEventListener('canplay', onReady, { once: true });
+                    el.addEventListener('error', onError, { once: true });
+                    // Already usable?
+                    if (el.readyState >= 2) {
+                        cleanup();
+                        resolve();
+                    }
+                });
+            }
+            return captureLastFrameFromVideoElement(el, { name });
+        },
+    }));
 
     useEffect(() => {
         const el = videoRef.current;
@@ -93,22 +149,24 @@ export default function LabVideoPlayer({
             player.destroy();
             playerRef.current = null;
         };
-    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay]);
+    }, [playSrc, autoPlay, loop, teaserSeconds, shouldAutoplay]);
 
     return (
         <div className={`lab-plyr h-full w-full overflow-hidden rounded-[5px] bg-black ${className}`}>
             <video
                 ref={videoRef}
-                key={src}
+                key={playSrc}
                 className={`h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
                 playsInline
                 loop={loop}
                 poster={poster || undefined}
-                preload="metadata"
+                preload={sameOriginProxy ? 'auto' : 'metadata'}
                 muted={shouldAutoplay}
             >
-                <source src={src} type="video/mp4" />
+                <source src={playSrc} type="video/mp4" />
             </video>
         </div>
     );
-}
+});
+
+export default LabVideoPlayer;
