@@ -59,14 +59,14 @@ const PACK_META: Record<
         taglineKey: 'taglines.starter',
         accent: 'border-white/10 hover:border-white/20',
         check: 'text-emerald-400',
-        btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
+        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     creator: {
         taglineKey: 'taglines.creator',
         accent: 'border-sky-500/40 hover:border-sky-400/60',
         check: 'text-emerald-400',
-        btn: 'bg-sky-600 text-white hover:bg-sky-500',
+        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     pro: {
@@ -74,7 +74,7 @@ const PACK_META: Record<
         taglineKey: 'taglines.pro',
         accent: 'border-[#FF5733]/55 ring-2 ring-[#FF5733]/20 hover:border-[#FF5733]/70',
         check: 'text-[#FF8A65]',
-        btn: 'bg-gradient-to-b from-[#FF6A45] to-[#E24216] text-white shadow-[0_12px_28px_-12px_rgba(255,87,51,0.9)] hover:brightness-110',
+        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     business: {
@@ -82,7 +82,7 @@ const PACK_META: Record<
         taglineKey: 'taglines.business',
         accent: 'border-amber-400/45 hover:border-amber-300/65',
         check: 'text-amber-400',
-        btn: 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-semibold hover:brightness-105',
+        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.dedicatedSupport', 'perks.fastQueue', 'perks.bulk', 'perks.api'],
     },
 };
@@ -91,7 +91,7 @@ const DEFAULT_META = {
     taglineKey: 'taglines.default',
     accent: 'border-white/10 hover:border-white/20',
     check: 'text-emerald-400',
-    btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
+    btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
     perkKeys: ['perks.allModels', 'perks.hd'],
 };
 
@@ -360,7 +360,8 @@ export default function Pricing() {
                         </motion.div>
                     </div>
 
-                    {/* Free runway — horizontal ribbon (not a green card clone) */}
+                    {/* Free runway — guests only */}
+                    {!user && (
                     <motion.section
                         initial="hidden"
                         whileInView="show"
@@ -385,14 +386,15 @@ export default function Pricing() {
                                 </div>
                             </div>
                             <Link
-                                href={user ? '/lab' : '/register'}
+                                href="/register"
                                 className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-6 text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] transition hover:brightness-110"
                             >
-                                {user ? t('openLab') : t('claimFree')}
+                                {t('claimFree')}
                                 <ArrowIcon />
                             </Link>
                         </div>
                     </motion.section>
+                    )}
 
                     {/* Packs — standard equal rectangles */}
                     <section className="mt-14">
