@@ -3,6 +3,7 @@ import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/r
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import CreditsModal from '@/Components/CreditsModal';
+import { applyLanguage, LANGUAGES, readSavedLang, type AppLang } from '@/lib/i18n';
 import { getEcho } from '@/lib/echo';
 import type { PageProps } from '@/types';
 
@@ -11,15 +12,32 @@ type Props = {
 };
 
 export default function AppHeader({ onMenuClick }: Props) {
-    const { t } = useTranslation('common');
+    const { t, i18n } = useTranslation('common');
+    const { t: tn } = useTranslation('nav');
     const { props } = usePage<PageProps>();
     const user = props.auth.user;
     const [creditsOpen, setCreditsOpen] = useState(false);
+    const [lang, setLang] = useState<AppLang>(readSavedLang);
     const [tokens, setTokens] = useState(() => Math.max(0, user?.tokens ?? 0));
     const meterMax = Math.max(100, tokens);
     const pct = Math.min(100, Math.round((tokens / meterMax) * 100));
     const initials = user?.name?.slice(0, 2).toUpperCase() || 'U';
     const firstName = user?.name?.split(' ')[0] || t('guest');
+
+    const selectLanguage = (next: AppLang) => {
+        setLang(next);
+        applyLanguage(next);
+    };
+
+    useEffect(() => {
+        const onLang = (lng: string) => {
+            if (lng === 'en' || lng === 'fr' || lng === 'ar') setLang(lng);
+        };
+        i18n.on('languageChanged', onLang);
+        return () => {
+            i18n.off('languageChanged', onLang);
+        };
+    }, [i18n]);
 
     useEffect(() => {
         setTokens(Math.max(0, user?.tokens ?? 0));
@@ -115,6 +133,16 @@ export default function AppHeader({ onMenuClick }: Props) {
                             {tokens.toLocaleString()}
                         </span>
                     </button>
+
+                    {/* Phone-only language — between tokens and avatar */}
+                    <MobileLanguageSwitcher
+                        lang={lang}
+                        onSelect={selectLanguage}
+                        ariaLabel={tn('language')}
+                        englishLabel={tn('english')}
+                        frenchLabel={tn('french')}
+                        arabicLabel={tn('arabic')}
+                    />
 
                     {/* Credits meter */}
                     <div className="hidden items-center gap-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] py-1 pe-3 ps-1 sm:flex">
@@ -259,6 +287,14 @@ export default function AppHeader({ onMenuClick }: Props) {
                         </>
                     ) : (
                         <>
+                            <MobileLanguageSwitcher
+                                lang={lang}
+                                onSelect={selectLanguage}
+                                ariaLabel={tn('language')}
+                                englishLabel={tn('english')}
+                                frenchLabel={tn('french')}
+                                arabicLabel={tn('arabic')}
+                            />
                             <Link
                                 href="/pricing"
                                 prefetch
@@ -285,6 +321,75 @@ export default function AppHeader({ onMenuClick }: Props) {
 
             <CreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
         </div>
+    );
+}
+
+function MobileLanguageSwitcher({
+    lang,
+    onSelect,
+    ariaLabel,
+    englishLabel,
+    frenchLabel,
+    arabicLabel,
+}: {
+    lang: AppLang;
+    onSelect: (next: AppLang) => void;
+    ariaLabel: string;
+    englishLabel: string;
+    frenchLabel: string;
+    arabicLabel: string;
+}) {
+    const labelFor = (code: AppLang) =>
+        code === 'en' ? englishLabel : code === 'fr' ? frenchLabel : arabicLabel;
+
+    return (
+        <Menu as="div" className="relative sm:hidden">
+            <MenuButton
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 outline-none transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-2 focus-visible:ring-[#FF5733]/50"
+                aria-label={ariaLabel}
+            >
+                <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                    <path d="M2 12h20" />
+                </svg>
+            </MenuButton>
+            <Transition
+                as={Fragment}
+                enter="transition ease-out duration-150"
+                enterFrom="opacity-0 translate-y-1 scale-95"
+                enterTo="opacity-100 translate-y-0 scale-100"
+                leave="transition ease-in duration-100"
+                leaveFrom="opacity-100 translate-y-0 scale-100"
+                leaveTo="opacity-0 translate-y-1 scale-95"
+            >
+                <MenuItems className="absolute end-0 z-50 mt-2 w-[128px] origin-top-right overflow-hidden rounded-xl border border-white/10 bg-[#111114] p-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.9)] focus:outline-none">
+                    {LANGUAGES.map((item) => {
+                        const active = lang === item.code;
+                        return (
+                            <MenuItem key={item.code}>
+                                {({ focus }) => (
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelect(item.code)}
+                                        className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-start text-xs font-medium transition ${
+                                            active
+                                                ? 'bg-white/15 text-white'
+                                                : focus
+                                                  ? 'bg-white/10 text-white'
+                                                  : 'text-white/70'
+                                        }`}
+                                    >
+                                        <span>{labelFor(item.code)}</span>
+                                        <span className="text-[10px] text-white/40">{item.short}</span>
+                                    </button>
+                                )}
+                            </MenuItem>
+                        );
+                    })}
+                </MenuItems>
+            </Transition>
+        </Menu>
     );
 }
 
