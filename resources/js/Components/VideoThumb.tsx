@@ -112,10 +112,25 @@ export default function VideoThumb({
         const host = hostRef.current;
         if (!el || !host) return;
         return bindTrendWarmVideo(warmKey, el, host, {
-            onLift: () => setLifted(true),
+            onLift: () => {
+                if (src) {
+                    const dataUrl = captureFrameDataUrl(el);
+                    if (dataUrl) {
+                        framePosterCache.set(src, dataUrl);
+                        setCapturedPoster(dataUrl);
+                    }
+                }
+                setLifted(true);
+                setPlaying(false);
+            },
             onRestore: () => {
                 setLifted(false);
                 setPlaying(true);
+                // Ensure card teaser resumes even if IntersectionObserver is stale.
+                requestAnimationFrame(() => {
+                    el.muted = true;
+                    void el.play().catch(() => undefined);
+                });
             },
         });
     }, [warmKey, src, previewMode]);
@@ -136,16 +151,12 @@ export default function VideoThumb({
 
     useEffect(() => {
         if (!previewMode) return;
+        if (lifted) return;
         const video = videoRef.current;
         if (!video) return;
 
         if (inView) {
             video.muted = true;
-            try {
-                video.currentTime = 0;
-            } catch {
-                /* ignore */
-            }
             void video
                 .play()
                 .then(() => setPlaying(true))
@@ -154,7 +165,7 @@ export default function VideoThumb({
             video.pause();
             setPlaying(false);
         }
-    }, [inView, previewMode, src]);
+    }, [inView, previewMode, src, lifted]);
 
     const markReady = useCallback(
         (video: HTMLVideoElement) => {
@@ -275,7 +286,7 @@ export default function VideoThumb({
                 />
             )}
 
-            <div ref={hostRef} className={`absolute inset-0 ${lifted ? 'invisible' : ''}`}>
+            <div ref={hostRef} className={`absolute inset-0 ${lifted ? 'pointer-events-none opacity-0' : ''}`}>
                 <video
                     ref={videoRef}
                     key={previewMode ? src : framedSrc}
@@ -286,7 +297,7 @@ export default function VideoThumb({
                     loop={autoLoop}
                     preload={preload}
                     className={`absolute inset-0 size-full ${fit} transition-opacity duration-200 ${
-                        playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
+                        lifted || playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
                     }`}
                     onLoadedMetadata={handleLoadedMetadata}
                     onLoadedData={(e) => freezeAt(e.currentTarget)}

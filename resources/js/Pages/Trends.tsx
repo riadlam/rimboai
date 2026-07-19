@@ -383,7 +383,7 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
                 {/* gradient glow ring on hover */}
                 <span className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 shadow-[0_24px_60px_-24px_rgba(255,87,51,0.55)] transition-opacity duration-300 group-hover:opacity-100" />
 
-                <motion.div layoutId={`trend-media-${tmpl.id}`} className="relative aspect-[4/5] overflow-hidden bg-zinc-900">
+                <motion.div className="relative aspect-[4/5] overflow-hidden bg-zinc-900">
                     {showVideo ? (
                         <VideoThumb
                             src={videoSrc}
@@ -554,7 +554,7 @@ export function TemplateDetailModal({
                     className="relative flex h-full w-full flex-col bg-black"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <motion.div layoutId={`trend-media-${tmpl.id}`} className="relative min-h-0 flex-1 overflow-hidden">
+                    <motion.div className="relative min-h-0 flex-1 overflow-hidden">
                         {mediaEl}
                     </motion.div>
 
@@ -618,7 +618,7 @@ export function TemplateDetailModal({
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="relative flex min-h-0 flex-1 flex-col bg-black md:max-w-[58%]">
-                        <motion.div layoutId={`trend-media-${tmpl.id}`} className="relative aspect-auto min-h-0 w-full flex-1 overflow-hidden">
+                        <motion.div className="relative aspect-auto min-h-0 w-full flex-1 overflow-hidden">
                             {mediaEl}
                             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
                             {(tmpl.featured || tmpl.hot) && (

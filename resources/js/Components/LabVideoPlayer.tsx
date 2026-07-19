@@ -22,8 +22,7 @@ type Props = {
 
 /**
  * Branded Plyr player for Lab / Trends asset previews.
- * Plays the CDN URL directly — do not route through /lab/asset-fetch here
- * (that proxy is only for on-demand downloads / last-frame capture).
+ * Warm-card handoff uses native <video> (no Plyr) so destroy/restore stays clean.
  */
 export default function LabVideoPlayer({
     src,
@@ -43,6 +42,7 @@ export default function LabVideoPlayer({
 
     const teaserSeconds = loop ? undefined : previewSeconds;
     const shouldAutoplay = Boolean(teaserSeconds) || autoPlay || loop;
+    const fitClass = objectFit === 'cover' ? 'object-cover' : 'object-contain';
 
     useEffect(() => {
         const mount = mountRef.current;
@@ -52,41 +52,54 @@ export default function LabVideoPlayer({
         playerRef.current?.destroy();
         playerRef.current = null;
 
-        let el: HTMLVideoElement | null = null;
         let adopted: HTMLVideoElement | null = null;
-
         if (warmKey) {
             adopted = claimTrendWarmVideo(warmKey);
         }
 
+        // ---- Warm handoff: native video only (Plyr breaks reparent/restore) ----
         if (adopted) {
-            // Keep the React-owned fallback node mounted but hidden.
-            if (fallbackVideoRef.current) {
-                fallbackVideoRef.current.style.display = 'none';
-                fallbackVideoRef.current.removeAttribute('src');
-                fallbackVideoRef.current.querySelectorAll('source').forEach((s) => s.removeAttribute('src'));
-                fallbackVideoRef.current.load();
+            const fallback = fallbackVideoRef.current;
+            if (fallback) {
+                fallback.style.display = 'none';
             }
-            adopted.className = `h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`;
-            adopted.poster = poster || adopted.poster || '';
+
+            adopted.className = `h-full w-full ${fitClass}`;
+            adopted.style.cssText = '';
+            if (poster) adopted.poster = poster;
+            adopted.controls = true;
             adopted.playsInline = true;
             adopted.loop = loop;
             adopted.muted = shouldAutoplay;
-            if (adopted.srcObject) {
-                adopted.srcObject = null;
-            }
+            adopted.defaultMuted = shouldAutoplay;
+            if (adopted.srcObject) adopted.srcObject = null;
+
             mount.appendChild(adopted);
-            el = adopted;
             adoptedRef.current = adopted;
-        } else {
-            el = fallbackVideoRef.current;
-            adoptedRef.current = null;
-            if (el) {
-                el.style.display = '';
+
+            if (shouldAutoplay) {
+                void adopted.play().catch(() => undefined);
             }
+
+            return () => {
+                const borrowed = adoptedRef.current;
+                adoptedRef.current = null;
+                if (borrowed) {
+                    restoreTrendWarmVideo(borrowed);
+                }
+                if (fallback) {
+                    fallback.style.display = '';
+                }
+            };
         }
 
+        // ---- Cold path: normal Plyr ----
+        adoptedRef.current = null;
+        const el = fallbackVideoRef.current;
         if (!el) return;
+
+        el.style.display = '';
+        el.className = `h-full w-full ${fitClass}`;
 
         playerRef.current = new Plyr(el, {
             controls: [
@@ -141,22 +154,15 @@ export default function LabVideoPlayer({
             player.off('play', onPlay);
             player.destroy();
             playerRef.current = null;
-
-            const borrowed = adoptedRef.current;
-            adoptedRef.current = null;
-            if (borrowed) {
-                // Plyr may have wrapped/moved the node — ensure we restore the media element itself.
-                restoreTrendWarmVideo(borrowed);
-            }
         };
-    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay, objectFit, warmKey, poster]);
+    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay, fitClass, warmKey, poster]);
 
     return (
         <div ref={mountRef} className={`lab-plyr h-full w-full overflow-hidden rounded-[5px] bg-black ${className}`}>
             <video
                 ref={fallbackVideoRef}
-                key={warmKey ? `${warmKey}-fallback` : src}
-                className={`h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
+                key={src}
+                className={`h-full w-full ${fitClass}`}
                 playsInline
                 loop={loop}
                 poster={poster || undefined}
