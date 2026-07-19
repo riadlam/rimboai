@@ -100,7 +100,7 @@ class DashboardController extends Controller
             return [];
         }
 
-        $slugs = ['social-media', 'e-commerce'];
+        $slugs = ['e-commerce', 'social-media'];
         $categories = InnovationCategory::query()
             ->active()
             ->whereIn('slug', $slugs)
