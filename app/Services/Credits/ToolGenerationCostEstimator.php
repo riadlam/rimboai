@@ -259,6 +259,19 @@ class ToolGenerationCostEstimator
                     return max(0.0, (float) $value);
                 }
             }
+            // UI may omit resolution or pick an unsupported tier (e.g. 1080p on PixVerse Swap).
+            foreach (['720p', '540p', '480p', '360p'] as $prefer) {
+                foreach ($tiers as $key => $value) {
+                    if (strtolower((string) $key) === $prefer && is_numeric($value) && (float) $value > 0) {
+                        return (float) $value;
+                    }
+                }
+            }
+            foreach ($tiers as $value) {
+                if (is_numeric($value) && (float) $value > 0) {
+                    return (float) $value;
+                }
+            }
         }
 
         return max(0.0, $fallback);

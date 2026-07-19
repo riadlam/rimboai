@@ -255,7 +255,7 @@ export default function ToolCreatePanel({
                         ? values.resolution
                         : typeof values.scale === 'string'
                           ? undefined
-                          : '1080p',
+                          : '720p',
             },
             creditsConfig,
         );

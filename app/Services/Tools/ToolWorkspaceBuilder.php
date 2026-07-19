@@ -217,8 +217,10 @@ class ToolWorkspaceBuilder
                     'option_label_prefix' => 'syncModes',
                 ],
             ],
-            // 4️⃣ Face Swap Video — no resolution/quality controls (face index not supported by model)
-            'face-swap-video' => [],
+            // 4️⃣ Face Swap Video — resolution tiers change PixVerse flat clip price
+            'face-swap-video' => [
+                $this->resolutionControl($enums, $defaults, ['360p', '540p', '720p']),
+            ],
             // 5️⃣ Video Background Remover — Background + Preserve Audio
             'video-background-remover' => [
                 [

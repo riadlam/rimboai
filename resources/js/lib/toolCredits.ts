@@ -219,6 +219,13 @@ function resolveUnitPrice(billing: ToolBilling, resolution: string): number {
     if (tiers && typeof tiers === 'object') {
         const keyed = tiers[resolution] ?? tiers[resolution.toLowerCase()];
         if (typeof keyed === 'number' && keyed > 0) return keyed;
+        // UI may omit resolution or pick an unsupported tier (e.g. 1080p on PixVerse Swap).
+        for (const prefer of ['720p', '540p', '480p', '360p']) {
+            const v = tiers[prefer];
+            if (typeof v === 'number' && v > 0) return v;
+        }
+        const first = Object.values(tiers).find((v) => typeof v === 'number' && v > 0);
+        if (typeof first === 'number') return first;
     }
     return Number(billing.unit_price) || 0;
 }
