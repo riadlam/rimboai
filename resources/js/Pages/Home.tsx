@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import VideoThumb from '@/Components/VideoThumb';
@@ -1051,12 +1051,7 @@ function InnovationRail({ section }: { section: HomeInnovationSection }) {
                                         preload="none"
                                     />
                                 ) : (
-                                    <img
-                                        src={post.image}
-                                        alt={post.title}
-                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                        loading="lazy"
-                                    />
+                                    <InnovationCardSlideshow post={post} />
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                                 <div className="absolute inset-x-0 bottom-0 p-3">
@@ -1068,5 +1063,49 @@ function InnovationRail({ section }: { section: HomeInnovationSection }) {
                 </div>
             </div>
         </motion.section>
+    );
+}
+
+/** Cycles gallery frames like a GIF when an innovation has multiple image_urls. */
+function InnovationCardSlideshow({ post }: { post: InnovationPost }) {
+    const frames = useMemo(() => {
+        const list = (post.images?.length ? post.images : [post.image]).filter(
+            (src): src is string => typeof src === 'string' && src.length > 0,
+        );
+        return list.length > 0 ? list : [post.image].filter(Boolean);
+    }, [post.images, post.image]);
+    const [idx, setIdx] = useState(0);
+    const multi = frames.length > 1;
+
+    useEffect(() => {
+        frames.forEach((src) => {
+            const img = new Image();
+            img.src = src;
+        });
+    }, [frames]);
+
+    useEffect(() => {
+        if (!multi) return;
+        const id = window.setInterval(() => {
+            setIdx((i) => (i + 1) % frames.length);
+        }, 1100);
+        return () => window.clearInterval(id);
+    }, [multi, frames.length]);
+
+    return (
+        <>
+            {frames.map((src, i) => (
+                <img
+                    key={src}
+                    src={src}
+                    alt={i === 0 ? post.title : ''}
+                    aria-hidden={i !== idx}
+                    className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-500 group-hover:scale-105 ${
+                        i === idx ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    loading={i === 0 ? 'lazy' : 'eager'}
+                />
+            ))}
+        </>
     );
 }

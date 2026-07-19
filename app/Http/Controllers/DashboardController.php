@@ -120,8 +120,11 @@ class DashboardController extends Controller
                 ->where('innovation_category_id', $category->id)
                 ->orderBy('sort')
                 ->orderByDesc('id')
-                ->limit(16)
-                ->get()
+                ->limit(80)
+                ->get();
+
+            $posts = $this->sortInnovationsMultiImageFirst($posts)
+                ->take(16)
                 ->map(fn (Innovation $post) => $post->toFrontend())
                 ->values()
                 ->all();
@@ -174,16 +177,44 @@ class DashboardController extends Controller
             return [];
         }
 
-        return Innovation::query()
-            ->with('category')
-            ->active()
-            ->orderBy('sort')
-            ->orderByDesc('id')
-            ->limit(200)
-            ->get()
+        return $this->sortInnovationsMultiImageFirst(
+            Innovation::query()
+                ->with('category')
+                ->active()
+                ->orderBy('sort')
+                ->orderByDesc('id')
+                ->limit(200)
+                ->get()
+        )
             ->map(fn (Innovation $post) => $post->toFrontend())
             ->values()
             ->all();
+    }
+
+    /**
+     * Innovations with multiple gallery frames first, then sort / id.
+     *
+     * @param  \Illuminate\Support\Collection<int, Innovation>  $posts
+     * @return \Illuminate\Support\Collection<int, Innovation>
+     */
+    private function sortInnovationsMultiImageFirst($posts)
+    {
+        return $posts
+            ->sort(function (Innovation $a, Innovation $b) {
+                $aMulti = count($a->galleryImageUrls()) > 1 ? 1 : 0;
+                $bMulti = count($b->galleryImageUrls()) > 1 ? 1 : 0;
+                if ($aMulti !== $bMulti) {
+                    return $bMulti <=> $aMulti;
+                }
+
+                $bySort = ((int) $a->sort) <=> ((int) $b->sort);
+                if ($bySort !== 0) {
+                    return $bySort;
+                }
+
+                return ((int) $b->id) <=> ((int) $a->id);
+            })
+            ->values();
     }
 
     public function settings(): Response

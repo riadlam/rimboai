@@ -174,7 +174,13 @@ export default function ImageLabCreateForm({
                 setSelectedModel(matched.name);
             }
 
-            if (draft.aspect && aspectMeta[draft.aspect]) setAspect(draft.aspect);
+            const nextAspect = String(draft.aspect || '')
+                .trim()
+                .replace(/\s+/g, '')
+                .replace(/[xX×/／：]/g, ':');
+            if (nextAspect && aspectMeta[nextAspect]) {
+                setAspect(nextAspect);
+            }
             if (draft.resolution && ['1K', '2K', '4K'].includes(draft.resolution)) setResolution(draft.resolution);
             if (draft.quantity && draft.quantity >= 1) setQuantity(Math.min(4, draft.quantity));
 
@@ -235,6 +241,17 @@ export default function ImageLabCreateForm({
                 }
             } finally {
                 if (!cancelled) {
+                    // Re-assert settings after async media load so they aren't lost.
+                    const retryAspect = String(draft.aspect || '')
+                        .trim()
+                        .replace(/\s+/g, '')
+                        .replace(/[xX×/／：]/g, ':');
+                    if (retryAspect && aspectMeta[retryAspect]) {
+                        setAspect(retryAspect);
+                    }
+                    if (draft.resolution && ['1K', '2K', '4K'].includes(draft.resolution)) {
+                        setResolution(draft.resolution);
+                    }
                     if (draft.intent === 'use-result') {
                         setMode('create');
                     }

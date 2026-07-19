@@ -2,7 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
-import { buildInnovationLabDraft, labHrefForPost, type InnovationPost } from '@/data/innovationPrompts';
+import { buildInnovationLabDraft, labHrefForPost, normalizeAspectRatio, type InnovationPost } from '@/data/innovationPrompts';
 import { saveLabReuseDraft } from '@/lib/labReuse';
 
 type Props = {
@@ -65,6 +65,10 @@ function PostDetail({ post }: { post: InnovationPost }) {
         if (opening) return;
         setOpening(true);
         const draft = buildInnovationLabDraft(post);
+        draft.aspect = normalizeAspectRatio(
+            post.aspect_ratio ?? post.settings?.aspect ?? post.settings?.aspect_ratio,
+            draft.aspect || '1:1',
+        );
         saveLabReuseDraft(draft);
         router.visit(labHrefForPost(post), {
             onFinish: () => setOpening(false),

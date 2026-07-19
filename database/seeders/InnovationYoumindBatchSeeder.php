@@ -58,6 +58,9 @@ class InnovationYoumindBatchSeeder extends Seeder
                     // Multi-frame gallery lives in existing settings JSON (no new column).
                     'settings' => [
                         'image_urls' => $urls,
+                        'aspect' => $post['aspect_ratio'],
+                        'aspect_ratio' => $post['aspect_ratio'],
+                        'resolution' => '1K',
                     ],
                     'sort' => $sort,
                     'status' => 'active',

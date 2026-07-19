@@ -77,6 +77,16 @@ function pickSetting<T>(post: InnovationPost, key: string, fallback: T): T {
     return fallback;
 }
 
+/** Normalize lab aspect tokens like "9:16", "9 / 16", "9x16". */
+export function normalizeAspectRatio(raw: unknown, fallback = '1:1'): string {
+    if (raw == null) return fallback;
+    const s = String(raw)
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/[xX×/／：]/g, ':');
+    return /^\d+:\d+$/.test(s) ? s : fallback;
+}
+
 /**
  * Build a Lab reuse draft from an Innovation post (image / video / music).
  */
@@ -103,7 +113,10 @@ export function buildInnovationLabDraft(post: InnovationPost): import('@/lib/lab
 
     const aspectDefault = lab === 'video' ? '16:9' : '1:1';
     const resolutionDefault = lab === 'video' ? '720p' : '1K';
-    const aspect = String(post.aspect_ratio || pickSetting(post, 'aspect', aspectDefault) || aspectDefault);
+    const aspect = normalizeAspectRatio(
+        post.aspect_ratio ?? pickSetting(post, 'aspect', null) ?? pickSetting(post, 'aspect_ratio', null),
+        aspectDefault,
+    );
     const resolution = String(post.resolution || pickSetting(post, 'resolution', resolutionDefault) || resolutionDefault);
 
     let duration: number | 'auto' | string | null = null;
