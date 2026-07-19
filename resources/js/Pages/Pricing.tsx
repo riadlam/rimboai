@@ -59,14 +59,14 @@ const PACK_META: Record<
         taglineKey: 'taglines.starter',
         accent: 'border-white/10 hover:border-white/20',
         check: 'text-emerald-400',
-        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
+        btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     creator: {
         taglineKey: 'taglines.creator',
         accent: 'border-sky-500/40 hover:border-sky-400/60',
         check: 'text-emerald-400',
-        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
+        btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     pro: {
@@ -74,7 +74,7 @@ const PACK_META: Record<
         taglineKey: 'taglines.pro',
         accent: 'border-[#FF5733]/55 ring-2 ring-[#FF5733]/20 hover:border-[#FF5733]/70',
         check: 'text-[#FF8A65]',
-        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
+        btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     business: {
@@ -82,7 +82,7 @@ const PACK_META: Record<
         taglineKey: 'taglines.business',
         accent: 'border-amber-400/45 hover:border-amber-300/65',
         check: 'text-amber-400',
-        btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
+        btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
         perkKeys: ['perks.allModels', 'perks.4k', 'perks.dedicatedSupport', 'perks.fastQueue', 'perks.bulk', 'perks.api'],
     },
 };
@@ -91,7 +91,7 @@ const DEFAULT_META = {
     taglineKey: 'taglines.default',
     accent: 'border-white/10 hover:border-white/20',
     check: 'text-emerald-400',
-    btn: 'bg-emerald-500 text-white shadow-[0_12px_30px_-12px_rgba(16,185,129,0.85)] hover:brightness-110',
+    btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
     perkKeys: ['perks.allModels', 'perks.hd'],
 };
 
