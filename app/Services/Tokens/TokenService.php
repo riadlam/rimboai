@@ -5,6 +5,7 @@ namespace App\Services\Tokens;
 use App\Events\TokensUpdated;
 use App\Exceptions\InsufficientTokensException;
 use App\Models\User;
+use App\Services\CreationTelegramNotifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -61,6 +62,12 @@ class TokenService
         }, 3);
 
         $this->broadcastBalance($user);
+
+        try {
+            app(CreationTelegramNotifier::class)->notifyStarted($user, $creationType, $creation);
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         return $creation;
     }

@@ -116,6 +116,9 @@ class FalWalletCostTracker
      */
     public function reconcile(Model $creation, bool $finalizeZeroCharge = false): bool
     {
+        $hadCostUsd = $creation->getAttribute('cost_usd') !== null
+            && is_numeric($creation->getAttribute('cost_usd'));
+
         $updates = [];
 
         $cost = $creation->getAttribute('cost_usd');
@@ -167,8 +170,21 @@ class FalWalletCostTracker
             }
         }
 
+        $costJustSet = ! $hadCostUsd && array_key_exists('cost_usd', $updates);
+
         if ($updates !== []) {
             $creation->forceFill($updates)->save();
+        }
+
+        if ($costJustSet) {
+            $type = $this->creationType($creation);
+            if ($type !== null) {
+                try {
+                    app(CreationTelegramNotifier::class)->notifyCostSettled($type, $creation);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
         }
 
         $finalCost = $creation->getAttribute('cost_usd');
