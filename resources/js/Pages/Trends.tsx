@@ -458,7 +458,7 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
     );
 }
 
-function TemplateDetailModal({
+export function TemplateDetailModal({
     template: tmpl,
     onClose,
     onUse,

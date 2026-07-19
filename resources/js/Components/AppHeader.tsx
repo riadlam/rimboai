@@ -91,23 +91,25 @@ export default function AppHeader({ onMenuClick }: Props) {
                 <div className="flex items-center gap-2 md:gap-3">
                     {user ? (
                         <>
-                    {/* Phone-only tokens — sharp, minimal */}
+                    {/* Phone-only tokens — glass chip */}
                     <button
                         type="button"
                         onClick={() => setCreditsOpen(true)}
-                        className="inline-flex items-center gap-1 sm:hidden"
+                        className="me-[5px] inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.06] py-1 pe-2.5 ps-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md sm:hidden"
                         aria-label={`${tokens} ${t('tokens')}`}
                     >
-                        <svg
-                            className="h-[14px] w-[14px] shrink-0 text-[#FF5733] drop-shadow-[0_0_6px_rgba(255,87,51,0.55)]"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            aria-hidden
-                        >
-                            <path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8Z" />
-                        </svg>
+                        <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#FF5733]/15 ring-1 ring-[#FF5733]/25">
+                            <svg
+                                className="h-[11px] w-[11px] text-[#FF6A45]"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                aria-hidden
+                            >
+                                <path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8Z" />
+                            </svg>
+                        </span>
                         <span
-                            className="bg-gradient-to-b from-[#FFB199] to-[#FF5733] bg-clip-text text-[13px] font-semibold leading-none tracking-[-0.03em] text-transparent tabular-nums"
+                            className="bg-gradient-to-b from-[#FFC4B0] to-[#FF6A45] bg-clip-text text-[12.5px] font-semibold leading-none tracking-[-0.03em] text-transparent tabular-nums"
                             style={{ fontFamily: "'Outfit', ui-sans-serif, system-ui, sans-serif" }}
                         >
                             {tokens.toLocaleString()}

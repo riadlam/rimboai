@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import AppLayout from '@/Layouts/AppLayout';
 import type { Brand, PageProps, Tool } from '@/types';
-import type { TrendTemplate } from '@/Pages/Trends';
+import { TemplateDetailModal, type TrendTemplate } from '@/Pages/Trends';
 import type { InnovationPost } from '@/data/innovationPrompts';
 
 type HomeInnovationSection = {
@@ -912,13 +912,29 @@ function ToolChip({
 
 function TrendRail({ templates }: { templates: TrendTemplate[] }) {
     const { t } = useTranslation('home');
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const selected = selectedId ? templates.find((row) => row.id === selectedId) ?? null : null;
+
+    useEffect(() => {
+        if (!selectedId) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setSelectedId(null);
+        };
+        document.addEventListener('keydown', onKey);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            document.body.style.overflow = '';
+        };
+    }, [selectedId]);
 
     if (templates.length === 0) {
         return null;
     }
 
-    const openTrend = (item: TrendTemplate) => {
-        router.visit(`/trends/${item.id}`);
+    const useInLab = (row: TrendTemplate) => {
+        setSelectedId(null);
+        router.visit(`/trends/${row.id}`);
     };
 
     return (
@@ -935,7 +951,7 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
                         <button
                             key={item.id}
                             type="button"
-                            onClick={() => openTrend(item)}
+                            onClick={() => setSelectedId(item.id)}
                             className="group relative w-[200px] shrink-0 cursor-pointer overflow-hidden rounded-2xl text-left sm:w-[220px]"
                         >
                             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014]">
@@ -978,6 +994,17 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
                     ))}
                 </div>
             </div>
+
+            <AnimatePresence>
+                {selected && (
+                    <TemplateDetailModal
+                        template={selected}
+                        using={false}
+                        onClose={() => setSelectedId(null)}
+                        onUse={() => useInLab(selected)}
+                    />
+                )}
+            </AnimatePresence>
         </motion.section>
     );
 }
