@@ -282,9 +282,9 @@ class TrendsFeedService
         };
 
         $trendCost = $creation->trend_cost ?? null;
-        $credits = (int) round((float) (
-            $trendCost !== null ? $trendCost : ($creation->credits_charged ?? 0)
-        ));
+        $credits = ($trendCost !== null && is_numeric($trendCost) && (float) $trendCost > 0)
+            ? (int) round((float) $trendCost)
+            : 0;
 
         $user = auth()->user();
         $userRemakes = $user
@@ -457,12 +457,32 @@ class TrendsFeedService
             if ($isPublic === false) {
                 $payload['is_featured'] = false;
             }
+            // Freeze the Trends token price from the original charge when publishing.
+            if ($isPublic === true) {
+                $existingTrendCost = $creation->getAttribute('trend_cost');
+                if ($existingTrendCost === null || ! is_numeric($existingTrendCost) || (float) $existingTrendCost <= 0) {
+                    $charged = $creation->getAttribute('credits_charged');
+                    if ($charged !== null && is_numeric($charged) && (float) $charged > 0) {
+                        $payload['trend_cost'] = (int) round((float) $charged);
+                    }
+                }
+            }
         }
         if ($isFeatured !== null) {
             $payload['is_featured'] = $isFeatured;
             // Featured items must be public to appear on Trends
             if ($isFeatured) {
                 $payload['is_public'] = true;
+                $existingTrendCost = $creation->getAttribute('trend_cost');
+                if (
+                    ($existingTrendCost === null || ! is_numeric($existingTrendCost) || (float) $existingTrendCost <= 0)
+                    && ! isset($payload['trend_cost'])
+                ) {
+                    $charged = $creation->getAttribute('credits_charged');
+                    if ($charged !== null && is_numeric($charged) && (float) $charged > 0) {
+                        $payload['trend_cost'] = (int) round((float) $charged);
+                    }
+                }
             }
         }
 
@@ -477,6 +497,7 @@ class TrendsFeedService
             'id' => $creation->id,
             'is_public' => (bool) $creation->is_public,
             'is_featured' => (bool) ($creation->is_featured ?? false),
+            'trend_cost' => $creation->trend_cost !== null ? (int) round((float) $creation->trend_cost) : null,
         ];
     }
 
@@ -630,9 +651,9 @@ class TrendsFeedService
             'uses' => $uses,
             'rating' => null,
             'credits' => (int) round((float) (
-                ($creation->trend_cost ?? null) !== null
+                ($creation->trend_cost ?? null) !== null && (float) $creation->trend_cost > 0
                     ? $creation->trend_cost
-                    : ($creation->credits_charged ?? 0)
+                    : 0
             )),
             'model' => $creation->model_name ?: 'AI Model',
             'endpoint_id' => $creation->endpoint_id,

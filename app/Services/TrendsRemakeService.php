@@ -206,7 +206,7 @@ class TrendsRemakeService
             'aspect' => $built['aspect_ratio'] ?? $aspect,
         ]);
 
-        $credits = $this->creditsForTemplate($template, (int) $cost['credits']);
+        $credits = $this->creditsForTemplate($template);
         if ($credits <= 0) {
             throw new TrendsRemakeException(__('messages.model_unavailable'), 503);
         }
@@ -252,6 +252,7 @@ class TrendsRemakeService
                         'billing_unit_price' => $billing['unit_price'],
                         'fal_cost_usd' => $cost['fal_cost_usd'],
                         'credits' => $credits,
+                        'credits_source' => 'trend_cost',
                         'cost_breakdown' => $cost['breakdown'],
                         'media_counts' => $counts,
                         'from_trend_id' => $template->id,
@@ -344,7 +345,7 @@ class TrendsRemakeService
             'reference_count' => count($imageUrls),
         ]);
 
-        $credits = $this->creditsForTemplate($template, (int) $cost['credits']);
+        $credits = $this->creditsForTemplate($template);
         if ($credits <= 0) {
             throw new TrendsRemakeException(__('messages.model_unavailable'), 503);
         }
@@ -389,6 +390,7 @@ class TrendsRemakeService
                     'billing_unit_price' => $billing['unit_price'],
                     'fal_cost_usd' => $cost['fal_cost_usd'],
                     'credits' => $credits,
+                    'credits_source' => 'trend_cost',
                     'cost_breakdown' => $cost['breakdown'],
                     'from_trend_id' => $template->id,
                 ],
@@ -471,7 +473,7 @@ class TrendsRemakeService
             'max_duration' => $model->max_duration ?? null,
         ], $autoEnhance, is_numeric($durationSeconds) ? (int) $durationSeconds : null);
 
-        $credits = $this->creditsForTemplate($template, (int) $cost['credits']);
+        $credits = $this->creditsForTemplate($template);
         if ($credits <= 0) {
             throw new TrendsRemakeException(__('messages.model_unavailable'), 503);
         }
@@ -505,6 +507,7 @@ class TrendsRemakeService
                     'fal_endpoint' => $endpointId,
                     'fal_cost_usd' => $cost['fal_cost_usd'],
                     'credits' => $credits,
+                    'credits_source' => 'trend_cost',
                     'assumed_seconds' => $cost['assumed_seconds'],
                     'from_trend_id' => $template->id,
                 ],
@@ -582,19 +585,21 @@ class TrendsRemakeService
         return null;
     }
 
-    private function creditsForTemplate(Model $template, int $estimated): int
+    /**
+     * Charge exactly template.trend_cost — same tokens shown on Trends cards.
+     * Never re-estimate Fal cost at remake time.
+     */
+    private function creditsForTemplate(Model $template): int
     {
         $trendCost = $template->getAttribute('trend_cost');
         if ($trendCost !== null && is_numeric($trendCost) && (float) $trendCost > 0) {
             return (int) round((float) $trendCost);
         }
 
-        $charged = $template->getAttribute('credits_charged');
-        if ($charged !== null && is_numeric($charged) && (float) $charged > 0) {
-            return (int) round((float) $charged);
-        }
-
-        return $estimated;
+        throw new TrendsRemakeException(
+            'This template has no Trends token price (trend_cost). Republish it from History.',
+            422,
+        );
     }
 
     /**
