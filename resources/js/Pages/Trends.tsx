@@ -498,14 +498,15 @@ export function TemplateDetailModal({
     const mediaEl = (
         <>
             {showVideo ? (
-                <div className="size-full">
+                <div className={`size-full ${isMobile ? '' : 'bg-black'}`}>
                     <LabVideoPlayer
                         src={videoSrc}
                         poster={tmpl.thumbnail_url || undefined}
-                        warmKey={warmKey}
+                        // Phone: reuse buffered card video. Desktop: full Plyr + real aspect (contain).
+                        warmKey={isMobile ? warmKey : undefined}
                         loop
                         autoPlay
-                        objectFit={isMobile ? 'contain' : 'cover'}
+                        objectFit="contain"
                         className="!rounded-none"
                     />
                 </div>
