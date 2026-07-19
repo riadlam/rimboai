@@ -426,7 +426,7 @@ class DashboardController extends Controller
 
     private function loadBrands(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection
     {
-        $cacheKey = "catalog.brands.v2.{$modelsTable}.{$categoriesTable}";
+        $cacheKey = "catalog.brands.v3.{$modelsTable}.{$categoriesTable}";
 
         /** @var list<array<string, mixed>> $cached */
         $cached = Cache::remember(

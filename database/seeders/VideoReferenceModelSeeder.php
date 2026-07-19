@@ -16,7 +16,11 @@ class VideoReferenceModelSeeder extends Seeder
             'sort' => 20,
             'icon_url' => '/storage/ai_icons/bytedance-color.svg',
         ],
-        'Wan' => ['name' => 'Wan', 'sort' => 50],
+        'Wan' => [
+            'name' => 'Wan',
+            'sort' => 50,
+            'icon_url' => '/storage/ai_icons/alibaba-color.svg',
+        ],
         'PixVerse' => ['name' => 'PixVerse', 'sort' => 70],
     ];
 
@@ -122,6 +126,7 @@ class VideoReferenceModelSeeder extends Seeder
             'max_duration' => 10,
             'enums' => [2, 3, 4, 5, 6, 7, 8, 9, 10],
             'tags' => ['image-to-video', 'wan', 'a14b', 'negative-prompt'],
+            'image_url' => '/storage/ai_icons/alibaba-color.svg',
         ],
         [
             'endpoint_id' => 'fal-ai/wan/v2.7/text-to-video',
@@ -134,6 +139,7 @@ class VideoReferenceModelSeeder extends Seeder
             'max_duration' => 10,
             'enums' => [2, 3, 4, 5, 6, 7, 8, 9, 10],
             'tags' => ['text-to-video', 'reference-to-video', 'multi-reference'],
+            'image_url' => '/storage/ai_icons/alibaba-color.svg',
         ],
         [
             'endpoint_id' => 'fal-ai/pixverse/c1/reference-to-video',
@@ -224,6 +230,7 @@ class VideoReferenceModelSeeder extends Seeder
             'max_duration' => 10,
             'enums' => [2, 3, 4, 5, 6, 7, 8, 9, 10],
             'tags' => ['image-to-video', 'wan', 'a14b'],
+            'image_url' => '/storage/ai_icons/alibaba-color.svg',
         ],
         [
             'endpoint_id' => 'fal-ai/wan/v2.7/reference-to-video',
@@ -236,6 +243,7 @@ class VideoReferenceModelSeeder extends Seeder
             'max_duration' => 10,
             'enums' => [2, 3, 4, 5, 6, 7, 8, 9, 10],
             'tags' => ['reference-to-video', 'multi-reference'],
+            'image_url' => '/storage/ai_icons/alibaba-color.svg',
         ],
         [
             'endpoint_id' => 'fal-ai/kling-video/o3/4k/reference-to-video',
