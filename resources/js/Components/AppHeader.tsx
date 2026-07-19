@@ -91,18 +91,23 @@ export default function AppHeader({ onMenuClick }: Props) {
                 <div className="flex items-center gap-2 md:gap-3">
                     {user ? (
                         <>
-                    {/* Phone-only tokens — compact brand chip */}
+                    {/* Phone-only tokens — sharp, minimal */}
                     <button
                         type="button"
                         onClick={() => setCreditsOpen(true)}
-                        className="inline-flex items-center gap-1 rounded-full border border-[#FF5733]/35 bg-[#FF5733]/10 py-1 pe-2 ps-1.5 sm:hidden"
+                        className="inline-flex items-center gap-1 sm:hidden"
                         aria-label={`${tokens} ${t('tokens')}`}
                     >
-                        <svg className="h-3 w-3 shrink-0 text-[#FF5733]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <svg
+                            className="h-[14px] w-[14px] shrink-0 text-[#FF5733] drop-shadow-[0_0_6px_rgba(255,87,51,0.55)]"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden
+                        >
                             <path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8Z" />
                         </svg>
                         <span
-                            className="text-[12px] font-bold leading-none tracking-tight tabular-nums text-[#FF8A65]"
+                            className="bg-gradient-to-b from-[#FFB199] to-[#FF5733] bg-clip-text text-[13px] font-semibold leading-none tracking-[-0.03em] text-transparent tabular-nums"
                             style={{ fontFamily: "'Outfit', ui-sans-serif, system-ui, sans-serif" }}
                         >
                             {tokens.toLocaleString()}
@@ -130,11 +135,11 @@ export default function AppHeader({ onMenuClick }: Props) {
                         </div>
                     </div>
 
-                    {/* Buy credits */}
+                    {/* Buy credits — desktop / tablet only */}
                     <button
                         type="button"
                         onClick={() => setCreditsOpen(true)}
-                        className="group relative inline-flex h-8 items-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-3 text-[12px] font-semibold text-white shadow-[0_6px_18px_-8px_rgba(255,87,51,0.9)] transition-transform active:scale-[0.97] md:h-9 md:px-3.5 md:text-[13px]"
+                        className="group relative hidden h-8 items-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-b from-[#FF6A45] to-[#E24216] px-3 text-[12px] font-semibold text-white shadow-[0_6px_18px_-8px_rgba(255,87,51,0.9)] transition-transform active:scale-[0.97] sm:inline-flex md:h-9 md:px-3.5 md:text-[13px]"
                     >
                         <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                         <svg className="relative h-3.5 w-3.5 md:h-4 md:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
