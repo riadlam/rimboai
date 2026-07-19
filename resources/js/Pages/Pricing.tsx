@@ -199,11 +199,11 @@ export default function Pricing() {
                 btn: meta.btn,
                 perks: meta.perkKeys.map((key) => t(key)),
                 yields: [
-                    { value: Math.max(0, Math.floor(tokens / 15)).toLocaleString(locale), label: t('yields.imagesNano'), icon: 'image' as const },
-                    { value: Math.max(0, Math.floor(tokens / 104)).toLocaleString(locale), label: t('yields.videosKling'), icon: 'video' as const },
-                    { value: Math.max(0, Math.floor(tokens / 400)).toLocaleString(locale), label: t('yields.videosVeo'), icon: 'videoAlt' as const },
-                    { value: Math.max(0, Math.floor(tokens / 42)).toLocaleString(locale), label: t('yields.songsSuno'), icon: 'music' as const },
-                    { value: Math.max(0, Math.floor(tokens / 10)).toLocaleString(locale), label: t('yields.voiceovers'), icon: 'mic' as const },
+                    { value: Math.max(0, Math.floor(tokens / 15) * 2).toLocaleString(locale), label: t('yields.imagesNano'), icon: 'image' as const },
+                    { value: Math.max(0, Math.floor(tokens / 104) * 2).toLocaleString(locale), label: t('yields.videosKling'), icon: 'video' as const },
+                    { value: Math.max(0, Math.floor(tokens / 400) * 2).toLocaleString(locale), label: t('yields.videosVeo'), icon: 'videoAlt' as const },
+                    { value: Math.max(0, Math.floor(tokens / 42) * 2).toLocaleString(locale), label: t('yields.songsSuno'), icon: 'music' as const },
+                    { value: Math.max(0, Math.floor(tokens / 10) * 2).toLocaleString(locale), label: t('yields.voiceovers'), icon: 'mic' as const },
                 ],
             } satisfies Pack;
         });

@@ -131,12 +131,9 @@ class ImageGenerationCostEstimator
         string $unit,
         float $unitPrice,
     ): array {
-        // Approximate published fal GPT Image output prices (USD / image).
-        $perImage = match ($resolution) {
-            '4K' => 0.25,
-            '2K' => 0.15,
-            default => 0.06,
-        };
+        // Fal publish prices + ~10–15% buffer for text/image tokens.
+        // Lab maps 1K→quality medium, 2K/4K→quality high (FalImageInputBuilder).
+        $perImage = $this->gptPerImageUsd($endpointId, $resolution);
 
         $base = $perImage * $quantity;
         // Input tokens raise edit cost — approximate +15% of base per reference.
@@ -154,6 +151,31 @@ class ImageGenerationCostEstimator
             'catalog_unit_price' => $unitPrice,
             'endpoint_id' => $endpointId,
         ]);
+    }
+
+    /**
+     * Safe USD/image tiers aligned to fal GPT tables (not catalog unit_price=$1).
+     */
+    private function gptPerImageUsd(string $endpointId, string $resolution): float
+    {
+        $id = strtolower($endpointId);
+        $isGpt2 = str_contains($id, 'gpt-image-2');
+
+        // GPT Image 2 (openai/gpt-image-2): high 4K ~$0.40, high ~1–2K ~$0.21–0.23, medium ~$0.06.
+        if ($isGpt2) {
+            return match ($resolution) {
+                '4K' => 0.50,
+                '2K' => 0.30,
+                default => 0.10,
+            };
+        }
+
+        // GPT Image 1.5: max size ~1536; 2K/4K UI both map to high quality.
+        // fal high ≤~$0.20, medium ≤~$0.051.
+        return match ($resolution) {
+            '4K', '2K' => 0.25,
+            default => 0.08,
+        };
     }
 
     /**

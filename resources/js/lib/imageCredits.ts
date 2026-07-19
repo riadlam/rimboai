@@ -55,7 +55,8 @@ export function estimateImageCredits(
     const referenceCount = Math.max(0, Math.min(8, options.referenceCount ?? 0));
 
     if (isGptImage(endpointId)) {
-        const perImage = resolution === '4K' ? 0.25 : resolution === '2K' ? 0.15 : 0.06;
+        // Fal publish + ~10–15% token buffer. Lab: 1K→medium, 2K/4K→high.
+        const perImage = gptPerImageUsd(endpointId, resolution);
         const base = perImage * quantity;
         const refSurcharge = referenceCount > 0 ? base * 0.15 * referenceCount : 0;
         const falCostUsd = round6(base + refSurcharge);
@@ -159,6 +160,22 @@ function normalizePrice(price?: number | string | null): number {
 
 function isGptImage(endpointId: string): boolean {
     return endpointId.toLowerCase().includes('gpt-image');
+}
+
+/** Safe USD/image tiers matching ImageGenerationCostEstimator::gptPerImageUsd. */
+function gptPerImageUsd(endpointId: string, resolution: string): number {
+    const id = endpointId.toLowerCase();
+    const isGpt2 = id.includes('gpt-image-2');
+
+    if (isGpt2) {
+        if (resolution === '4K') return 0.5;
+        if (resolution === '2K') return 0.3;
+        return 0.1;
+    }
+
+    // gpt-image-1.5 — no native 4K; 2K/4K UI both bill as high.
+    if (resolution === '4K' || resolution === '2K') return 0.25;
+    return 0.08;
 }
 
 function round6(n: number): number {
