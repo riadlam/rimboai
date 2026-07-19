@@ -40,6 +40,9 @@ function PostDetail({ post }: { post: InnovationPost }) {
     const { t } = useTranslation('innovation');
     const [copied, setCopied] = useState(false);
     const [opening, setOpening] = useState(false);
+    const gallery = (post.images?.length ? post.images : [post.image]).filter(Boolean);
+    const [slide, setSlide] = useState(0);
+    const activeImage = gallery[Math.min(slide, gallery.length - 1)] || post.image;
     const categoryLabel = post.category_label || post.category;
     const labLabel =
         post.lab_type === 'text-to-video' || post.media === 'videos'
@@ -76,7 +79,7 @@ function PostDetail({ post }: { post: InnovationPost }) {
                     {post.video ? (
                         <video
                             src={post.video}
-                            poster={post.image}
+                            poster={activeImage}
                             className="absolute inset-0 h-full w-full object-cover"
                             autoPlay
                             muted
@@ -85,14 +88,51 @@ function PostDetail({ post }: { post: InnovationPost }) {
                         />
                     ) : (
                         <img
-                            src={post.image}
+                            src={activeImage}
                             alt={post.title}
                             className="absolute inset-0 h-full w-full object-cover"
                         />
                     )}
+                    {!post.video && gallery.length > 1 && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setSlide((s) => (s - 1 + gallery.length) % gallery.length)}
+                                className="absolute start-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/70"
+                                aria-label="Previous image"
+                            >
+                                <svg className="h-4 w-4 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 19-7-7 7-7" />
+                                </svg>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSlide((s) => (s + 1) % gallery.length)}
+                                className="absolute end-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/70"
+                                aria-label="Next image"
+                            >
+                                <svg className="h-4 w-4 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+                                </svg>
+                            </button>
+                            <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center gap-1.5">
+                                {gallery.map((url, i) => (
+                                    <button
+                                        key={url}
+                                        type="button"
+                                        onClick={() => setSlide(i)}
+                                        className={`h-1.5 rounded-full transition ${
+                                            i === slide ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
+                                        }`}
+                                        aria-label={`Image ${i + 1}`}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    )}
                     <Link
                         href="/innovation"
-                        className="absolute start-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
+                        className="absolute start-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
                     >
                         <svg className="h-3.5 w-3.5 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m12 19-7-7 7-7M19 12H5" />

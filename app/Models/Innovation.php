@@ -14,6 +14,7 @@ class Innovation extends Model
         'prompt',
         'media_type',
         'image_url',
+        'image_urls',
         'video_url',
         'audio_url',
         'model_name',
@@ -35,6 +36,7 @@ class Innovation extends Model
     protected function casts(): array
     {
         return [
+            'image_urls' => 'array',
             'settings' => 'array',
             'is_featured' => 'boolean',
             'generate_audio' => 'boolean',
@@ -73,6 +75,20 @@ class Innovation extends Model
         $imageMode = $this->image_mode ?: ($settings['image_mode'] ?? null);
         $stylePrompt = $this->style_prompt ?: ($settings['style'] ?? null);
 
+        $gallery = [];
+        if (is_array($this->image_urls)) {
+            foreach ($this->image_urls as $url) {
+                if (is_string($url) && $url !== '') {
+                    $gallery[] = $url;
+                }
+            }
+        }
+        if ($this->image_url && ! in_array($this->image_url, $gallery, true)) {
+            array_unshift($gallery, $this->image_url);
+        }
+        $gallery = array_values(array_unique($gallery));
+        $primaryImage = $gallery[0] ?? $this->image_url;
+
         return [
             'id' => $this->slug,
             'db_id' => $this->id,
@@ -85,7 +101,8 @@ class Innovation extends Model
                 default => 'images',
             },
             'media_type' => $this->media_type,
-            'image' => $this->image_url,
+            'image' => $primaryImage,
+            'images' => $gallery,
             'video' => $this->video_url,
             'audio' => $this->audio_url,
             'prompt' => $this->prompt,

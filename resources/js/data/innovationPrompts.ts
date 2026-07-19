@@ -11,6 +11,8 @@ export type InnovationPost = {
     media: MediaType;
     media_type?: 'image' | 'video' | 'music';
     image: string;
+    /** Extra sample frames when an innovation has multiple reference renders */
+    images?: string[];
     video?: string | null;
     audio?: string | null;
     prompt: string;

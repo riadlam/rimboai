@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             InnovationSeeder::class,
+            InnovationYoumindBatchSeeder::class,
             VideoReferenceModelSeeder::class,
             Wan22A14bImageToVideoSeeder::class,
             VoiceCloneModelSeeder::class,

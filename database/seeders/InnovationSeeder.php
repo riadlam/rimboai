@@ -61,6 +61,9 @@ class InnovationSeeder extends Seeder
                     'prompt' => $prompt,
                     'media_type' => $mediaType,
                     'image_url' => $post['image_url'],
+                    'image_urls' => $post['image_urls'] ?? (
+                        is_string($post['image_url'] ?? null) ? [$post['image_url']] : null
+                    ),
                     'video_url' => $post['video_url'] ?? null,
                     'audio_url' => $post['audio_url'] ?? null,
                     'model_name' => $model,
