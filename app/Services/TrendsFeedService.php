@@ -21,7 +21,7 @@ class TrendsFeedService
         $limit = max(1, min(200, $limit));
 
         return \Illuminate\Support\Facades\Cache::remember(
-            "trends.feed.v1.{$limit}",
+            "trends.feed.v2.{$limit}",
             now()->addSeconds(45),
             fn () => $this->buildFeed($limit),
         );
@@ -78,7 +78,7 @@ class TrendsFeedService
         $table = $model->getTable();
 
         $query = $modelClass::query()
-            ->with('user:id,name,email')
+            ->with('user:id,name,email,avatar')
             ->notDiscarded()
             ->where('is_public', true)
             ->where('status', $modelClass::STATUS_COMPLETED);
@@ -128,9 +128,9 @@ class TrendsFeedService
         $creation->refresh();
 
         $item = match ($type) {
-            'image' => $this->mapImage($creation->loadMissing('user:id,name,email')),
-            'video' => $this->mapVideo($creation->loadMissing('user:id,name,email')),
-            'music' => $this->mapMusic($creation->loadMissing('user:id,name,email')),
+            'image' => $this->mapImage($creation->loadMissing('user:id,name,email,avatar')),
+            'video' => $this->mapVideo($creation->loadMissing('user:id,name,email,avatar')),
+            'music' => $this->mapMusic($creation->loadMissing('user:id,name,email,avatar')),
             default => null,
         };
 
@@ -181,7 +181,7 @@ class TrendsFeedService
             return null;
         }
 
-        $creation->loadMissing('user:id,name,email');
+        $creation->loadMissing('user:id,name,email,avatar');
 
         $card = match ($type) {
             'image' => $this->mapImage($creation),
@@ -648,7 +648,7 @@ class TrendsFeedService
             'creation_id' => $creation->id,
             'type' => $type,
             'creator' => $username,
-            'avatar' => $this->avatarUrl($username),
+            'avatar' => $this->creatorAvatarUrl($user, $username),
             'uses' => $uses,
             'rating' => null,
             'credits' => (int) round((float) (
@@ -693,7 +693,22 @@ class TrendsFeedService
         return array_values(array_unique($urls));
     }
 
-    private function avatarUrl(string $name): string
+    private function creatorAvatarUrl(?User $user, string $name): string
+    {
+        $avatar = is_string($user?->avatar) ? trim($user->avatar) : '';
+        if ($avatar !== '') {
+            // Absolute CDN / Google photo URLs, or app-relative /storage/... paths.
+            if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://') || str_starts_with($avatar, '/')) {
+                return $avatar;
+            }
+
+            return '/storage/'.ltrim($avatar, '/');
+        }
+
+        return $this->fallbackInitialsAvatarUrl($name);
+    }
+
+    private function fallbackInitialsAvatarUrl(string $name): string
     {
         $initials = collect(preg_split('/\s+/', trim($name)) ?: [])
             ->filter()
