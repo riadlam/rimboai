@@ -9,6 +9,10 @@ const DEFAULT_CONFIG: CreditsConfig = {
 const MINIMAX_CLONE_FEE_USD = 1.5;
 const MINIMAX_PREVIEW_PER_1000_CHARS_USD = 0.3;
 
+/** User-facing credit rules (mirror VoiceGenerationCostEstimator). */
+const MIN_VOICE_CREDITS = 10;
+const ELEVENLABS_CREDIT_MULTIPLIER = 5;
+
 export type VoiceModelPricing = {
     unit_price?: number | string | null;
     unit?: string | null;
@@ -47,6 +51,11 @@ export function isVoiceCloneModel(
 export function isMiniMaxVoiceClone(endpointId?: string | null): boolean {
     const id = String(endpointId ?? '').toLowerCase();
     return id.includes('minimax/voice-clone') || id.endsWith('/voice-clone');
+}
+
+export function isElevenLabsVoice(endpointId?: string | null): boolean {
+    const id = String(endpointId ?? '').toLowerCase();
+    return id.includes('elevenlabs') || id.includes('eleven-v') || (id.includes('/eleven') && id.includes('tts'));
 }
 
 export const CHATTERBOX_EN_ENDPOINT = 'fal-ai/chatterbox/text-to-speech';
@@ -105,6 +114,19 @@ export function minVoiceSampleSeconds(endpointId?: string | null): number {
     return isMiniMaxVoiceClone(endpointId) ? 10 : 3;
 }
 
+/** Apply ElevenLabs ×5 then minimum 10 credits (when charge > 0). */
+function applyVoiceCreditRules(credits: number, endpointId?: string | null): number {
+    if (credits <= 0) return 0;
+    let next = credits;
+    if (isElevenLabsVoice(endpointId)) {
+        next *= ELEVENLABS_CREDIT_MULTIPLIER;
+    }
+    if (next < MIN_VOICE_CREDITS) {
+        next = MIN_VOICE_CREDITS;
+    }
+    return next;
+}
+
 /**
  * Mirror of VoiceGenerationCostEstimator.
  * Clone MiniMax: $1.50/request + $0.30/1k preview chars.
@@ -135,12 +157,12 @@ export function estimateVoiceCredits(
         const previewChars = Math.max(chars, 1);
         const previewUsd = (previewChars / 1000) * MINIMAX_PREVIEW_PER_1000_CHARS_USD;
         const falCostUsd = Math.round((cloneFee + previewUsd) * 1e6) / 1e6;
-        const credits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
+        const baseCredits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
 
         return {
             falCostUsd,
             billableUnits: 1,
-            credits,
+            credits: applyVoiceCreditRules(baseCredits, endpointId),
             mode: 'minimax_voice_clone',
             sampleSeconds,
         };
@@ -176,12 +198,12 @@ export function estimateVoiceCredits(
     }
 
     falCostUsd = Math.round(falCostUsd * 1e6) / 1e6;
-    const credits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
+    const baseCredits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
 
     return {
         falCostUsd,
         billableUnits,
-        credits,
+        credits: applyVoiceCreditRules(baseCredits, endpointId),
         mode,
         sampleSeconds,
     };

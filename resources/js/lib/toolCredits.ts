@@ -44,6 +44,17 @@ const DEFAULT_CONFIG: CreditsConfig = {
     usd_per_credit: 0.01,
 };
 
+/** User-facing credit floor (mirror ToolGenerationCostEstimator). */
+const MIN_TOOL_CREDITS = 45;
+
+function toolCreditsFromFalUsd(falCostUsd: number, config: CreditsConfig = DEFAULT_CONFIG): number {
+    const credits = creditsFromFalUsd(falCostUsd, config);
+    if (credits > 0 && credits < MIN_TOOL_CREDITS) {
+        return MIN_TOOL_CREDITS;
+    }
+    return credits;
+}
+
 const RES_DIMS: Record<string, [number, number]> = {
     '360p': [640, 360],
     '480p': [854, 480],
@@ -152,7 +163,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(megapixels * unitPrice);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: round6(megapixels),
             unit,
         };
@@ -164,7 +175,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(blocks * unitPrice);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: blocks,
             unit,
         };
@@ -175,7 +186,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(minutes * unitPrice);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: round6(minutes),
             unit,
         };
@@ -185,7 +196,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(duration * unitPrice);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: duration,
             unit,
         };
@@ -197,7 +208,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(unitPrice * multiplier);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: multiplier,
             unit: 'video',
         };
@@ -211,7 +222,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(videoSeconds * unitPrice);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: round6(videoSeconds),
             unit: 'video_seconds_input_fps',
         };
@@ -224,7 +235,7 @@ export function estimateToolCredits(
         const falCostUsd = round6(videoSeconds * unitPrice);
         return {
             falCostUsd,
-            credits: creditsFromFalUsd(falCostUsd, config),
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
             billableUnits: round6(videoSeconds),
             unit: 'video_seconds_16fps',
         };
@@ -234,7 +245,7 @@ export function estimateToolCredits(
     const falCostUsd = round6(duration * unitPrice);
     return {
         falCostUsd,
-        credits: creditsFromFalUsd(falCostUsd, config),
+        credits: toolCreditsFromFalUsd(falCostUsd, config),
         billableUnits: duration,
         unit: unit || 'seconds',
     };

@@ -12,6 +12,7 @@ use App\Services\VideoModelCapabilities;
 use App\Services\VoiceUseCaseClassifier;
 use App\Support\PublicMediaUrl;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -394,6 +395,20 @@ class DashboardController extends Controller
 
     private function loadBrands(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection
     {
+        $cacheKey = "catalog.brands.v2.{$modelsTable}.{$categoriesTable}";
+
+        /** @var list<array<string, mixed>> $cached */
+        $cached = Cache::remember(
+            $cacheKey,
+            now()->addMinutes(10),
+            fn () => $this->buildBrandsCatalog($modelsTable, $categoriesTable, $imageInputBuilder)->values()->all(),
+        );
+
+        return collect($cached);
+    }
+
+    private function buildBrandsCatalog(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection
+    {
         try {
             $categoryColumns = DB::getSchemaBuilder()->getColumnListing($categoriesTable);
             $categoriesQuery = DB::table($categoriesTable);
@@ -410,6 +425,7 @@ class DashboardController extends Controller
         $columns = DB::getSchemaBuilder()->getColumnListing($modelsTable);
         $selectCols = array_values(array_intersect($columns, [
             'id',
+            'category_id',
             'name',
             'description',
             'endpoint_id',
@@ -439,6 +455,11 @@ class DashboardController extends Controller
 
         if ($selectCols === []) {
             return collect();
+        }
+
+        // Needed for one-query grouping even if somehow omitted from intersect.
+        if (in_array('category_id', $columns, true) && ! in_array('category_id', $selectCols, true)) {
+            $selectCols[] = 'category_id';
         }
 
         $hasStatus = in_array('status', $columns, true);
@@ -483,14 +504,35 @@ class DashboardController extends Controller
                 ->groupBy('text_to_music_model_id');
         }
 
+        $categoryIds = $categories->pluck('id')->filter()->values()->all();
+        $modelsByCategory = collect();
+        if ($categoryIds !== []) {
+            $modelsQuery = DB::table($modelsTable)
+                ->whereIn('category_id', $categoryIds)
+                ->select($selectCols);
+
+            if ($hasStatus) {
+                $modelsQuery->where('status', 'active');
+            }
+
+            if ($hasImageUrl) {
+                $modelsQuery->whereNotNull('image_url')->where('image_url', '!=', '');
+            }
+
+            if ($hasSort) {
+                $modelsQuery->orderBy('sort')->orderBy('name');
+            } else {
+                $modelsQuery->orderBy('name');
+            }
+
+            $modelsByCategory = $modelsQuery->get()->groupBy('category_id');
+        }
+
         return $categories
             ->map(function ($cat) use (
-                $modelsTable,
-                $selectCols,
-                $hasStatus,
+                $modelsByCategory,
                 $hasImageUrl,
                 $hasTags,
-                $hasSort,
                 $hasSupportsAudio,
                 $hasSupportsFirstFrame,
                 $hasSupportsLastFrame,
@@ -512,26 +554,7 @@ class DashboardController extends Controller
                 $voiceClassifier,
                 $musicExamplesByModelId,
             ) {
-                $query = DB::table($modelsTable)
-                    ->where('category_id', $cat->id)
-                    ->select($selectCols);
-
-                if ($hasStatus) {
-                    $query->where('status', 'active');
-                }
-
-                if ($hasImageUrl) {
-                    $query->whereNotNull('image_url')->where('image_url', '!=', '');
-                }
-
-                if ($hasSort) {
-                    $query->orderBy('sort')->orderBy('name');
-                } else {
-                    $query->orderBy('name');
-                }
-
-                $models = $query
-                    ->get()
+                $models = collect($modelsByCategory->get($cat->id) ?? $modelsByCategory->get((string) $cat->id) ?? [])
                     ->map(function ($m) use (
                         $hasImageUrl,
                         $hasTags,
@@ -759,7 +782,7 @@ class DashboardController extends Controller
                     'name' => $cat->name,
                     'icon' => PublicMediaUrl::normalize(is_string($cat->icon_url ?? null) ? $cat->icon_url : null),
                     'sort' => $cat->sort ?? 999,
-                    'models' => $models,
+                    'models' => $models->all(),
                 ];
             })
             ->filter(fn ($brand) => count($brand['models']) > 0)

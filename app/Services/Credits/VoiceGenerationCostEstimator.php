@@ -4,12 +4,20 @@ namespace App\Services\Credits;
 
 /**
  * Estimates fal USD cost for text-to-speech from catalog unit / unit_price.
+ *
+ * User-facing credits:
+ *  - ElevenLabs TTS: ×5 after markup conversion
+ *  - All voice models: minimum 10 credits when charge > 0
  */
 class VoiceGenerationCostEstimator
 {
     private const MINIMAX_CLONE_FEE_USD = 1.5;
 
     private const MINIMAX_PREVIEW_PER_1000_CHARS_USD = 0.3;
+
+    private const MIN_CREDITS = 10;
+
+    private const ELEVENLABS_CREDIT_MULTIPLIER = 5;
 
     public function __construct(
         private readonly CreditCalculator $credits,
@@ -56,7 +64,7 @@ class VoiceGenerationCostEstimator
                 'clone_fee_usd' => $cloneFee,
                 'preview_usd' => round($previewUsd, 6),
                 'sample_seconds' => $sampleSeconds,
-            ]);
+            ], $endpointId);
         }
 
         if ($unitPrice <= 0 || $chars <= 0) {
@@ -64,7 +72,7 @@ class VoiceGenerationCostEstimator
                 'mode' => 'zero',
                 'character_count' => $chars,
                 'sample_seconds' => $sampleSeconds,
-            ]);
+            ], $endpointId);
         }
 
         // Per 1000 characters (most TTS models)
@@ -76,7 +84,7 @@ class VoiceGenerationCostEstimator
                 'mode' => 'per_1000_characters',
                 'character_count' => $chars,
                 'sample_seconds' => $sampleSeconds,
-            ]);
+            ], $endpointId);
         }
 
         // Per character
@@ -88,7 +96,7 @@ class VoiceGenerationCostEstimator
                 'mode' => 'per_character',
                 'character_count' => $chars,
                 'sample_seconds' => $sampleSeconds,
-            ]);
+            ], $endpointId);
         }
 
         // Flat per generation
@@ -99,7 +107,7 @@ class VoiceGenerationCostEstimator
                 'mode' => 'per_generation',
                 'character_count' => $chars,
                 'sample_seconds' => $sampleSeconds,
-            ]);
+            ], $endpointId);
         }
 
         // xAI-style compute seconds — rough TTS estimate (~15 chars/sec)
@@ -112,7 +120,7 @@ class VoiceGenerationCostEstimator
                 'character_count' => $chars,
                 'estimated_seconds' => round($seconds, 2),
                 'sample_seconds' => $sampleSeconds,
-            ]);
+            ], $endpointId);
         }
 
         // Fallback: treat price as per 1000 characters
@@ -123,7 +131,7 @@ class VoiceGenerationCostEstimator
             'mode' => 'fallback_per_1000_characters',
             'character_count' => $chars,
             'sample_seconds' => $sampleSeconds,
-        ]);
+        ], $endpointId);
     }
 
     private function isMiniMaxVoiceClone(string $endpointId): bool
@@ -131,15 +139,45 @@ class VoiceGenerationCostEstimator
         return str_contains($endpointId, 'minimax/voice-clone') || str_ends_with($endpointId, '/voice-clone');
     }
 
+    private function isElevenLabs(string $endpointId): bool
+    {
+        $id = strtolower($endpointId);
+
+        return str_contains($id, 'elevenlabs')
+            || str_contains($id, 'eleven-v')
+            || (str_contains($id, '/eleven') && str_contains($id, 'tts'));
+    }
+
     /**
      * @param  array<string, mixed>  $breakdown
      * @return array{fal_cost_usd: float, credits: int, billable_units: float, unit: string, unit_price: float, breakdown: array<string, mixed>}
      */
-    private function present(float $falCost, float $billable, string $unit, float $unitPrice, array $breakdown): array
-    {
+    private function present(
+        float $falCost,
+        float $billable,
+        string $unit,
+        float $unitPrice,
+        array $breakdown,
+        string $endpointId = '',
+    ): array {
+        $credits = $falCost > 0 ? max(1, $this->credits->fromFalUsd($falCost)) : 0;
+
+        if ($credits > 0) {
+            if ($this->isElevenLabs($endpointId)) {
+                $credits *= self::ELEVENLABS_CREDIT_MULTIPLIER;
+                $breakdown['elevenlabs_multiplier'] = self::ELEVENLABS_CREDIT_MULTIPLIER;
+            }
+
+            if ($credits < self::MIN_CREDITS) {
+                $breakdown['credits_before_floor'] = $credits;
+                $credits = self::MIN_CREDITS;
+                $breakdown['min_credits'] = self::MIN_CREDITS;
+            }
+        }
+
         return [
             'fal_cost_usd' => $falCost,
-            'credits' => max($falCost > 0 ? 1 : 0, $this->credits->fromFalUsd($falCost)),
+            'credits' => $credits,
             'billable_units' => $billable,
             'unit' => $unit,
             'unit_price' => $unitPrice,

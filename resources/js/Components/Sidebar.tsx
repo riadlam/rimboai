@@ -43,7 +43,7 @@ function RailLink({
 
     if (href) {
         return (
-            <Link href={href} onClick={onClick} className={className}>
+            <Link href={href} prefetch cacheFor="30s" onClick={onClick} className={className}>
                 {content}
             </Link>
         );

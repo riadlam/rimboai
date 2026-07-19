@@ -60,14 +60,14 @@ const PACK_META: Record<
         accent: 'border-white/10 hover:border-white/20',
         check: 'text-emerald-400',
         btn: 'border border-white/12 bg-white/[0.05] text-white hover:bg-white/[0.09]',
-        perkKeys: ['perks.allModels', 'perks.hd', 'perks.emailSupport'],
+        perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     creator: {
         taglineKey: 'taglines.creator',
         accent: 'border-sky-500/40 hover:border-sky-400/60',
         check: 'text-emerald-400',
         btn: 'bg-sky-600 text-white hover:bg-sky-500',
-        perkKeys: ['perks.allModels', 'perks.hd', 'perks.prioritySupport', 'perks.fastQueue'],
+        perkKeys: ['perks.allModels', 'perks.4k', 'perks.prioritySupport', 'perks.fastQueue', 'perks.bulk'],
     },
     pro: {
         popular: true,
@@ -98,10 +98,10 @@ const DEFAULT_META = {
 const FEATURE_ROWS: { key: string; packs: Record<string, boolean> }[] = [
     { key: 'perks.allModels', packs: { starter: true, creator: true, pro: true, business: true } },
     { key: 'perks.hd', packs: { starter: true, creator: true, pro: true, business: true } },
-    { key: 'perks.4k', packs: { starter: false, creator: false, pro: true, business: true } },
-    { key: 'perks.fastQueue', packs: { starter: false, creator: true, pro: true, business: true } },
-    { key: 'perks.bulk', packs: { starter: false, creator: false, pro: true, business: true } },
-    { key: 'perks.prioritySupport', packs: { starter: false, creator: true, pro: true, business: true } },
+    { key: 'perks.4k', packs: { starter: true, creator: true, pro: true, business: true } },
+    { key: 'perks.fastQueue', packs: { starter: true, creator: true, pro: true, business: true } },
+    { key: 'perks.bulk', packs: { starter: true, creator: true, pro: true, business: true } },
+    { key: 'perks.prioritySupport', packs: { starter: true, creator: true, pro: true, business: true } },
     { key: 'perks.dedicatedSupport', packs: { starter: false, creator: false, pro: false, business: true } },
     { key: 'perks.api', packs: { starter: false, creator: false, pro: false, business: true } },
 ];

@@ -236,6 +236,8 @@ export default function AppHeader({ onMenuClick }: Props) {
                         <>
                             <Link
                                 href="/pricing"
+                                prefetch
+                                cacheFor="30s"
                                 className="inline-flex h-7 items-center px-2 text-[11.5px] font-semibold text-white/65 transition hover:text-white sm:px-2.5 sm:text-[12.5px]"
                             >
                                 {t('pricing')}

@@ -18,8 +18,20 @@ class TrendsFeedService
      */
     public function feed(int $limit = 120): array
     {
-        $this->ensureTrendColumns();
+        $limit = max(1, min(200, $limit));
 
+        return \Illuminate\Support\Facades\Cache::remember(
+            "trends.feed.v1.{$limit}",
+            now()->addSeconds(45),
+            fn () => $this->buildFeed($limit),
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildFeed(int $limit): array
+    {
         $images = $this->publicCompletedQuery(UserImageCreation::class)
             ->limit($limit)
             ->get();
@@ -82,25 +94,14 @@ class TrendsFeedService
         return $query->orderByDesc('completed_at')->orderByDesc('id');
     }
 
+    /**
+     * Columns live in migrations — never ALTER here on request path.
+     *
+     * @deprecated No-op kept for older call sites.
+     */
     private function ensureTrendColumns(): void
     {
-        foreach (['user_image_creations', 'user_video_creations', 'user_music_creations'] as $table) {
-            if (! \Illuminate\Support\Facades\Schema::hasTable($table)) {
-                continue;
-            }
-
-            if (! \Illuminate\Support\Facades\Schema::hasColumn($table, 'uses_count')) {
-                \Illuminate\Support\Facades\Schema::table($table, function (\Illuminate\Database\Schema\Blueprint $blueprint) {
-                    $blueprint->unsignedInteger('uses_count')->default(0)->after('is_public');
-                });
-            }
-
-            if (! \Illuminate\Support\Facades\Schema::hasColumn($table, 'is_featured')) {
-                \Illuminate\Support\Facades\Schema::table($table, function (\Illuminate\Database\Schema\Blueprint $blueprint) {
-                    $blueprint->boolean('is_featured')->default(false)->after('is_public');
-                });
-            }
-        }
+        // intentionally empty
     }
 
     /**
@@ -108,7 +109,7 @@ class TrendsFeedService
      */
     private function ensureUsesCountColumns(): void
     {
-        $this->ensureTrendColumns();
+        // intentionally empty
     }
 
     /**

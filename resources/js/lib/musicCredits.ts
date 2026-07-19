@@ -5,6 +5,9 @@ const DEFAULT_CONFIG: CreditsConfig = {
     usd_per_credit: 0.01,
 };
 
+/** User-facing credit floor (mirror MusicGenerationCostEstimator). */
+const MIN_MUSIC_CREDITS = 30;
+
 export type MusicModelPricing = {
     unit_price?: number | string | null;
     unit?: string | null;
@@ -66,6 +69,10 @@ export function estimateMusicCredits(
     // Product add-on (not fal) — keep tiny if enabled
     if (options.autoEnhance) {
         credits += 1;
+    }
+
+    if (credits > 0 && credits < MIN_MUSIC_CREDITS) {
+        credits = MIN_MUSIC_CREDITS;
     }
 
     return {

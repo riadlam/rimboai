@@ -9,6 +9,8 @@ namespace App\Services\Credits;
  */
 class MusicGenerationCostEstimator
 {
+    private const MIN_CREDITS = 30;
+
     public function __construct(
         private CreditCalculator $credits,
     ) {}
@@ -53,6 +55,10 @@ class MusicGenerationCostEstimator
 
         if ($autoEnhance) {
             $credits += 1;
+        }
+
+        if ($credits > 0 && $credits < self::MIN_CREDITS) {
+            $credits = self::MIN_CREDITS;
         }
 
         return [
