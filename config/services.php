@@ -75,4 +75,8 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'gtm' => [
+        'id' => env('GTM_ID', 'GTM-PWZGLWKN'),
+    ],
+
 ];
