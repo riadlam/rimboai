@@ -1025,7 +1025,7 @@ function InnovationRail({ section }: { section: HomeInnovationSection }) {
                     {section.posts.map((post) => (
                         <Link
                             key={post.id}
-                            href={href}
+                            href={`/post/${post.id}`}
                             className="group relative w-[160px] shrink-0 cursor-pointer overflow-hidden rounded-2xl sm:w-[180px]"
                             onMouseEnter={(e) => {
                                 const v = e.currentTarget.querySelector('video');
