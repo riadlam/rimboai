@@ -112,6 +112,7 @@ class ToolWorkspaceBuilder
             'unit_price_by_resolution' => self::unitPriceByResolution(
                 (string) $row->endpoint_id,
                 (string) ($row->unit ?? 'seconds'),
+                is_array($defaults) ? $defaults : [],
             ),
             'max_duration' => $row->max_duration !== null ? (int) $row->max_duration : null,
             'ref_duration_seconds' => $row->ref_duration_seconds !== null
@@ -521,9 +522,10 @@ class ToolWorkspaceBuilder
      * Resolution-tiered Fal prices for models that bill differently by output size.
      * Keys are lowercase resolution labels; values are USD per billing unit.
      *
+     * @param  array<string, mixed>  $defaults
      * @return array<string, float>|null
      */
-    public static function unitPriceByResolution(string $endpointId, string $unit): ?array
+    public static function unitPriceByResolution(string $endpointId, string $unit, array $defaults = []): ?array
     {
         // Wan 2.7 family — $0.10/s @ 720p, $0.15/s @ 1080p
         // https://fal.ai/models/fal-ai/wan/v2.7/edit-video
@@ -553,6 +555,29 @@ class ToolWorkspaceBuilder
                 '580p' => 0.06,
                 '720p' => 0.08,
             ];
+        }
+
+        // Topaz Video Upscale — output-resolution tiers (Gaia 2 is half price).
+        // https://fal.ai/models/fal-ai/topaz/upscale/video
+        // ≤720p: $0.01/s · 720p→1080p: $0.02/s · above 1080p: $0.08/s
+        if (str_contains($endpointId, 'topaz/upscale/video')) {
+            $model = strtolower((string) ($defaults['model'] ?? ''));
+            $half = str_contains($model, 'gaia 2') || $model === 'gaia2';
+            $tiers = [
+                '720p' => 0.01,
+                '1080p' => 0.02,
+                '1440p' => 0.08,
+                '2k' => 0.08,
+                '2160p' => 0.08,
+                '4k' => 0.08,
+            ];
+            if ($half) {
+                foreach ($tiers as $key => $price) {
+                    $tiers[$key] = round($price / 2, 6);
+                }
+            }
+
+            return $tiers;
         }
 
         $flatVideo = \App\Services\Credits\ToolGenerationCostEstimator::isFlatVideoUnit($unit);

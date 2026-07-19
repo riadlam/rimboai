@@ -258,6 +258,7 @@ class ToolGenerationController extends Controller
             'unit_price_by_resolution' => \App\Services\Tools\ToolWorkspaceBuilder::unitPriceByResolution(
                 (string) $model->endpoint_id,
                 (string) ($model->unit ?? 'seconds'),
+                $defaults,
             ),
             'duration_seconds' => $billDuration,
             'duration_enums' => $durationEnums,
