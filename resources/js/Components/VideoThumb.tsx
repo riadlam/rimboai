@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent, type VideoHTMLAttributes } from 'react';
+import { bindTrendWarmVideo } from '@/lib/trendWarmVideo';
 
 type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls' | 'loop'> & {
     /** Seconds into the clip to freeze as the thumbnail frame. Defaults to first scene. */
@@ -15,6 +16,11 @@ type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'
      * while the card is in view until the user navigates away.
      */
     autoLoop?: boolean;
+    /**
+     * Registers this video for instant reuse in the trend detail modal
+     * (see LabVideoPlayer `warmKey`).
+     */
+    warmKey?: string;
 };
 
 /** Module cache so scrolling a grid of videos doesn't re-capture the same first frame. */
@@ -60,6 +66,7 @@ export default function VideoThumb({
     playOnHover = true,
     autoPreviewSeconds,
     autoLoop = false,
+    warmKey,
     muted = true,
     playsInline = true,
     preload = 'auto',
@@ -69,11 +76,13 @@ export default function VideoThumb({
     ...rest
 }: Props) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const hostRef = useRef<HTMLDivElement>(null);
     const rootRef = useRef<HTMLDivElement>(null);
     const framedRef = useRef(false);
     const [frameReady, setFrameReady] = useState(false);
     const [playing, setPlaying] = useState(false);
     const [inView, setInView] = useState(false);
+    const [lifted, setLifted] = useState(false);
     const [capturedPoster, setCapturedPoster] = useState<string | null>(() =>
         src && !poster ? framePosterCache.get(src) ?? null : null,
     );
@@ -93,8 +102,23 @@ export default function VideoThumb({
         framedRef.current = false;
         setFrameReady(false);
         setPlaying(false);
+        setLifted(false);
         setCapturedPoster(src && !poster ? framePosterCache.get(src) ?? null : null);
     }, [src, seekTo, poster]);
+
+    useEffect(() => {
+        if (!warmKey || !src) return;
+        const el = videoRef.current;
+        const host = hostRef.current;
+        if (!el || !host) return;
+        return bindTrendWarmVideo(warmKey, el, host, {
+            onLift: () => setLifted(true),
+            onRestore: () => {
+                setLifted(false);
+                setPlaying(true);
+            },
+        });
+    }, [warmKey, src, previewMode]);
 
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;
@@ -230,8 +254,8 @@ export default function VideoThumb({
         );
     }
 
-    const showPoster = Boolean(effectivePoster) && !playing && !previewMode;
-    const showShimmer = !effectivePoster && !frameReady && !playing;
+    const showPoster = Boolean(effectivePoster) && ((!playing && !previewMode) || lifted);
+    const showShimmer = !effectivePoster && !frameReady && !playing && !lifted;
 
     return (
         <div ref={rootRef} className={`relative overflow-hidden bg-zinc-900 ${className}`}>
@@ -251,50 +275,52 @@ export default function VideoThumb({
                 />
             )}
 
-            <video
-                ref={videoRef}
-                key={previewMode ? src : framedSrc}
-                src={previewMode ? src : framedSrc}
-                poster={effectivePoster}
-                muted={muted}
-                playsInline={playsInline}
-                loop={autoLoop}
-                preload={preload}
-                className={`absolute inset-0 size-full ${fit} transition-opacity duration-200 ${
-                    playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
-                }`}
-                onLoadedMetadata={handleLoadedMetadata}
-                onLoadedData={(e) => freezeAt(e.currentTarget)}
-                onCanPlay={(e) => freezeAt(e.currentTarget)}
-                onTimeUpdate={handleTimeUpdate}
-                onEnded={handleEnded}
-                onMouseEnter={(e) => {
-                    if (playOnHover) {
-                        void e.currentTarget
-                            .play()
-                            .then(() => setPlaying(true))
-                            .catch(() => undefined);
-                    }
-                    onMouseEnter?.(e);
-                }}
-                onMouseLeave={(e) => {
-                    if (playOnHover) {
-                        const video = e.currentTarget;
-                        video.pause();
-                        setPlaying(false);
-                        if (Number.isFinite(video.duration) && video.duration > 0) {
-                            const target = Math.min(Math.max(0.05, seekTo), Math.max(0.05, video.duration - 0.05));
-                            try {
-                                video.currentTime = target;
-                            } catch {
-                                /* ignore */
+            <div ref={hostRef} className={`absolute inset-0 ${lifted ? 'invisible' : ''}`}>
+                <video
+                    ref={videoRef}
+                    key={previewMode ? src : framedSrc}
+                    src={previewMode ? src : framedSrc}
+                    poster={effectivePoster}
+                    muted={muted}
+                    playsInline={playsInline}
+                    loop={autoLoop}
+                    preload={preload}
+                    className={`absolute inset-0 size-full ${fit} transition-opacity duration-200 ${
+                        playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onLoadedData={(e) => freezeAt(e.currentTarget)}
+                    onCanPlay={(e) => freezeAt(e.currentTarget)}
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={handleEnded}
+                    onMouseEnter={(e) => {
+                        if (playOnHover) {
+                            void e.currentTarget
+                                .play()
+                                .then(() => setPlaying(true))
+                                .catch(() => undefined);
+                        }
+                        onMouseEnter?.(e);
+                    }}
+                    onMouseLeave={(e) => {
+                        if (playOnHover) {
+                            const video = e.currentTarget;
+                            video.pause();
+                            setPlaying(false);
+                            if (Number.isFinite(video.duration) && video.duration > 0) {
+                                const target = Math.min(Math.max(0.05, seekTo), Math.max(0.05, video.duration - 0.05));
+                                try {
+                                    video.currentTime = target;
+                                } catch {
+                                    /* ignore */
+                                }
                             }
                         }
-                    }
-                    onMouseLeave?.(e);
-                }}
-                {...rest}
-            />
+                        onMouseLeave?.(e);
+                    }}
+                    {...rest}
+                />
+            </div>
         </div>
     );
 }

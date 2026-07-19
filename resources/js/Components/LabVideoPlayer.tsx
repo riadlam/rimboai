@@ -1,5 +1,6 @@
 import Plyr from 'plyr';
 import { useEffect, useRef } from 'react';
+import { claimTrendWarmVideo, restoreTrendWarmVideo } from '@/lib/trendWarmVideo';
 import 'plyr/dist/plyr.css';
 
 type Props = {
@@ -9,9 +10,14 @@ type Props = {
     autoPlay?: boolean;
     /** When true, clip loops until the user pauses. */
     loop?: boolean;
-    /** Muted teaser: play from 0 then pause at this second (user Play continues full clip). Ignored when `loop` is set. */
+    /** Muted teaser: play from 0 then pause at this second (false Play continues full clip). Ignored when `loop` is set. */
     previewSeconds?: number;
     objectFit?: 'cover' | 'contain';
+    /**
+     * When set, prefer adopting an already-buffered card <video> registered
+     * under this key (instant open — no network reload).
+     */
+    warmKey?: string;
 };
 
 /**
@@ -27,20 +33,61 @@ export default function LabVideoPlayer({
     loop = false,
     previewSeconds,
     objectFit = 'contain',
+    warmKey,
 }: Props) {
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const mountRef = useRef<HTMLDivElement>(null);
+    const fallbackVideoRef = useRef<HTMLVideoElement>(null);
     const playerRef = useRef<Plyr | null>(null);
     const previewDoneRef = useRef(false);
+    const adoptedRef = useRef<HTMLVideoElement | null>(null);
 
     const teaserSeconds = loop ? undefined : previewSeconds;
     const shouldAutoplay = Boolean(teaserSeconds) || autoPlay || loop;
 
     useEffect(() => {
-        const el = videoRef.current;
-        if (!el) return;
+        const mount = mountRef.current;
+        if (!mount) return;
 
         previewDoneRef.current = false;
         playerRef.current?.destroy();
+        playerRef.current = null;
+
+        let el: HTMLVideoElement | null = null;
+        let adopted: HTMLVideoElement | null = null;
+
+        if (warmKey) {
+            adopted = claimTrendWarmVideo(warmKey);
+        }
+
+        if (adopted) {
+            // Keep the React-owned fallback node mounted but hidden.
+            if (fallbackVideoRef.current) {
+                fallbackVideoRef.current.style.display = 'none';
+                fallbackVideoRef.current.removeAttribute('src');
+                fallbackVideoRef.current.querySelectorAll('source').forEach((s) => s.removeAttribute('src'));
+                fallbackVideoRef.current.load();
+            }
+            adopted.className = `h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`;
+            adopted.poster = poster || adopted.poster || '';
+            adopted.playsInline = true;
+            adopted.loop = loop;
+            adopted.muted = shouldAutoplay;
+            if (adopted.srcObject) {
+                adopted.srcObject = null;
+            }
+            mount.appendChild(adopted);
+            el = adopted;
+            adoptedRef.current = adopted;
+        } else {
+            el = fallbackVideoRef.current;
+            adoptedRef.current = null;
+            if (el) {
+                el.style.display = '';
+            }
+        }
+
+        if (!el) return;
+
         playerRef.current = new Plyr(el, {
             controls: [
                 'play-large',
@@ -94,14 +141,21 @@ export default function LabVideoPlayer({
             player.off('play', onPlay);
             player.destroy();
             playerRef.current = null;
+
+            const borrowed = adoptedRef.current;
+            adoptedRef.current = null;
+            if (borrowed) {
+                // Plyr may have wrapped/moved the node — ensure we restore the media element itself.
+                restoreTrendWarmVideo(borrowed);
+            }
         };
-    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay]);
+    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay, objectFit, warmKey, poster]);
 
     return (
-        <div className={`lab-plyr h-full w-full overflow-hidden rounded-[5px] bg-black ${className}`}>
+        <div ref={mountRef} className={`lab-plyr h-full w-full overflow-hidden rounded-[5px] bg-black ${className}`}>
             <video
-                ref={videoRef}
-                key={src}
+                ref={fallbackVideoRef}
+                key={warmKey ? `${warmKey}-fallback` : src}
                 className={`h-full w-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
                 playsInline
                 loop={loop}

@@ -3,10 +3,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
+import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
 import type { Brand, PageProps, Tool } from '@/types';
 import { TemplateDetailModal, type TrendTemplate } from '@/Pages/Trends';
 import type { InnovationPost } from '@/data/innovationPrompts';
+import { trendWarmKey } from '@/lib/trendWarmVideo';
 
 type HomeInnovationSection = {
     slug: string;
@@ -956,15 +958,13 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
                         >
                             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014]">
                                 {item.coverType === 'video' ? (
-                                    <video
+                                    <VideoThumb
                                         src={item.video_url || item.cover}
                                         poster={item.thumbnail_url || undefined}
-                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                        muted
-                                        loop
-                                        playsInline
-                                        autoPlay
-                                        preload="auto"
+                                        warmKey={trendWarmKey(item.id, item.video_url || item.cover)}
+                                        playOnHover={false}
+                                        autoLoop
+                                        className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-105"
                                     />
                                 ) : (
                                     <img
@@ -974,7 +974,7 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
                                         loading="lazy"
                                     />
                                 )}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
                                 {item.featured && (
                                     <div className="absolute start-3 top-3 inline-flex items-center rounded-md bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
                                         <svg className="me-1 h-3 w-3 fill-current" viewBox="0 0 24 24">

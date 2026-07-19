@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import VideoThumb from '@/Components/VideoThumb';
+import { trendWarmKey } from '@/lib/trendWarmVideo';
 import type { PageProps } from '@/types';
 
 export type TrendTemplate = {
@@ -387,6 +388,7 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
                         <VideoThumb
                             src={videoSrc}
                             poster={videoPoster}
+                            warmKey={trendWarmKey(tmpl.id, videoSrc)}
                             playOnHover={false}
                             autoLoop
                             className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
@@ -477,6 +479,8 @@ export function TemplateDetailModal({
     const samples = tmpl.samples.length ? tmpl.samples : [tmpl.cover];
     const activeSrc = samples[Math.min(activeSample, samples.length - 1)] || tmpl.cover;
     const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
+    const videoSrc = tmpl.video_url || tmpl.cover || '';
+    const warmKey = showVideo ? trendWarmKey(tmpl.id, videoSrc) : undefined;
 
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 767px)');
@@ -496,8 +500,9 @@ export function TemplateDetailModal({
             {showVideo ? (
                 <div className="size-full">
                     <LabVideoPlayer
-                        src={tmpl.video_url || tmpl.cover}
+                        src={videoSrc}
                         poster={tmpl.thumbnail_url || undefined}
+                        warmKey={warmKey}
                         loop
                         autoPlay
                         objectFit={isMobile ? 'contain' : 'cover'}
