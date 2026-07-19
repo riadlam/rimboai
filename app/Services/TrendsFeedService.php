@@ -501,7 +501,7 @@ class TrendsFeedService
             'cover' => $cover,
             'coverType' => 'image',
             'samples' => $samples ?: [$cover],
-            'description' => trim((string) $creation->prompt) ?: 'Community image creation',
+            'description' => 'Community image creation',
             'prompt' => (string) ($creation->prompt ?? ''),
             'aspect' => $settings['aspect'] ?? '1:1',
             'resolution' => $settings['resolution'] ?? '1K',
@@ -553,7 +553,7 @@ class TrendsFeedService
             'video_url' => $videoUrl,
             'thumbnail_url' => $creation->thumbnail_url ?: $creation->result_preview_url,
             'samples' => $samples ?: array_values(array_filter([$cover, $videoUrl])),
-            'description' => trim((string) $creation->prompt) ?: 'Community video creation',
+            'description' => 'Community video creation',
             'prompt' => (string) ($creation->prompt ?? ''),
             'aspect' => $creation->aspect_ratio ?? ($settings['aspect'] ?? '16:9'),
             'resolution' => $creation->resolution ?? ($settings['resolution'] ?? '720p'),
@@ -585,7 +585,7 @@ class TrendsFeedService
         } else {
             $title = trim((string) ($creation->title ?: ''));
             if ($title === '') {
-                $title = $this->titleFromPrompt($creation->prompt, 'Track');
+                $title = 'Track';
             }
         }
 
@@ -596,7 +596,7 @@ class TrendsFeedService
             'coverType' => 'audio',
             'audio_url' => $audioUrl,
             'samples' => array_values(array_filter([$cover])),
-            'description' => trim((string) ($creation->prompt ?: $creation->lyrics)) ?: 'Community music creation',
+            'description' => 'Community music creation',
             'prompt' => (string) ($creation->prompt ?? ''),
             'lyrics' => $creation->lyrics,
             'aspect' => null,
@@ -651,11 +651,7 @@ class TrendsFeedService
 
     private function trendDisplayTitle(Model $creation, string $fallback): string
     {
-        return $this->manualTrendTitle($creation)
-            ?? $this->titleFromPrompt(
-                is_string($creation->prompt ?? null) ? $creation->prompt : null,
-                $fallback,
-            );
+        return $this->manualTrendTitle($creation) ?? $fallback;
     }
 
     /**
@@ -673,16 +669,6 @@ class TrendsFeedService
         }
 
         return array_values(array_unique($urls));
-    }
-
-    private function titleFromPrompt(?string $prompt, string $fallback): string
-    {
-        $text = trim((string) $prompt);
-        if ($text === '') {
-            return $fallback;
-        }
-
-        return Str::limit($text, 48, '…');
     }
 
     private function avatarUrl(string $name): string

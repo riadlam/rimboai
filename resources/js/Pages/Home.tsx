@@ -971,8 +971,7 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
                                     {t('creditsLabel', { count: item.credits })}
                                 </div>
                                 <div className="absolute inset-x-0 bottom-0 p-4">
-                                    <h3 className="mb-1 line-clamp-1 text-sm font-semibold text-white">{item.name}</h3>
-                                    <p className="line-clamp-2 text-xs text-white/60">{item.description || item.creator}</p>
+                                    <h3 className="line-clamp-2 text-sm font-semibold text-white">{item.name}</h3>
                                 </div>
                             </div>
                         </button>
