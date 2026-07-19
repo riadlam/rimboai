@@ -484,13 +484,18 @@ class VideoToolsModelsSeeder extends Seeder
                 'name' => 'Topaz Gaia 2 (Animation)',
                 'description' => 'Topaz Gaia 2 — a 2× model built specifically for animation & motion graphics, preserving hand-drawn line work without interpolation artifacts.',
                 'unit' => 'seconds',
-                // Gaia 2 is half Topaz price — unitPriceByResolution halves when model=Gaia 2
-                'unit_price' => 0.005,
-                'ref_cost_usd' => 0.005 * $s,
+                // Gaia 2 is half Topaz price — unitPriceByResolution halves when model=Gaia 2.
+                // Default output tier 1440p: 2× upscale from typical ~720p anime/phone clips.
+                'unit_price' => 0.04,
+                'ref_cost_usd' => 0.04 * $s,
                 'max_duration' => 120,
-                'enums' => ['2x'],
+                'enums' => ['720p', '1080p', '1440p', '2160p'],
                 'is_primary' => true,
-                'defaults' => ['model' => 'Gaia 2', 'upscale_factor' => 2],
+                'defaults' => [
+                    'model' => 'Gaia 2',
+                    'upscale_factor' => 2,
+                    'resolution' => '1440p',
+                ],
                 'tags' => ['anime', 'enhance', 'topaz', 'gaia', 'primary'],
             ],
             [

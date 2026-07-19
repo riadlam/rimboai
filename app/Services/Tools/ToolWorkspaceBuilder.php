@@ -195,7 +195,7 @@ class ToolWorkspaceBuilder
                 ],
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p', '1440p', '2160p']),
             ],
-            // Anime enhancer primary is Topaz (scale) — no resolution UI
+            // Anime enhancer — Strength + output resolution (Topaz Gaia 2 / SeedVR)
             'anime-video-enhancer' => [
                 [
                     'type' => 'slider',
@@ -206,6 +206,7 @@ class ToolWorkspaceBuilder
                     'step' => 0.05,
                     'default' => (float) ($defaults['noise_scale'] ?? $defaults['recover_detail'] ?? 0.5),
                 ],
+                $this->resolutionControl($enums, $defaults, ['720p', '1080p', '1440p', '2160p']),
             ],
             // 3️⃣ Lip Sync AI — Sync Mode
             'lip-sync' => [
