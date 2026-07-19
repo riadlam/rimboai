@@ -155,9 +155,13 @@ export function buildUseLastFrameDraft(source: LabReuseSource, frameUrl: string)
 
 /**
  * Capture the last visible frame of a result video as a JPEG File.
+ * Runs only when the user clicks "Continue from last frame" — never touches
+ * the on-screen preview player (which streams the CDN URL directly).
  *
- * Prefer the proven same-origin proxy download (works without ffmpeg on shared hosts).
- * Optional server ffmpeg extract is tried first when available (faster on large clips).
+ * Strategy (on-demand only):
+ * 1) Optional server ffmpeg when available
+ * 2) Hidden <video> on Range-capable /lab/asset-fetch (seek near EOS — no full download)
+ * 3) Fallback: full proxy download → seek
  */
 export async function captureVideoLastFrameFile(
     videoUrl: string,
@@ -175,7 +179,7 @@ export async function captureVideoLastFrameFile(
         return err instanceof Error ? err : new Error('Frame capture failed');
     };
 
-    // 1) Optional server ffmpeg (skipped quickly with 501 when missing — your shared host).
+    // 1) Optional server ffmpeg (skipped quickly with 501 when missing).
     try {
         const file = await fetchLastFrameFromServer(videoUrl, base, opts?.signal);
         if (file) return file;
@@ -183,7 +187,15 @@ export async function captureVideoLastFrameFile(
         if (opts?.signal?.aborted) throw friendly(err);
     }
 
-    // 2) Original path that worked before: proxy-download full video → seek last frame.
+    // 2) Hidden video + HTTP Range via same-origin proxy (does not affect preview loading).
+    try {
+        const blob = await grabLastFrameBlob(resolveFetchUrl(videoUrl), opts?.signal);
+        return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
+    } catch (err) {
+        if (opts?.signal?.aborted) throw friendly(err);
+    }
+
+    // 3) Fallback: download full video through proxy, then seek.
     try {
         const videoFile = await fetchUrlAsFile(videoUrl, 'video', 'source.mp4', opts?.signal);
         const objectUrl = URL.createObjectURL(videoFile);
@@ -193,14 +205,6 @@ export async function captureVideoLastFrameFile(
         } finally {
             URL.revokeObjectURL(objectUrl);
         }
-    } catch (err) {
-        if (opts?.signal?.aborted) throw friendly(err);
-    }
-
-    // 3) Seek via <video> on the Range-capable proxy (no Blob download first).
-    try {
-        const blob = await grabLastFrameBlob(resolveFetchUrl(videoUrl), opts?.signal);
-        return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
     } catch (err) {
         throw friendly(err);
     }
@@ -425,123 +429,6 @@ function resolveFetchUrl(raw: string): string {
 /** Same-origin URL for remote fal CDN assets (avoids CORS / tainted canvas). */
 export function sameOriginMediaUrl(raw: string): string {
     return resolveFetchUrl(raw);
-}
-
-/**
- * Grab the last frame from an already-loaded <video> (preferred on shared hosts).
- * Video must be same-origin (or CORS-enabled) or canvas export will fail.
- */
-export async function captureLastFrameFromVideoElement(
-    video: HTMLVideoElement,
-    opts?: { name?: string; signal?: AbortSignal },
-): Promise<File> {
-    const blob = await grabFrameNearEndFromVideo(video, opts?.signal);
-    const base = (opts?.name || 'last-frame').replace(/\.[^.]+$/, '');
-    return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
-}
-
-function grabFrameNearEndFromVideo(video: HTMLVideoElement, signal?: AbortSignal): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
-            reject(new DOMException('Aborted', 'AbortError'));
-            return;
-        }
-
-        const previousTime = video.currentTime;
-        const wasPaused = video.paused;
-        let settled = false;
-
-        const cleanup = () => {
-            signal?.removeEventListener('abort', onAbort);
-            video.removeEventListener('seeked', onSeeked);
-            video.removeEventListener('error', onError);
-        };
-
-        const fail = (err: unknown) => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            try {
-                video.currentTime = previousTime;
-            } catch {
-                /* ignore */
-            }
-            if (!wasPaused) {
-                void video.play().catch(() => undefined);
-            }
-            reject(err instanceof Error ? err : new Error('Frame capture failed'));
-        };
-
-        const succeed = (blob: Blob) => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            try {
-                video.currentTime = previousTime;
-            } catch {
-                /* ignore */
-            }
-            if (!wasPaused) {
-                void video.play().catch(() => undefined);
-            }
-            resolve(blob);
-        };
-
-        const onAbort = () => fail(new DOMException('Aborted', 'AbortError'));
-        const onError = () => fail(new Error('Could not seek video for frame capture'));
-
-        const onSeeked = () => {
-            try {
-                video.pause();
-                const w = video.videoWidth || 1280;
-                const h = video.videoHeight || 720;
-                if (w < 2 || h < 2) {
-                    fail(new Error('Invalid video dimensions'));
-                    return;
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    fail(new Error('Canvas unavailable'));
-                    return;
-                }
-                ctx.drawImage(video, 0, 0, w, h);
-                canvas.toBlob(
-                    (blob) => {
-                        if (!blob || blob.size === 0) {
-                            fail(new Error('Empty frame (video may be CORS-protected)'));
-                            return;
-                        }
-                        succeed(blob);
-                    },
-                    'image/jpeg',
-                    0.92,
-                );
-            } catch (err) {
-                fail(err);
-            }
-        };
-
-        signal?.addEventListener('abort', onAbort, { once: true });
-        video.addEventListener('seeked', onSeeked, { once: true });
-        video.addEventListener('error', onError, { once: true });
-
-        const duration = Number.isFinite(video.duration) ? video.duration : 0;
-        const target = duration > 0.12 ? Math.max(0, duration - 0.08) : 0;
-
-        try {
-            video.pause();
-            if (Math.abs(video.currentTime - target) < 0.04 && video.readyState >= 2) {
-                onSeeked();
-            } else {
-                video.currentTime = target;
-            }
-        } catch (err) {
-            fail(err);
-        }
-    });
 }
 
 async function fetchUrlAsFile(

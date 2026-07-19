@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import LabVideoPlayer, { type LabVideoPlayerHandle } from '@/Components/LabVideoPlayer';
+import { useEffect, useState, type ReactNode } from 'react';
+import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 
@@ -35,7 +35,6 @@ type Props = {
     onDelete?: (ids: string[]) => void;
     onReuseSettings?: (image: ImageLabPreviewItem) => void;
     onUseResult?: (image: ImageLabPreviewItem) => void;
-    /** Optional pre-captured frame from the on-screen player (preferred). */
     onUseLastFrame?: (image: ImageLabPreviewItem, frameFile?: File) => void | Promise<void>;
     /** Tools: hide prompt block in generation details */
     hidePrompt?: boolean;
@@ -87,7 +86,6 @@ export default function ImageLabPreviewModal({
     const [reusing, setReusing] = useState(false);
     const [capturingFrame, setCapturingFrame] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
-    const videoPlayerRef = useRef<LabVideoPlayerHandle>(null);
 
     const isVideo =
         image.method === 'text-to-video' ||
@@ -137,19 +135,10 @@ export default function ImageLabPreviewModal({
         if (!onUseLastFrame || reusing || capturingFrame || !mediaUrl || !isVideo) return;
         setCapturingFrame(true);
         try {
-            let frameFile: File | undefined;
-            // Option 1: grab from the video already playing in this modal (no re-download).
-            try {
-                frameFile = await videoPlayerRef.current?.captureLastFrameFile(`last-frame-${image.id}`);
-            } catch {
-                frameFile = undefined;
-            }
-            // Fallback: proxy download / server extract.
-            if (!frameFile) {
-                frameFile = await captureVideoLastFrameFile(mediaUrl, {
-                    name: `last-frame-${image.id}`,
-                });
-            }
+            // Capture only on click — never proxy the preview player (keeps playback fast).
+            const frameFile = await captureVideoLastFrameFile(mediaUrl, {
+                name: `last-frame-${image.id}`,
+            });
             await onUseLastFrame(image, frameFile);
             onClose();
         } catch {
@@ -240,10 +229,8 @@ export default function ImageLabPreviewModal({
                     >
                         {isVideo ? (
                             <LabVideoPlayer
-                                ref={videoPlayerRef}
                                 src={mediaUrl}
                                 poster={image.src !== mediaUrl ? image.src : undefined}
-                                sameOriginProxy
                             />
                         ) : (
                             <img
