@@ -39,8 +39,8 @@ class VoiceCloneModelSeeder extends Seeder
 
         $now = now();
         $categories = [
-            'MiniMax' => ['sort' => 20],
-            'Chatterbox' => ['sort' => 55],
+            'MiniMax' => ['sort' => 20, 'icon_url' => '/storage/ai_icons/minimax-color.svg'],
+            'Chatterbox' => ['sort' => 55, 'icon_url' => '/storage/ai_icons/chatterbox.png'],
         ];
 
         $categoryIds = [];
@@ -48,7 +48,7 @@ class VoiceCloneModelSeeder extends Seeder
             $values = $this->filterColumns('text_to_voice_categories', [
                 'name' => $name,
                 'sort' => $meta['sort'],
-                'icon_url' => null,
+                'icon_url' => $meta['icon_url'] ?? null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -67,6 +67,7 @@ class VoiceCloneModelSeeder extends Seeder
                 'unit' => 'generations',
                 'unit_price' => 1.5,
                 'tags' => ['voice-clone', 'sample-audio', 'popular', 'multilingual'],
+                'image_url' => '/storage/ai_icons/minimax-color.svg',
             ],
             [
                 // Shown in the model picker as the Chatterbox entry; language dropdown switches endpoint.
@@ -78,6 +79,7 @@ class VoiceCloneModelSeeder extends Seeder
                 'unit' => '1000 characters',
                 'unit_price' => 0.025,
                 'tags' => ['voice-clone', 'sample-audio', 'expressive', 'popular', 'multilingual', 'arabic'],
+                'image_url' => '/storage/ai_icons/chatterbox.png',
             ],
             [
                 // Sibling endpoint selected via language = English (hidden from picker when multilingual exists).
@@ -89,17 +91,19 @@ class VoiceCloneModelSeeder extends Seeder
                 'unit' => '1000 characters',
                 'unit_price' => 0.025,
                 'tags' => ['voice-clone', 'sample-audio', 'expressive', 'english-only'],
+                'image_url' => '/storage/ai_icons/chatterbox.png',
             ],
         ];
 
         foreach ($models as $model) {
+            $icon = $model['image_url'] ?? '/storage/ai_icons/logo_icon_only.png';
             $values = $this->filterColumns('text_to_voice_models', [
                 'sort' => $model['sort'],
                 'endpoint_id' => $model['endpoint_id'],
                 'name' => $model['name'],
                 'description' => $model['description'],
-                'image_url' => '/storage/ai_icons/logo_icon_only.png',
-                'image_cover' => '/storage/ai_icons/logo_icon_only.png',
+                'image_url' => $icon,
+                'image_cover' => $icon,
                 'tags' => json_encode($model['tags']),
                 'status' => 'active',
                 'unit' => $model['unit'],
@@ -128,7 +132,7 @@ class VoiceCloneModelSeeder extends Seeder
         $catValues = $this->filterColumns('text_to_music_categories', [
             'name' => 'MiniMax',
             'sort' => 10,
-            'icon_url' => null,
+            'icon_url' => '/storage/ai_icons/minimax-color.svg',
             'created_at' => $now,
             'updated_at' => $now,
         ]);
@@ -140,8 +144,8 @@ class VoiceCloneModelSeeder extends Seeder
             'endpoint_id' => 'fal-ai/minimax-music/cover',
             'name' => 'MiniMax Music Cover',
             'description' => 'Upload a reference song (6s–6m) and generate a new cover matching its vocal/musical identity.',
-            'image_url' => '/storage/ai_icons/logo_icon_only.png',
-            'image_cover' => '/storage/ai_icons/logo_icon_only.png',
+            'image_url' => '/storage/ai_icons/minimax-color.svg',
+            'image_cover' => '/storage/ai_icons/minimax-color.svg',
             'tags' => json_encode(['cover', 'reference-audio', 'vocals', 'popular']),
             'status' => 'active',
             'unit' => 'generations',
