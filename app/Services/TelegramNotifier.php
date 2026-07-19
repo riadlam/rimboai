@@ -8,8 +8,12 @@ use Illuminate\Support\Facades\Log;
 /**
  * Thin wrapper around the Telegram Bot API sendMessage endpoint.
  *
- * Used by the pricing cron to report each run's result. Failures are logged
- * and swallowed so a Telegram outage never breaks the sync itself.
+ * Two bots are supported:
+ * - pricing  → TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (model pricing sync)
+ * - creations → TELEGRAM_CREATIONS_BOT_TOKEN / TELEGRAM_CREATIONS_CHAT_ID
+ *               (user creations + payments; chat falls back to TELEGRAM_CHAT_ID)
+ *
+ * Failures are logged and swallowed so Telegram outages never break the app.
  */
 class TelegramNotifier
 {
@@ -17,10 +21,36 @@ class TelegramNotifier
 
     private ?string $chatId;
 
-    public function __construct()
+    private string $channel;
+
+    public function __construct(?string $token = null, ?string $chatId = null, string $channel = 'pricing')
     {
-        $this->token = config('services.telegram.bot_token');
-        $this->chatId = config('services.telegram.chat_id');
+        $this->channel = $channel;
+        $this->token = $token ?? config('services.telegram.bot_token');
+        $this->chatId = $chatId ?? config('services.telegram.chat_id');
+    }
+
+    /** Model pricing / fal sync reports. */
+    public static function forPricing(): self
+    {
+        return new self(
+            config('services.telegram.bot_token'),
+            config('services.telegram.chat_id'),
+            'pricing',
+        );
+    }
+
+    /** User creations + token purchases. */
+    public static function forCreations(): self
+    {
+        $chatId = config('services.telegram.creations_chat_id')
+            ?: config('services.telegram.chat_id');
+
+        return new self(
+            config('services.telegram.creations_bot_token'),
+            $chatId,
+            'creations',
+        );
     }
 
     public function isConfigured(): bool
@@ -34,7 +64,10 @@ class TelegramNotifier
     public function send(string $message): bool
     {
         if (! $this->isConfigured()) {
-            Log::warning('TelegramNotifier skipped — TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing');
+            $hint = $this->channel === 'creations'
+                ? 'TELEGRAM_CREATIONS_BOT_TOKEN or TELEGRAM_CREATIONS_CHAT_ID / TELEGRAM_CHAT_ID'
+                : 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID';
+            Log::warning("TelegramNotifier [{$this->channel}] skipped — {$hint} is missing");
 
             return false;
         }
@@ -61,7 +94,7 @@ class TelegramNotifier
                 ]);
 
             if (! $response->successful()) {
-                Log::error('Telegram sendMessage failed', [
+                Log::error("Telegram [{$this->channel}] sendMessage failed", [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
@@ -71,7 +104,7 @@ class TelegramNotifier
 
             return true;
         } catch (\Throwable $e) {
-            Log::error('Telegram sendMessage error: ' . $e->getMessage());
+            Log::error("Telegram [{$this->channel}] sendMessage error: ".$e->getMessage());
 
             return false;
         }
@@ -98,7 +131,7 @@ class TelegramNotifier
                 }
                 $current = $line;
             } else {
-                $current = $current === '' ? $line : $current . "\n" . $line;
+                $current = $current === '' ? $line : $current."\n".$line;
             }
         }
 

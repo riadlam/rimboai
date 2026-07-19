@@ -45,7 +45,8 @@ class ToolGenerationCostEstimator
         }
 
         foreach ($steps as $step) {
-            if ($step + 1e-9 >= $seconds) {
+            // 50ms tolerance so 5.04s metadata doesn't snap to 6s.
+            if ($step + 0.05 >= $seconds) {
                 return (float) $step;
             }
         }
@@ -59,14 +60,30 @@ class ToolGenerationCostEstimator
     }
 
     /**
-     * Wan 2.2 family bills "video seconds" at 16fps (= num_frames / 16), not wall-clock.
+     * Wan 2.2 A14B v2v: we set num_frames at 16fps, so bill num_frames/16.
      */
-    public static function usesWan22VideoSeconds(string $endpointId): bool
+    public static function usesWan22GeneratedVideoSeconds(string $endpointId): bool
+    {
+        return str_contains(strtolower($endpointId), 'wan/v2.2-a14b/video-to-video');
+    }
+
+    /**
+     * Wan Animate Move/Replace: Fal bills (duration × input_fps) / 16 "video seconds".
+     * https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/move
+     */
+    public static function usesWan22InputFrameBilling(string $endpointId): bool
     {
         $id = strtolower($endpointId);
 
-        return str_contains($id, 'wan/v2.2-a14b/video-to-video')
-            || str_contains($id, 'wan/v2.2-14b/animate/move');
+        return str_contains($id, 'wan/v2.2-14b/animate/move')
+            || str_contains($id, 'wan/v2.2-14b/animate/replace');
+    }
+
+    /** @deprecated Use usesWan22GeneratedVideoSeconds / usesWan22InputFrameBilling */
+    public static function usesWan22VideoSeconds(string $endpointId): bool
+    {
+        return self::usesWan22GeneratedVideoSeconds($endpointId)
+            || self::usesWan22InputFrameBilling($endpointId);
     }
 
     /**
@@ -205,8 +222,25 @@ class ToolGenerationCostEstimator
             ]);
         }
 
-        // Wan 2.2: Fal video-seconds = num_frames / 16 (not wall-clock input length).
-        if (self::usesWan22VideoSeconds($endpointId)) {
+        // Wan Animate Move: Fal bills (wall_duration × input_fps) / 16.
+        // Default 30fps when client didn't measure FPS (typical phone/dance clips).
+        if (self::usesWan22InputFrameBilling($endpointId)) {
+            $inputFps = max(1.0, (float) ($options['fps'] ?? 30));
+            $inputFrames = max(1, (int) round($duration * $inputFps));
+            $videoSeconds = $inputFrames / 16.0;
+            $falCost = round($videoSeconds * $unitPrice, 6);
+
+            return $this->pack($falCost, $videoSeconds, 'video_seconds_input_fps', $unitPrice, [
+                'formula' => '(duration*input_fps)/16 * unit_price',
+                'wall_duration_seconds' => $duration,
+                'input_fps' => $inputFps,
+                'input_frames' => $inputFrames,
+                'video_seconds' => $videoSeconds,
+            ]);
+        }
+
+        // Wan 2.2 A14B v2v: we submit num_frames at 16fps → bill num_frames/16.
+        if (self::usesWan22GeneratedVideoSeconds($endpointId)) {
             $frames = self::wan22FramesForDuration($duration);
             $videoSeconds = $frames / 16.0;
             $falCost = round($videoSeconds * $unitPrice, 6);

@@ -318,10 +318,10 @@ class FalSyncPricing extends Command
      */
     private function reportToTelegram(array $data): void
     {
-        $notifier = app(TelegramNotifier::class);
+        $notifier = TelegramNotifier::forPricing();
 
         if (! $notifier->isConfigured()) {
-            $this->warn('Telegram not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) — skipping report.');
+            $this->warn('Telegram pricing bot not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) — skipping report.');
 
             return;
         }

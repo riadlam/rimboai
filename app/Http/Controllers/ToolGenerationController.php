@@ -97,6 +97,7 @@ class ToolGenerationController extends Controller
                 'model_id' => ['required', 'integer'],
                 'tool_slug' => ['required', 'string', 'max:64'],
                 'duration_seconds' => ['nullable', 'numeric', 'min:0.5', 'max:600'],
+                'fps' => ['nullable', 'numeric', 'min:1', 'max:120'],
                 'settings' => ['nullable', 'array'],
                 // 1️⃣ Upscaler
                 'settings.scale' => ['nullable', 'string', 'max:16'],
@@ -251,12 +252,20 @@ class ToolGenerationController extends Controller
 
         $billDuration = $durationSeconds;
 
+        $endpointId = (string) $model->endpoint_id;
+        $clientFps = isset($data['fps']) && is_numeric($data['fps']) ? (float) $data['fps'] : null;
+        $estimateFps = $clientFps !== null && $clientFps > 0
+            ? $clientFps
+            : (\App\Services\Credits\ToolGenerationCostEstimator::usesWan22InputFrameBilling($endpointId)
+                ? 30.0
+                : (str_contains((string) $model->unit, 'frames') ? 30.0 : 24.0));
+
         $cost = $costEstimator->estimate([
-            'endpoint_id' => $model->endpoint_id,
+            'endpoint_id' => $endpointId,
             'unit' => $model->unit,
             'unit_price' => $model->unit_price,
             'unit_price_by_resolution' => \App\Services\Tools\ToolWorkspaceBuilder::unitPriceByResolution(
-                (string) $model->endpoint_id,
+                $endpointId,
                 (string) ($model->unit ?? 'seconds'),
                 $defaults,
             ),
@@ -266,7 +275,7 @@ class ToolGenerationController extends Controller
             'resolution' => $settings['resolution']
                 ?? $built['resolution']
                 ?? ($defaults['resolution'] ?? '720p'),
-            'fps' => str_contains((string) $model->unit, 'frames') ? 30 : 24,
+            'fps' => $estimateFps,
         ]);
 
         if ((int) $cost['credits'] <= 0) {

@@ -130,7 +130,7 @@ class SofizPayFulfillmentService
         }
 
         try {
-            $notifier = app(TelegramNotifier::class);
+            $notifier = TelegramNotifier::forCreations();
             if (! $notifier->isConfigured()) {
                 return;
             }

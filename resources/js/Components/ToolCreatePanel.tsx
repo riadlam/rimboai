@@ -12,6 +12,7 @@ type FileSlot = {
     file: File | null;
     preview: string | null;
     duration: number | null;
+    fps: number | null;
 };
 
 type ToolCreationResponse = {
@@ -189,6 +190,7 @@ export default function ToolCreatePanel({
     );
 
     const videoDuration = slots.video?.duration ?? null;
+    const videoFps = slots.video?.fps ?? null;
     const hasDurationControl = workspace.controls.some((c) => c.key === 'duration');
     const selectedDuration =
         typeof values.duration === 'string' || typeof values.duration === 'number'
@@ -256,10 +258,11 @@ export default function ToolCreatePanel({
                         : typeof values.scale === 'string'
                           ? undefined
                           : '720p',
+                fps: videoFps && videoFps > 0 ? videoFps : undefined,
             },
             creditsConfig,
         );
-    }, [activeBilling, billDuration, values.resolution, values.scale, creditsConfig]);
+    }, [activeBilling, billDuration, values.resolution, values.scale, creditsConfig, videoFps]);
 
     const requiredReady = workspace.uploads.every((u) => {
         if (!u.required) return true;
@@ -329,6 +332,7 @@ export default function ToolCreatePanel({
                 model_id: activeModelId,
                 tool_slug: workspace.tool_slug,
                 duration_seconds: billDuration,
+                fps: videoFps && videoFps > 0 ? videoFps : null,
                 settings,
                 video_url: urls.video_url ?? null,
                 image_url: urls.image_url ?? null,
@@ -382,19 +386,21 @@ export default function ToolCreatePanel({
                     file,
                     preview: URL.createObjectURL(file),
                     duration: prev[key]?.duration ?? null,
+                    fps: prev[key]?.fps ?? null,
                 },
             };
         });
 
         if (file.type.startsWith('video/')) {
-            const duration = await readMediaDuration(file);
+            const meta = await readVideoMeta(file);
             setSlots((prev) => ({
                 ...prev,
                 [key]: {
-                    ...(prev[key] ?? { file: null, preview: null, duration: null }),
+                    ...(prev[key] ?? { file: null, preview: null, duration: null, fps: null }),
                     file,
                     preview: prev[key]?.preview ?? URL.createObjectURL(file),
-                    duration,
+                    duration: meta.duration,
+                    fps: meta.fps,
                 },
             }));
         }
@@ -693,7 +699,7 @@ function initControlValues(controls: ToolControlSpec[]): Record<string, string |
 function initSlots(uploads: ToolUploadSpec[]): Record<string, FileSlot> {
     const out: Record<string, FileSlot> = {};
     for (const u of uploads) {
-        out[u.key] = { file: null, preview: null, duration: null };
+        out[u.key] = { file: null, preview: null, duration: null, fps: null };
     }
     return out;
 }
@@ -704,20 +710,24 @@ function hintFor(upload: ToolUploadSpec, t: (k: string) => string): string {
     return t('detail.uploadVideoTypes');
 }
 
-function readMediaDuration(file: File): Promise<number | null> {
+/** Duration from <video> metadata. FPS is left null (browsers rarely expose it); Animate Move defaults to 30fps. */
+function readVideoMeta(file: File): Promise<{ duration: number | null; fps: number | null }> {
     return new Promise((resolve) => {
         const url = URL.createObjectURL(file);
         const el = document.createElement('video');
         el.preload = 'metadata';
+        el.muted = true;
+        el.playsInline = true;
+
+        const finish = (duration: number | null, fps: number | null) => {
+            URL.revokeObjectURL(url);
+            resolve({ duration, fps });
+        };
+
         el.onloadedmetadata = () => {
-            const d = Number.isFinite(el.duration) ? el.duration : null;
-            URL.revokeObjectURL(url);
-            resolve(d);
+            finish(Number.isFinite(el.duration) ? el.duration : null, null);
         };
-        el.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve(null);
-        };
+        el.onerror = () => finish(null, null);
         el.src = url;
     });
 }

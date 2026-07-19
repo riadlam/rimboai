@@ -47,8 +47,12 @@ return [
     'ffmpeg_path' => env('FFMPEG_PATH'),
 
     'telegram' => [
+        // Bot 1 — model pricing sync reports
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'chat_id' => env('TELEGRAM_CHAT_ID'),
+        // Bot 2 — user creations + token purchase alerts
+        'creations_bot_token' => env('TELEGRAM_CREATIONS_BOT_TOKEN'),
+        'creations_chat_id' => env('TELEGRAM_CREATIONS_CHAT_ID'),
     ],
 
     'sofizpay' => [

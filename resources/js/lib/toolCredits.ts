@@ -26,7 +26,7 @@ export type ToolCreditOptions = {
     durationSeconds?: number;
     /** Output / target resolution when unit is megapixels */
     resolution?: string;
-    /** Assumed fps for megapixel / frames_30 billing */
+    /** Source video fps (Animate Move) or assumed fps for megapixel / frames_30 */
     fps?: number;
     /** Flat video units (PixVerse-style: doubles when duration > 5s) */
     videoLong?: boolean;
@@ -82,7 +82,8 @@ export function snapBillableDuration(
     }
 
     for (const step of steps) {
-        if (step + 1e-9 >= raw) return step;
+        // 50ms tolerance so 5.04s metadata doesn't snap to 6s.
+        if (step + 0.05 >= raw) return step;
     }
 
     const last = steps[steps.length - 1];
@@ -90,9 +91,20 @@ export function snapBillableDuration(
     return last;
 }
 
-export function usesWan22VideoSeconds(endpointId: string | null | undefined): boolean {
+export function usesWan22GeneratedVideoSeconds(endpointId: string | null | undefined): boolean {
+    return String(endpointId || '')
+        .toLowerCase()
+        .includes('wan/v2.2-a14b/video-to-video');
+}
+
+export function usesWan22InputFrameBilling(endpointId: string | null | undefined): boolean {
     const id = String(endpointId || '').toLowerCase();
-    return id.includes('wan/v2.2-a14b/video-to-video') || id.includes('wan/v2.2-14b/animate/move');
+    return id.includes('wan/v2.2-14b/animate/move') || id.includes('wan/v2.2-14b/animate/replace');
+}
+
+/** @deprecated */
+export function usesWan22VideoSeconds(endpointId: string | null | undefined): boolean {
+    return usesWan22GeneratedVideoSeconds(endpointId) || usesWan22InputFrameBilling(endpointId);
 }
 
 /** Match Lab / PHP: odd frame count in [17, 161] at 16fps. */
@@ -191,8 +203,22 @@ export function estimateToolCredits(
         };
     }
 
-    // Wan 2.2: Fal video-seconds = num_frames / 16 (not wall-clock input length).
-    if (usesWan22VideoSeconds(billing.endpoint_id)) {
+    // Wan Animate Move: Fal bills (wall_duration × input_fps) / 16.
+    if (usesWan22InputFrameBilling(billing.endpoint_id)) {
+        const inputFps = Math.max(1, options.fps ?? 30);
+        const inputFrames = Math.max(1, Math.round(duration * inputFps));
+        const videoSeconds = inputFrames / 16;
+        const falCostUsd = round6(videoSeconds * unitPrice);
+        return {
+            falCostUsd,
+            credits: creditsFromFalUsd(falCostUsd, config),
+            billableUnits: round6(videoSeconds),
+            unit: 'video_seconds_input_fps',
+        };
+    }
+
+    // Wan 2.2 A14B v2v: num_frames at 16fps.
+    if (usesWan22GeneratedVideoSeconds(billing.endpoint_id)) {
         const frames = wan22FramesForDuration(duration);
         const videoSeconds = frames / 16;
         const falCostUsd = round6(videoSeconds * unitPrice);

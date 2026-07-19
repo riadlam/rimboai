@@ -17,9 +17,12 @@ use Throwable;
  */
 class CreationTelegramNotifier
 {
-    public function __construct(
-        private readonly TelegramNotifier $telegram,
-    ) {}
+    private TelegramNotifier $telegram;
+
+    public function __construct()
+    {
+        $this->telegram = TelegramNotifier::forCreations();
+    }
 
     public function notifyStarted(User $user, string $creationType, Model $creation): void
     {
