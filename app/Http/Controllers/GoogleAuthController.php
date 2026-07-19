@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\CreationTelegramNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -77,6 +78,12 @@ class GoogleAuthController extends Controller
                 'tokens' => 50,
                 'email_verified_at' => now(),
             ]);
+
+            try {
+                app(CreationTelegramNotifier::class)->notifyNewRegistration($user, 'google');
+            } catch (Throwable $e) {
+                report($e);
+            }
         }
 
         Auth::login($user, true);

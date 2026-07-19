@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Services\CreationTelegramNotifier;
 
 class AuthController extends Controller
 {
@@ -51,6 +52,12 @@ class AuthController extends Controller
             'password' => Hash::make($data['password']),
             'tokens' => 50,
         ]);
+
+        try {
+            app(CreationTelegramNotifier::class)->notifyNewRegistration($user, 'email');
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         Auth::login($user);
         $request->session()->regenerate();

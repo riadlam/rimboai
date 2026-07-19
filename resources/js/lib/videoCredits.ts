@@ -1,9 +1,13 @@
 /**
  * Mirrors App\Services\Credits\VideoGenerationCostEstimator for live UI estimates.
  * credits = ceil( (fal_cost_usd * markup) / usd_per_credit )
+ * Floor: nothing under 55 when charge > 0.
  */
 
 import { creditsFromFalUsd, type CreditsConfig } from '@/lib/imageCredits';
+
+/** User-facing credit floor (mirror VideoGenerationCostEstimator). */
+const MIN_VIDEO_CREDITS = 55;
 
 export type VideoCreditModel = {
     endpoint_id?: string | null;
@@ -26,6 +30,13 @@ export type VideoCreditEstimate = {
     unitPrice: number;
 };
 
+function applyVideoFloor(credits: number): number {
+    if (credits > 0 && credits < MIN_VIDEO_CREDITS) {
+        return MIN_VIDEO_CREDITS;
+    }
+    return credits;
+}
+
 export function estimateVideoCredits(
     model: VideoCreditModel | null | undefined,
     options: VideoCreditOptions = {},
@@ -47,10 +58,11 @@ export function estimateVideoCredits(
     const resolutionMultiplier = resolutionMultiplierFor(endpointId, resolution);
     const billableUnits = durationSeconds;
     const falCostUsd = round6(billableUnits * unitPrice * audioMultiplier * resolutionMultiplier);
+    const baseCredits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
 
     return {
         falCostUsd,
-        credits: creditsFromFalUsd(falCostUsd, config),
+        credits: applyVideoFloor(baseCredits),
         billableUnits,
         unit: unit || 'seconds',
         unitPrice,
@@ -72,10 +84,11 @@ function estimateTokenPriced(
         pricePerThousand = 0.008;
     }
     const falCostUsd = round6((tokens / 1000) * pricePerThousand);
+    const baseCredits = falCostUsd > 0 ? Math.max(1, creditsFromFalUsd(falCostUsd, config)) : 0;
 
     return {
         falCostUsd,
-        credits: creditsFromFalUsd(falCostUsd, config),
+        credits: applyVideoFloor(baseCredits),
         billableUnits: Math.round(tokens * 10000) / 10000,
         unit: 'tokens_per_1000',
         unitPrice: pricePerThousand,

@@ -8,9 +8,13 @@ namespace App\Services\Credits;
  * Supported catalog units:
  * - seconds: duration_seconds × unit_price × multipliers
  * - tokens_per_1000: Seedance-style token billing
+ *
+ * User-facing credits: minimum 55 when charge > 0.
  */
 class VideoGenerationCostEstimator
 {
+    private const MIN_CREDITS = 55;
+
     public function __construct(private readonly CreditCalculator $credits) {}
 
     /**
@@ -50,21 +54,29 @@ class VideoGenerationCostEstimator
         $audioMultiplier = $this->audioMultiplier($endpointId, $audio);
         $resolutionMultiplier = $this->resolutionMultiplier($endpointId, $resolution);
         $falCost = round($billable * $unitPrice * $audioMultiplier * $resolutionMultiplier, 6);
+        $credits = $falCost > 0 ? max(1, $this->credits->fromFalUsd($falCost)) : 0;
+        $breakdown = [
+            'mode' => 'per_second',
+            'duration_seconds' => $durationSeconds,
+            'audio' => $audio,
+            'audio_multiplier' => $audioMultiplier,
+            'resolution' => $resolution,
+            'resolution_multiplier' => $resolutionMultiplier,
+        ];
+
+        if ($credits > 0 && $credits < self::MIN_CREDITS) {
+            $breakdown['credits_before_floor'] = $credits;
+            $credits = self::MIN_CREDITS;
+            $breakdown['min_credits'] = self::MIN_CREDITS;
+        }
 
         return [
             'fal_cost_usd' => $falCost,
-            'credits' => $this->credits->fromFalUsd($falCost),
+            'credits' => $credits,
             'billable_units' => $billable,
             'unit' => $unit ?: 'seconds',
             'unit_price' => $unitPrice,
-            'breakdown' => [
-                'mode' => 'per_second',
-                'duration_seconds' => $durationSeconds,
-                'audio' => $audio,
-                'audio_multiplier' => $audioMultiplier,
-                'resolution' => $resolution,
-                'resolution_multiplier' => $resolutionMultiplier,
-            ],
+            'breakdown' => $breakdown,
         ];
     }
 
@@ -95,24 +107,32 @@ class VideoGenerationCostEstimator
         }
 
         $falCost = round(($tokens / 1000) * $pricePerThousand, 6);
+        $credits = $falCost > 0 ? max(1, $this->credits->fromFalUsd($falCost)) : 0;
+        $breakdown = [
+            'mode' => 'tokens_per_1000',
+            'duration_seconds' => $durationSeconds,
+            'resolution' => $resolution,
+            'aspect' => $aspect,
+            'width' => $width,
+            'height' => $height,
+            'tokens' => round($tokens, 4),
+            'price_per_1000_tokens' => $pricePerThousand,
+            'formula' => '(H * W * duration * 24) / 1024 / 1000 * unit_price',
+        ];
+
+        if ($credits > 0 && $credits < self::MIN_CREDITS) {
+            $breakdown['credits_before_floor'] = $credits;
+            $credits = self::MIN_CREDITS;
+            $breakdown['min_credits'] = self::MIN_CREDITS;
+        }
 
         return [
             'fal_cost_usd' => $falCost,
-            'credits' => $this->credits->fromFalUsd($falCost),
+            'credits' => $credits,
             'billable_units' => round($tokens, 4),
             'unit' => 'tokens_per_1000',
             'unit_price' => $pricePerThousand,
-            'breakdown' => [
-                'mode' => 'tokens_per_1000',
-                'duration_seconds' => $durationSeconds,
-                'resolution' => $resolution,
-                'aspect' => $aspect,
-                'width' => $width,
-                'height' => $height,
-                'tokens' => round($tokens, 4),
-                'price_per_1000_tokens' => $pricePerThousand,
-                'formula' => '(H * W * duration * 24) / 1024 / 1000 * unit_price',
-            ],
+            'breakdown' => $breakdown,
         ];
     }
 

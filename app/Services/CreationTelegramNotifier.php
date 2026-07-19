@@ -24,6 +24,55 @@ class CreationTelegramNotifier
         $this->telegram = TelegramNotifier::forCreations();
     }
 
+    public function notifyNewRegistration(User $user, string $via = 'email'): void
+    {
+        if (! $this->telegram->isConfigured()) {
+            return;
+        }
+
+        try {
+            $user->refresh();
+            $viaLabel = match (strtolower($via)) {
+                'google' => 'Google',
+                'email' => 'Email / password',
+                default => $via,
+            };
+
+            $lines = [
+                '<b>🆕 New user registered</b>',
+                'Via: '.$this->e($viaLabel),
+                'ID: #'.(int) $user->getKey(),
+                'Name: '.$this->e((string) ($user->name ?? '—')),
+                'Email: '.$this->e((string) ($user->email ?? '—')),
+                'Tokens: '.number_format((int) ($user->tokens ?? 0)),
+                'Google ID: '.$this->e((string) ($user->google_id ?: '—')),
+            ];
+
+            $avatar = is_string($user->avatar) ? trim($user->avatar) : '';
+            if ($avatar !== '') {
+                $lines[] = 'Avatar: '.$this->e($this->truncate($avatar, 200));
+            }
+
+            $created = $user->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i:s');
+            if ($created) {
+                $lines[] = 'Created: '.$this->e($created);
+            }
+
+            $ip = request()?->ip();
+            if (is_string($ip) && $ip !== '') {
+                $lines[] = 'IP: '.$this->e($ip);
+            }
+
+            $this->telegram->send(implode("\n", $lines));
+        } catch (Throwable $e) {
+            report($e);
+            Log::warning('CreationTelegramNotifier notifyNewRegistration failed', [
+                'user_id' => $user->getKey(),
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function notifyStarted(User $user, string $creationType, Model $creation): void
     {
         if (! $this->telegram->isConfigured()) {
