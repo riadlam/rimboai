@@ -14,7 +14,6 @@ class Innovation extends Model
         'prompt',
         'media_type',
         'image_url',
-        'image_urls',
         'video_url',
         'audio_url',
         'model_name',
@@ -36,7 +35,6 @@ class Innovation extends Model
     protected function casts(): array
     {
         return [
-            'image_urls' => 'array',
             'settings' => 'array',
             'is_featured' => 'boolean',
             'generate_audio' => 'boolean',
@@ -52,6 +50,32 @@ class Innovation extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'active');
+    }
+
+    /**
+     * Gallery frames — stored in settings.image_urls (existing JSON column).
+     *
+     * @return list<string>
+     */
+    public function galleryImageUrls(): array
+    {
+        $settings = is_array($this->settings) ? $this->settings : [];
+        $fromSettings = $settings['image_urls'] ?? $settings['images'] ?? [];
+        $gallery = [];
+
+        if (is_array($fromSettings)) {
+            foreach ($fromSettings as $url) {
+                if (is_string($url) && $url !== '') {
+                    $gallery[] = $url;
+                }
+            }
+        }
+
+        if ($this->image_url && ! in_array($this->image_url, $gallery, true)) {
+            array_unshift($gallery, $this->image_url);
+        }
+
+        return array_values(array_unique($gallery));
     }
 
     /**
@@ -75,18 +99,7 @@ class Innovation extends Model
         $imageMode = $this->image_mode ?: ($settings['image_mode'] ?? null);
         $stylePrompt = $this->style_prompt ?: ($settings['style'] ?? null);
 
-        $gallery = [];
-        if (is_array($this->image_urls)) {
-            foreach ($this->image_urls as $url) {
-                if (is_string($url) && $url !== '') {
-                    $gallery[] = $url;
-                }
-            }
-        }
-        if ($this->image_url && ! in_array($this->image_url, $gallery, true)) {
-            array_unshift($gallery, $this->image_url);
-        }
-        $gallery = array_values(array_unique($gallery));
+        $gallery = $this->galleryImageUrls();
         $primaryImage = $gallery[0] ?? $this->image_url;
 
         return [

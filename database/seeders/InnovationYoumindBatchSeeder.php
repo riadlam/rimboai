@@ -33,7 +33,7 @@ class InnovationYoumindBatchSeeder extends Seeder
         foreach ($this->posts() as $post) {
             $sort += 10;
             $urls = array_values(array_filter($post['image_urls'] ?? [], static fn ($u) => is_string($u) && $u !== ''));
-            $primary = $urls[0] ?? $post['image_url'];
+            $primary = $urls[0] ?? ($post['image_url'] ?? null);
 
             Innovation::query()->updateOrCreate(
                 ['slug' => $post['slug']],
@@ -43,7 +43,6 @@ class InnovationYoumindBatchSeeder extends Seeder
                     'prompt' => $post['prompt'],
                     'media_type' => 'image',
                     'image_url' => $primary,
-                    'image_urls' => $urls,
                     'video_url' => null,
                     'audio_url' => null,
                     'model_name' => self::MODEL,
@@ -56,7 +55,10 @@ class InnovationYoumindBatchSeeder extends Seeder
                     'generate_audio' => null,
                     'image_mode' => 'create',
                     'style_prompt' => null,
-                    'settings' => null,
+                    // Multi-frame gallery lives in existing settings JSON (no new column).
+                    'settings' => [
+                        'image_urls' => $urls,
+                    ],
                     'sort' => $sort,
                     'status' => 'active',
                     'is_featured' => (bool) ($post['is_featured'] ?? false),
