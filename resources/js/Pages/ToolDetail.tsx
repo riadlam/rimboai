@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import ImageLabLibrary, { type LabImage } from '@/Components/ImageLabLibrary';
 import ToolCreatePanel, { type ToolCreationStatus } from '@/Components/ToolCreatePanel';
 import { apiGet } from '@/lib/api';
+import { discardCreations } from '@/lib/discardCreations';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import type { PageProps, Tool, ToolWorkspace } from '@/types';
 
@@ -206,7 +207,24 @@ export default function ToolDetail({ tool, workspace, creditsConfig, tokenBalanc
     }, []);
 
     const deleteImages = useCallback((ids: string[]) => {
-        setImages((prev) => prev.filter((img) => !ids.includes(img.id)));
+        setImages((prev) => {
+            const targets = prev.filter((img) => ids.includes(img.id));
+            const creationIds = [
+                ...new Set(
+                    targets
+                        .map((img) => img.creationId)
+                        .filter((id): id is number => typeof id === 'number' && id > 0),
+                ),
+            ];
+            if (creationIds.length > 0) {
+                void discardCreations('video', creationIds).catch(() => undefined);
+            }
+            return prev.filter((img) => {
+                if (ids.includes(img.id)) return false;
+                if (img.creationId != null && creationIds.includes(img.creationId)) return false;
+                return true;
+            });
+        });
     }, []);
 
     const onRevealComplete = useCallback((id: string) => {

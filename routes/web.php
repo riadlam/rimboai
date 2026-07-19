@@ -39,7 +39,6 @@ Route::get('/lab', [DashboardController::class, 'lab'])->name('lab');
 Route::get('/trends', [DashboardController::class, 'trends'])->name('trends');
 Route::get('/trends/{key}', [DashboardController::class, 'showTrend'])
     ->where('key', 'image-\d+|video-\d+|music-\d+')
-    ->middleware('auth')
     ->name('trends.show');
 Route::get('/innovation', [DashboardController::class, 'innovation'])->name('innovation');
 Route::get('/post/{id}', [DashboardController::class, 'showPost'])->name('post.show');
@@ -95,6 +94,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/lab/creations', [LabCreationsController::class, 'index'])
         ->middleware('throttle:60,1')
         ->name('lab.creations.index');
+
+    // Soft-hide creations (UI delete / dismiss failed).
+    Route::post('/lab/creations/discard', [LabCreationsController::class, 'discard'])
+        ->middleware('throttle:60,1')
+        ->name('lab.creations.discard');
 
     // Batched live-status sync for active building cards (fal calls throttled server-side).
     Route::post('/lab/creations/status', [LabCreationsController::class, 'statusBatch'])

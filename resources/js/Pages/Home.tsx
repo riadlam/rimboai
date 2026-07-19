@@ -5,44 +5,52 @@ import { useTranslation } from 'react-i18next';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
 import AppLayout from '@/Layouts/AppLayout';
 import type { Brand, PageProps, Tool } from '@/types';
+import type { TrendTemplate } from '@/Pages/Trends';
+import type { InnovationPost } from '@/data/innovationPrompts';
+
+type HomeInnovationSection = {
+    slug: string;
+    name: string;
+    posts: InnovationPost[];
+};
 
 type Props = {
     tools: Tool[];
     brands?: Brand[];
+    trendTemplates?: TrendTemplate[];
+    innovationSections?: HomeInnovationSection[];
 };
 
-const SAMPLE_VIDEO = (n: string) => `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/${n}.mp4`;
-const IMG = (seed: string, w = 600, h = 750) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
-
-/** Reliable, always-available sample clip for the Video create card (no signed-URL expiry). */
-const VIDEO_CARD_SRC = SAMPLE_VIDEO('ForBiggerBlazes');
+/** Home hero demos (public disk → /storage/...). */
+const HERO_VIDEO_SRC = '/storage/ai_icons/home_page_video.mp4';
+const HERO_IMAGES_SRC = '/storage/ai_icons/gif_images.mp4';
 
 const CREATE_TYPES = [
     {
         id: 'video',
         href: '/lab?type=text-to-video',
-        media: { type: 'video' as const, src: VIDEO_CARD_SRC },
+        media: { type: 'video' as const, src: HERO_VIDEO_SRC },
         accent: 'from-[#FF6A45] to-[#E24216]',
         glow: 'rgba(255,87,51,0.5)',
     },
     {
         id: 'image',
         href: '/lab?type=text-to-image',
-        media: { type: 'image' as const, src: IMG('rimboai-image') },
+        media: { type: 'video' as const, src: HERO_IMAGES_SRC },
         accent: 'from-[#a78bfa] to-[#6d28d9]',
         glow: 'rgba(139,92,246,0.35)',
     },
     {
         id: 'voice',
         href: '/lab?type=text-to-voice',
-        media: { type: 'image' as const, src: IMG('rimboai-voice') },
+        media: { type: 'image' as const, src: '/storage/ai_icons/voice_home.webp' },
         accent: 'from-[#22d3ee] to-[#0e7490]',
         glow: 'rgba(6,182,212,0.35)',
     },
     {
         id: 'music',
         href: '/lab?type=text-to-music',
-        media: { type: 'image' as const, src: IMG('rimboai-music') },
+        media: { type: 'image' as const, src: '/storage/ai_icons/music_home.jpg' },
         accent: 'from-[#fbbf24] to-[#b45309]',
         glow: 'rgba(245,158,11,0.35)',
     },
@@ -55,38 +63,7 @@ const HERO_SPRING = { type: 'spring' as const, stiffness: 220, damping: 28, mass
 /** How long each card stays in the big slot before rotating. */
 const HERO_ROTATE_MS = 3000;
 
-const TRENDS = [
-    { id: 'gta-v-graphics', name: 'GTA V Graphics', desc: 'Turn your photos into GTA V graphics.', credits: 80, cover: IMG('gta-graphics'), coverType: 'image' as const },
-    { id: 'frozen-traffic', name: 'Frozen traffic', desc: 'Cinematic frozen-traffic template.', credits: 50, featured: true, cover: SAMPLE_VIDEO('ForBiggerBlazes'), coverType: 'video' as const },
-    { id: '180-effect', name: '180 Effect', desc: 'A 180° rotating effect preserving the scene.', credits: 150, cover: SAMPLE_VIDEO('ForBiggerJoyrides'), coverType: 'video' as const },
-    { id: 'aerial-pullback', name: 'Aerial Pullback', desc: 'Reveal scale with a dramatic pull-back.', credits: 170, featured: true, cover: SAMPLE_VIDEO('ForBiggerEscapes'), coverType: 'video' as const },
-    { id: 'flying-truck', name: 'Flying truck', desc: 'Intro of a flying truck like a boss.', credits: 600, cover: SAMPLE_VIDEO('ForBiggerMeltdowns'), coverType: 'video' as const },
-    { id: 'giant-grab', name: 'Giant Grab', desc: 'Hyper-real giant hands slide the subject.', credits: 190, cover: SAMPLE_VIDEO('ForBiggerFun'), coverType: 'video' as const },
-];
-
-const INSPIRATIONS = [
-    { t: 'Portrait with cartoon doodles', img: IMG('insp-portrait', 400, 500) },
-    { t: 'Nostalgic flip-phone display', img: IMG('insp-flip', 400, 500) },
-    { t: 'Miniature realism restoration', img: IMG('insp-mini', 400, 500) },
-    { t: 'Profile image with aspect control', img: IMG('insp-profile', 400, 500) },
-    { t: 'Brutalist documentary photo', img: IMG('insp-brutal', 400, 500) },
-    { t: 'Surreal miniature egg art', img: IMG('insp-egg', 400, 500) },
-    { t: 'F40 memorial scene', img: IMG('insp-f40', 400, 500) },
-    { t: 'Jumping car effect', img: IMG('insp-car', 400, 500) },
-];
-
-const INSPIRATIONS_2 = [
-    { t: 'Cyber-aesthetic business card', img: IMG('av-cyber', 400, 500) },
-    { t: 'Overhead selfie with black cat', img: IMG('av-cat', 400, 500) },
-    { t: 'Cinematic red-tinted portrait', img: IMG('av-red', 400, 500) },
-    { t: 'Ulzzang aesthetic portrait', img: IMG('av-ulzzang', 400, 500) },
-    { t: 'Chibi character pose', img: IMG('av-chibi', 400, 500) },
-    { t: '90s disposable camera portrait', img: IMG('av-90s', 400, 500) },
-    { t: 'Photo to vector illustration', img: IMG('av-vector', 400, 500) },
-    { t: 'Selfie in a modern kitchen', img: IMG('av-kitchen', 400, 500) },
-];
-
-export default function Home({ tools }: Props) {
+export default function Home({ tools, trendTemplates = [], innovationSections = [] }: Props) {
     const { t: ta } = useTranslation('auth');
     const { url, props } = usePage<PageProps>();
     const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
@@ -103,9 +80,10 @@ export default function Home({ tools }: Props) {
 
                     <div className="space-y-8 px-4 pb-16 pt-8 sm:px-5 sm:pt-0 lg:px-8">
                         <ToolRail tools={tools} />
-                        <TrendRail />
-                        <InspirationRail titleKey="bestSocial" items={INSPIRATIONS} />
-                        <InspirationRail titleKey="bestAvatar" items={INSPIRATIONS_2} />
+                        <TrendRail templates={trendTemplates} />
+                        {innovationSections.map((section) => (
+                            <InnovationRail key={section.slug} section={section} />
+                        ))}
                     </div>
                 </div>
             )}
@@ -671,16 +649,6 @@ function CreateCard({
                     className={`pointer-events-none absolute inset-0 opacity-0 mix-blend-overlay transition-opacity duration-500 group-hover:opacity-45 bg-gradient-to-br ${item.accent}`}
                 />
 
-                {featured && (
-                    <div className="absolute start-3 top-3 z-10 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white backdrop-blur-md">
-                        <span className="relative flex h-1.5 w-1.5">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF5733] opacity-70" />
-                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF5733]" />
-                        </span>
-                        Live preview
-                    </div>
-                )}
-
                 <div className={`absolute inset-x-0 bottom-0 ${featured ? 'p-4 sm:p-5' : compact ? 'p-2' : side ? 'flex items-center justify-between gap-2 p-3' : 'p-3'}`}>
                     <div>
                         <div className="flex items-center gap-2">
@@ -888,17 +856,6 @@ function ToolChip({
             <Link
                 href={path}
                 className="group relative block w-[148px] shrink-0 cursor-pointer sm:w-[160px] lg:w-[168px]"
-                onMouseEnter={(e) => {
-                    const v = e.currentTarget.querySelector('video');
-                    v?.play()?.catch(() => undefined);
-                }}
-                onMouseLeave={(e) => {
-                    const v = e.currentTarget.querySelector('video');
-                    if (v) {
-                        v.pause();
-                        v.currentTime = 0;
-                    }
-                }}
             >
                 <div className="relative mb-2.5 aspect-[4/5] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101014] shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[#FF5733]/40 group-hover:shadow-[0_20px_48px_-20px_rgba(255,87,51,0.45)]">
                     {label && (
@@ -918,7 +875,8 @@ function ToolChip({
                         muted
                         loop
                         playsInline
-                        preload="none"
+                        autoPlay
+                        preload="auto"
                     />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80" />
@@ -952,8 +910,17 @@ function ToolChip({
     );
 }
 
-function TrendRail() {
+function TrendRail({ templates }: { templates: TrendTemplate[] }) {
     const { t } = useTranslation('home');
+
+    if (templates.length === 0) {
+        return null;
+    }
+
+    const openTrend = (item: TrendTemplate) => {
+        router.visit(`/trends/${item.id}`);
+    };
+
     return (
         <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -964,35 +931,32 @@ function TrendRail() {
             <RailHeader title={t('creatorsTrends')} sub={t('creatorsTrendsSub')} href="/trends" />
             <div className="scrollbar-hide -mx-1 overflow-x-auto px-1 pb-2">
                 <div className="flex gap-4">
-                    {TRENDS.map((item) => (
-                        <Link
+                    {templates.map((item) => (
+                        <button
                             key={item.id}
-                            href="/trends"
-                            className="group relative w-[200px] shrink-0 cursor-pointer overflow-hidden rounded-2xl sm:w-[220px]"
-                            onMouseEnter={(e) => {
-                                const v = e.currentTarget.querySelector('video');
-                                v?.play()?.catch(() => undefined);
-                            }}
-                            onMouseLeave={(e) => {
-                                const v = e.currentTarget.querySelector('video');
-                                if (v) {
-                                    v.pause();
-                                    v.currentTime = 0;
-                                }
-                            }}
+                            type="button"
+                            onClick={() => openTrend(item)}
+                            className="group relative w-[200px] shrink-0 cursor-pointer overflow-hidden rounded-2xl text-left sm:w-[220px]"
                         >
                             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014]">
                                 {item.coverType === 'video' ? (
                                     <video
-                                        src={item.cover}
+                                        src={item.video_url || item.cover}
+                                        poster={item.thumbnail_url || undefined}
                                         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                                         muted
                                         loop
                                         playsInline
-                                        preload="none"
+                                        autoPlay
+                                        preload="auto"
                                     />
                                 ) : (
-                                    <img src={item.cover} alt={item.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                                    <img
+                                        src={item.cover}
+                                        alt={item.name}
+                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                        loading="lazy"
+                                    />
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
                                 {item.featured && (
@@ -1008,10 +972,10 @@ function TrendRail() {
                                 </div>
                                 <div className="absolute inset-x-0 bottom-0 p-4">
                                     <h3 className="mb-1 line-clamp-1 text-sm font-semibold text-white">{item.name}</h3>
-                                    <p className="line-clamp-2 text-xs text-white/60">{item.desc}</p>
+                                    <p className="line-clamp-2 text-xs text-white/60">{item.description || item.creator}</p>
                                 </div>
                             </div>
-                        </Link>
+                        </button>
                     ))}
                 </div>
             </div>
@@ -1019,8 +983,9 @@ function TrendRail() {
     );
 }
 
-function InspirationRail({ titleKey, items }: { titleKey: 'bestSocial' | 'bestAvatar'; items: { t: string; img: string }[] }) {
-    const { t } = useTranslation('home');
+function InnovationRail({ section }: { section: HomeInnovationSection }) {
+    const href = `/innovation?category=${encodeURIComponent(section.slug)}`;
+
     return (
         <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -1028,20 +993,48 @@ function InspirationRail({ titleKey, items }: { titleKey: 'bestSocial' | 'bestAv
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.5 }}
         >
-            <RailHeader title={t(titleKey)} href="/trends" />
+            <RailHeader title={section.name} href={href} />
             <div className="scrollbar-hide -mx-1 overflow-x-auto px-1 pb-2">
                 <div className="flex gap-4">
-                    {items.map((it, i) => (
+                    {section.posts.map((post) => (
                         <Link
-                            key={it.t + i}
-                            href="/trends"
+                            key={post.id}
+                            href={href}
                             className="group relative w-[160px] shrink-0 cursor-pointer overflow-hidden rounded-2xl sm:w-[180px]"
+                            onMouseEnter={(e) => {
+                                const v = e.currentTarget.querySelector('video');
+                                v?.play()?.catch(() => undefined);
+                            }}
+                            onMouseLeave={(e) => {
+                                const v = e.currentTarget.querySelector('video');
+                                if (v) {
+                                    v.pause();
+                                    v.currentTime = 0;
+                                }
+                            }}
                         >
                             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014]">
-                                <img src={it.img} alt={it.t} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                                {post.media === 'videos' && post.video ? (
+                                    <video
+                                        src={post.video}
+                                        poster={post.image || undefined}
+                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                        muted
+                                        loop
+                                        playsInline
+                                        preload="none"
+                                    />
+                                ) : (
+                                    <img
+                                        src={post.image}
+                                        alt={post.title}
+                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                        loading="lazy"
+                                    />
+                                )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                                 <div className="absolute inset-x-0 bottom-0 p-3">
-                                    <h3 className="line-clamp-2 text-sm font-medium text-white">{it.t}</h3>
+                                    <h3 className="line-clamp-2 text-sm font-medium text-white">{post.title}</h3>
                                 </div>
                             </div>
                         </Link>

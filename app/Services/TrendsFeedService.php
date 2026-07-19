@@ -67,6 +67,7 @@ class TrendsFeedService
 
         $query = $modelClass::query()
             ->with('user:id,name,email')
+            ->notDiscarded()
             ->where('is_public', true)
             ->where('status', $modelClass::STATUS_COMPLETED);
 
@@ -147,16 +148,19 @@ class TrendsFeedService
         return match ($type) {
             'image' => UserImageCreation::query()
                 ->whereKey($id)
+                ->notDiscarded()
                 ->where('is_public', true)
                 ->where('status', UserImageCreation::STATUS_COMPLETED)
                 ->first(),
             'video' => UserVideoCreation::query()
                 ->whereKey($id)
+                ->notDiscarded()
                 ->where('is_public', true)
                 ->where('status', UserVideoCreation::STATUS_COMPLETED)
                 ->first(),
             'music' => UserMusicCreation::query()
                 ->whereKey($id)
+                ->notDiscarded()
                 ->where('is_public', true)
                 ->where('status', UserMusicCreation::STATUS_COMPLETED)
                 ->first(),

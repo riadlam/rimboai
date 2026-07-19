@@ -6,6 +6,7 @@ import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/Ima
 import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
 import { apiGet, apiPost } from '@/lib/api';
+import { discardCreations, type DiscardCreationType } from '@/lib/discardCreations';
 import {
     buildReuseSettingsDraft,
     buildUseLastFrameDraft,
@@ -84,6 +85,7 @@ type ApiTrackItem = {
 
 type ApiVoiceItem = {
     id: string;
+    creation_id?: number | null;
     title: string;
     text: string;
     voice: string;
@@ -292,6 +294,7 @@ function HistoryWorkspace() {
                 for (const voice of voiceRes.voices ?? []) {
                     next.push({
                         id: voice.id,
+                        creationId: voice.creation_id ?? null,
                         tab: 'audio',
                         kind: 'audio',
                         title: voice.title || t('voiceFallback'),
@@ -426,9 +429,44 @@ function HistoryWorkspace() {
     };
 
     const deleteItems = (ids: string[]) => {
-        setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
+        const targets = items.filter((it) => ids.includes(it.id));
+        const byType = new Map<DiscardCreationType, number[]>();
+        for (const it of targets) {
+            if (!it.creationId) continue;
+            const type: DiscardCreationType | null =
+                it.tab === 'image'
+                    ? 'image'
+                    : it.tab === 'video'
+                      ? 'video'
+                      : it.tab === 'music'
+                        ? 'music'
+                        : it.tab === 'audio'
+                          ? 'voice'
+                          : null;
+            if (!type) continue;
+            const list = byType.get(type) ?? [];
+            list.push(it.creationId);
+            byType.set(type, list);
+        }
+
+        setItems((prev) => {
+            const creationKeys = new Set(
+                targets
+                    .filter((t) => t.creationId != null)
+                    .map((t) => `${t.tab}:${t.creationId}`),
+            );
+            return prev.filter((it) => {
+                if (ids.includes(it.id)) return false;
+                if (it.creationId != null && creationKeys.has(`${it.tab}:${it.creationId}`)) return false;
+                return true;
+            });
+        });
         setSelected((prev) => prev.filter((id) => !ids.includes(id)));
         if (preview && ids.includes(preview.id)) closePreview();
+
+        for (const [type, creationIds] of byType) {
+            void discardCreations(type, creationIds).catch(() => undefined);
+        }
     };
 
     const deleteSelected = () => {

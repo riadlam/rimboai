@@ -44,6 +44,22 @@ trait BelongsToUserCreation
         ], true);
     }
 
+    /**
+     * Soft-hide from Lab / History UI (delete + dismiss failed).
+     * Kept when discarded is null or any value other than 1.
+     */
+    public function scopeNotDiscarded($query)
+    {
+        return $query->where(function ($inner) {
+            $inner->whereNull('discarded')->orWhere('discarded', '!=', 1);
+        });
+    }
+
+    public function markDiscarded(): void
+    {
+        $this->forceFill(['discarded' => 1])->save();
+    }
+
     public function markQueued(?string $requestId = null, ?string $statusUrl = null, ?string $responseUrl = null): void
     {
         $this->forceFill([

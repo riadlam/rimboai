@@ -3,6 +3,7 @@ import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/r
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import CreditsModal from '@/Components/CreditsModal';
+import { getEcho } from '@/lib/echo';
 import type { PageProps } from '@/types';
 
 type Props = {
@@ -34,6 +35,30 @@ export default function AppHeader({ onMenuClick }: Props) {
         window.addEventListener('tokens:updated', sync);
         return () => window.removeEventListener('tokens:updated', sync);
     }, []);
+
+    // Live balance via existing private Pusher channel (user.{id} — auth-gated).
+    useEffect(() => {
+        if (!user?.id) return;
+
+        const echo = getEcho();
+        if (!echo) return;
+
+        const channelName = `user.${user.id}`;
+        const channel = echo.private(channelName);
+        const onTokensUpdated = (payload: { balance?: number }) => {
+            if (typeof payload?.balance !== 'number' || !Number.isFinite(payload.balance)) return;
+            const next = Math.max(0, Math.floor(payload.balance));
+            setTokens(next);
+            window.dispatchEvent(new CustomEvent('tokens:updated', { detail: { balance: next } }));
+        };
+
+        channel.listen('.tokens.updated', onTokensUpdated);
+
+        return () => {
+            channel.stopListening('.tokens.updated');
+            // Do not echo.leave here — LabWorkspace may share the same private channel.
+        };
+    }, [user?.id]);
 
     return (
         <div className="fixed inset-x-0 top-0 z-50 flex-shrink-0" dir="ltr">
@@ -181,6 +206,7 @@ export default function AppHeader({ onMenuClick }: Props) {
                                         )}
                                     </MenuItem>
                                     <AccountRowLink href="/history" icon={<IconClock />} label={t('history')} />
+                                    <AccountRowLink href="/billing/history" icon={<IconBilling />} label={t('billing')} />
                                     <AccountRowLink href="/settings" icon={<IconGear />} label={t('settings')} />
                                 </div>
 
@@ -266,6 +292,15 @@ function IconClock() {
         <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
             <circle cx="12" cy="12" r="8.5" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 1.8" />
+        </svg>
+    );
+}
+
+function IconBilling() {
+    return (
+        <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+            <path d="M6 2h12a2 2 0 0 1 2 2v18l-3-2-3 2-3-2-3 2-3-2-3 2V4a2 2 0 0 1 2-2Z" />
+            <path d="M16 8h-6M16 12h-6M13 16h-3" />
         </svg>
     );
 }

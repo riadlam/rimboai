@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
@@ -60,8 +60,15 @@ function categoryIcon(icon?: string | null): ReactNode {
 export default function Innovation({ categories = [], posts = [] }: Props) {
     const { t } = useTranslation('innovation');
     const { t: tc } = useTranslation('common');
+    const { url } = usePage();
     const [mediaType, setMediaType] = useState<MediaType>('images');
-    const [category, setCategory] = useState<string>('all');
+    const [category, setCategory] = useState<string>(() => {
+        const qs = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+        const requested = new URLSearchParams(qs).get('category')?.trim() || '';
+        if (!requested || requested === 'all') return 'all';
+        const match = categories.some((c) => c.id === requested || c.slug === requested);
+        return match ? requested : 'all';
+    });
     const [query, setQuery] = useState('');
 
     const categoryTabs = useMemo(

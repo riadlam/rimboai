@@ -86,6 +86,7 @@ class LabCreationsController extends Controller
             /** @var Model|null $creation */
             $creation = $class::query()
                 ->where('user_id', $userId)
+                ->notDiscarded()
                 ->whereKey($item['id'])
                 ->first();
             if ($creation === null) {
@@ -106,6 +107,39 @@ class LabCreationsController extends Controller
         ]);
     }
 
+    /**
+     * Soft-hide creations from Lab / History (delete hover + dismiss failed card).
+     */
+    public function discard(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'string', Rule::in(['image', 'video', 'music', 'voice'])],
+            'ids' => ['required', 'array', 'min:1', 'max:50'],
+            'ids.*' => ['integer', 'min:1'],
+        ]);
+
+        $class = match ($data['type']) {
+            'image' => UserImageCreation::class,
+            'video' => UserVideoCreation::class,
+            'music' => UserMusicCreation::class,
+            'voice' => UserVoiceCreation::class,
+        };
+
+        $ids = array_values(array_unique(array_map('intval', $data['ids'])));
+        $userId = $request->user()->id;
+
+        $updated = $class::query()
+            ->where('user_id', $userId)
+            ->whereIn('id', $ids)
+            ->notDiscarded()
+            ->update(['discarded' => 1]);
+
+        return response()->json([
+            'ok' => true,
+            'discarded' => $updated,
+        ]);
+    }
+
     private function syncActiveCreations(int $userId, string $labType, FalWebhookProcessor $processor): void
     {
         [$type, $class] = match ($labType) {
@@ -123,6 +157,7 @@ class LabCreationsController extends Controller
         /** @var \Illuminate\Support\Collection<int, Model> $active */
         $active = $class::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->whereIn('status', [
                 $class::STATUS_PENDING,
                 $class::STATUS_QUEUED,
@@ -145,6 +180,7 @@ class LabCreationsController extends Controller
     {
         $creations = UserImageCreation::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->orderByDesc('created_at')
             ->limit(120)
             ->get();
@@ -262,6 +298,7 @@ class LabCreationsController extends Controller
     {
         $creations = UserVideoCreation::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->where('mode', 'not like', 'tool:%')
             ->orderByDesc('created_at')
             ->limit(100)
@@ -383,6 +420,7 @@ class LabCreationsController extends Controller
     {
         return UserMusicCreation::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->whereIn('status', [
                 UserMusicCreation::STATUS_PENDING,
                 UserMusicCreation::STATUS_QUEUED,
@@ -446,6 +484,7 @@ class LabCreationsController extends Controller
     {
         return UserVoiceCreation::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->whereIn('status', [
                 UserVoiceCreation::STATUS_PENDING,
                 UserVoiceCreation::STATUS_QUEUED,

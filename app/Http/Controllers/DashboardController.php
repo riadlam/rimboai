@@ -19,11 +19,13 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(): Response
+    public function index(TrendsFeedService $trends): Response
     {
         return Inertia::render('Home', [
             'tools' => ToolsService::all(),
             'brands' => $this->loadBrands('text_to_video_models', 'text_to_video_categories'),
+            'trendTemplates' => $trends->feed(24),
+            'innovationSections' => $this->homeInnovationSections(),
         ]);
     }
 
@@ -84,6 +86,57 @@ class DashboardController extends Controller
             'id' => $id,
             'post' => $post,
         ]);
+    }
+
+    /**
+     * Home rails for Innovation — Social Media + E-commerce only.
+     *
+     * @return list<array{slug: string, name: string, posts: list<array<string, mixed>>}>
+     */
+    private function homeInnovationSections(): array
+    {
+        if (! Schema::hasTable('innovation_categories') || ! Schema::hasTable('innovations')) {
+            return [];
+        }
+
+        $slugs = ['social-media', 'e-commerce'];
+        $categories = InnovationCategory::query()
+            ->active()
+            ->whereIn('slug', $slugs)
+            ->get()
+            ->keyBy('slug');
+
+        $sections = [];
+        foreach ($slugs as $slug) {
+            $category = $categories->get($slug);
+            if (! $category) {
+                continue;
+            }
+
+            $posts = Innovation::query()
+                ->with('category')
+                ->active()
+                ->where('innovation_category_id', $category->id)
+                ->orderBy('sort')
+                ->orderByDesc('id')
+                ->limit(16)
+                ->get()
+                ->map(fn (Innovation $post) => $post->toFrontend())
+                ->values()
+                ->all();
+
+            if ($posts === []) {
+                continue;
+            }
+
+            $sections[] = [
+                'slug' => $category->slug,
+                'name' => $category->name,
+                'posts' => $posts,
+            ];
+        }
+
+        return $sections;
     }
 
     /**

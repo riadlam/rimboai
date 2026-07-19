@@ -2,6 +2,7 @@
 
 namespace App\Services\Tokens;
 
+use App\Events\TokensUpdated;
 use App\Exceptions\InsufficientTokensException;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +26,7 @@ class TokenService
             throw new InvalidArgumentException('Token charge must be greater than zero.');
         }
 
-        return DB::transaction(function () use ($user, $amount, $creationType, $create) {
+        $creation = DB::transaction(function () use ($user, $amount, $creationType, $create) {
             /** @var User $lockedUser */
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->getKey());
             $available = (int) $lockedUser->tokens;
@@ -58,6 +59,10 @@ class TokenService
 
             return $creation;
         }, 3);
+
+        $this->broadcastBalance($user);
+
+        return $creation;
     }
 
     /**
@@ -76,7 +81,7 @@ class TokenService
         }
 
         try {
-            return DB::transaction(function () use ($user, $amount, $creationType, $creationId, $metadata) {
+            $applied = DB::transaction(function () use ($user, $amount, $creationType, $creationId, $metadata) {
                 $alreadyCredited = DB::table('token_transactions')
                     ->where('creation_type', $creationType)
                     ->where('creation_id', $creationId)
@@ -108,6 +113,12 @@ class TokenService
 
                 return true;
             }, 3);
+
+            if ($applied) {
+                $this->broadcastBalance($user);
+            }
+
+            return $applied;
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
             // A concurrent credit for the same reference won the race — already applied.
             return false;
@@ -120,7 +131,7 @@ class TokenService
     public function refund(User $user, Model $creation, string $creationType, string $reason): bool
     {
         try {
-            return DB::transaction(function () use ($user, $creation, $creationType, $reason) {
+            $applied = DB::transaction(function () use ($user, $creation, $creationType, $reason) {
                 $debit = DB::table('token_transactions')
                     ->where('creation_type', $creationType)
                     ->where('creation_id', $creation->getKey())
@@ -164,10 +175,44 @@ class TokenService
 
                 return true;
             }, 3);
+
+            if ($applied) {
+                $this->broadcastBalance($user);
+            }
+
+            return $applied;
         } catch (Throwable $e) {
             report($e);
 
             return false;
+        }
+    }
+
+    /**
+     * Notify the owner's browser on private user.{id} only (already auth-gated).
+     */
+    private function broadcastBalance(User $user): void
+    {
+        $userId = (int) $user->getKey();
+        if ($userId <= 0) {
+            return;
+        }
+
+        $balance = max(0, (int) $user->tokens);
+
+        try {
+            // Prefer after-commit so clients never see a rolled-back balance.
+            if (DB::transactionLevel() > 0) {
+                DB::afterCommit(function () use ($userId, $balance) {
+                    event(new TokensUpdated($userId, $balance));
+                });
+
+                return;
+            }
+
+            event(new TokensUpdated($userId, $balance));
+        } catch (Throwable $e) {
+            report($e);
         }
     }
 }

@@ -1,5 +1,4 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { router } from '@inertiajs/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Brand } from '@/types';
@@ -235,25 +234,20 @@ export default function VideoLabCreateForm({
     const modelsForPicker = useMemo(() => {
         const frameMode = framesMode ? 'first_last' : 'default';
         const compatible = allModels.filter((m) => {
-            // Tool catalog rows always appear (except FLF mode) — picking opens /tools/{slug}.
-            if (m.tool_slug) return !framesMode;
+            // Tools live under /tools — never list them in Video Lab.
+            if (m.tool_slug) return false;
             // Frames toggle on → only models that can do first+last, even before images are added.
             if (framesMode && !getMediaCaps(m).supports_last_frame) return false;
             return supportsMediaMix(m, mediaCounts, frameMode);
         });
-        // Rank safest / best-fit models first in the picker (tools sink to the bottom).
         return [...compatible].sort((a, b) => {
-            if (!!a.tool_slug !== !!b.tool_slug) return a.tool_slug ? 1 : -1;
             const sa = pickBestVideoModel([a], mediaCounts, prompt)?.score ?? 0;
             const sb = pickBestVideoModel([b], mediaCounts, prompt)?.score ?? 0;
             return sb - sa;
         });
     }, [allModels, mediaCounts, prompt, framesMode]);
 
-    const labModelsForPicker = useMemo(
-        () => modelsForPicker.filter((m) => !m.tool_slug),
-        [modelsForPicker],
-    );
+    const labModelsForPicker = modelsForPicker;
 
     const selectedModelRecord = useMemo(
         () => allModels.find((m) => m.name === selectedModel),
@@ -663,11 +657,6 @@ export default function VideoLabCreateForm({
         tool_slug?: string | null;
         media_capabilities?: (typeof allModels)[number]['media_capabilities'];
     }) => {
-        if (m.tool_slug) {
-            setModelOpen(false);
-            router.visit(`/tools/${m.tool_slug}`);
-            return;
-        }
         userModelLocked.current = true;
         setSelectedBrand(m.brandName);
         setSelectedModel(m.name);
@@ -1644,10 +1633,9 @@ export default function VideoLabCreateForm({
                                             },
                                         ]
                                 ).map((m) => {
-                                    const active = selectedModel === m.name && !('tool_slug' in m && m.tool_slug);
-                                    const isTool = Boolean('tool_slug' in m && m.tool_slug);
+                                    const active = selectedModel === m.name;
                                     const tags = ('tags' in m && Array.isArray(m.tags) ? m.tags : []).filter(
-                                        (tag) => tag !== 'tool' && tag !== (m.tool_slug ?? ''),
+                                        (tag) => tag !== 'tool' && !('tool_slug' in m && tag === m.tool_slug),
                                     );
                                     const modelCredits = estimateVideoCredits(
                                         m,
@@ -1674,11 +1662,6 @@ export default function VideoLabCreateForm({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <p className="text-[13px] font-medium text-zinc-100">{formatModelName(m.name)}</p>
-                                                    {isTool ? (
-                                                        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-100 bg-sky-500/20 ring-1 ring-sky-400/30">
-                                                            Tool
-                                                        </span>
-                                                    ) : null}
                                                     {tags.slice(0, 2).map((tag) => (
                                                         <span
                                                             key={tag}
@@ -1694,24 +1677,17 @@ export default function VideoLabCreateForm({
                                                     ) : null}
                                                 </div>
                                                 <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">
-                                                    {isTool
-                                                        ? `Open ${m.brandName} tool`
-                                                        : m.description || m.brandName}
+                                                    {m.description || m.brandName}
                                                 </p>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-1.5">
-                                                {!isTool && modelCredits > 0 && (
+                                                {modelCredits > 0 && (
                                                     <span className="inline-flex items-center gap-1 rounded-md border border-orange-400/25 bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-orange-200">
                                                         <CreditBoltIcon className="h-3 w-3 text-amber-300" />
                                                         {modelCredits}
                                                     </span>
                                                 )}
-                                                {isTool ? (
-                                                    <svg className="h-4 w-4 shrink-0 text-sky-300/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M7 17 17 7" />
-                                                        <path d="M8 7h9v9" />
-                                                    </svg>
-                                                ) : active ? (
+                                                {active ? (
                                                     <svg className="h-4 w-4 shrink-0 text-[#FF5733]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                                         <path d="M20 6 9 17l-5-5" />
                                                     </svg>

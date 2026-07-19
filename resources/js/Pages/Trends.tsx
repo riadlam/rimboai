@@ -138,10 +138,6 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
     const selected = selectedId ? templates.find((row) => row.id === selectedId) ?? null : null;
 
     const useInLab = (row: TrendTemplate) => {
-        if (!props.auth.user) {
-            router.visit('/?login');
-            return;
-        }
         setSelectedId(null);
         router.visit(`/trends/${row.id}`);
     };

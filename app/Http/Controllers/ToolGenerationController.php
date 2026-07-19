@@ -36,6 +36,7 @@ class ToolGenerationController extends Controller
         // Catch up active jobs if webhooks were missed.
         $active = UserVideoCreation::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->where('mode', $mode)
             ->whereNotNull('fal_request_id')
             ->whereIn('status', [
@@ -57,6 +58,7 @@ class ToolGenerationController extends Controller
 
         $creations = UserVideoCreation::query()
             ->where('user_id', $userId)
+            ->notDiscarded()
             ->where('mode', $mode)
             ->orderByDesc('created_at')
             ->limit(100)

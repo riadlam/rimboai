@@ -16,6 +16,7 @@ import {
     consumeLabReuseDraft,
     type LabReuseDraft,
 } from '@/lib/labReuse';
+import { discardCreations } from '@/lib/discardCreations';
 import type { Brand, PageProps } from '@/types';
 import Button from '@/Components/Button';
 import { LabToastProvider, useLabToast } from '@/Components/LabToast';
@@ -1262,7 +1263,24 @@ function LabWorkspaceInner({
     };
 
     const deleteImages = (ids: string[]) => {
-        setImages((prev) => prev.filter((img) => !ids.includes(img.id)));
+        const targets = images.filter((img) => ids.includes(img.id));
+        const creationIds = [
+            ...new Set(
+                targets
+                    .map((img) => img.creationId)
+                    .filter((id): id is number => typeof id === 'number' && id > 0),
+            ),
+        ];
+        setImages((prev) =>
+            prev.filter((img) => {
+                if (ids.includes(img.id)) return false;
+                if (img.creationId != null && creationIds.includes(img.creationId)) return false;
+                return true;
+            }),
+        );
+        if (creationIds.length > 0) {
+            void discardCreations(isVideoLab ? 'video' : 'image', creationIds).catch(() => undefined);
+        }
     };
 
     const toggleTrackFavorite = (id: string) => {
@@ -1270,7 +1288,24 @@ function LabWorkspaceInner({
     };
 
     const deleteTracks = (ids: string[]) => {
-        setTracks((prev) => prev.filter((t) => !ids.includes(t.id)));
+        const targets = tracks.filter((t) => ids.includes(t.id));
+        const creationIds = [
+            ...new Set(
+                targets
+                    .map((t) => t.creationId)
+                    .filter((id): id is number => typeof id === 'number' && id > 0),
+            ),
+        ];
+        setTracks((prev) =>
+            prev.filter((t) => {
+                if (ids.includes(t.id)) return false;
+                if (t.creationId != null && creationIds.includes(t.creationId)) return false;
+                return true;
+            }),
+        );
+        if (creationIds.length > 0) {
+            void discardCreations('music', creationIds).catch(() => undefined);
+        }
     };
 
     const toggleVoiceFavorite = (id: string) => {
@@ -1278,7 +1313,24 @@ function LabWorkspaceInner({
     };
 
     const deleteVoices = (ids: string[]) => {
-        setVoices((prev) => prev.filter((v) => !ids.includes(v.id)));
+        const targets = voices.filter((v) => ids.includes(v.id));
+        const creationIds = [
+            ...new Set(
+                targets
+                    .map((v) => v.creationId)
+                    .filter((id): id is number => typeof id === 'number' && id > 0),
+            ),
+        ];
+        setVoices((prev) =>
+            prev.filter((v) => {
+                if (ids.includes(v.id)) return false;
+                if (v.creationId != null && creationIds.includes(v.creationId)) return false;
+                return true;
+            }),
+        );
+        if (creationIds.length > 0) {
+            void discardCreations('voice', creationIds).catch(() => undefined);
+        }
     };
 
     const renderCreateForm = () => {
