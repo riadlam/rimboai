@@ -91,6 +91,24 @@ export default function AppHeader({ onMenuClick }: Props) {
                 <div className="flex items-center gap-2 md:gap-3">
                     {user ? (
                         <>
+                    {/* Phone-only tokens — compact brand chip */}
+                    <button
+                        type="button"
+                        onClick={() => setCreditsOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#FF5733]/35 bg-[#FF5733]/10 py-1 pe-2 ps-1.5 sm:hidden"
+                        aria-label={`${tokens} ${t('tokens')}`}
+                    >
+                        <svg className="h-3 w-3 shrink-0 text-[#FF5733]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                            <path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13l0-8Z" />
+                        </svg>
+                        <span
+                            className="text-[12px] font-bold leading-none tracking-tight tabular-nums text-[#FF8A65]"
+                            style={{ fontFamily: "'Outfit', ui-sans-serif, system-ui, sans-serif" }}
+                        >
+                            {tokens.toLocaleString()}
+                        </span>
+                    </button>
+
                     {/* Credits meter */}
                     <div className="hidden items-center gap-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] py-1 pe-3 ps-1 sm:flex">
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">
