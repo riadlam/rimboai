@@ -139,6 +139,7 @@ export type ToolControlSpec = {
 };
 
 export type ToolBilling = {
+    endpoint_id?: string | null;
     unit: string;
     unit_price: number;
     /** When set, Fal $/unit changes with the selected output resolution. */

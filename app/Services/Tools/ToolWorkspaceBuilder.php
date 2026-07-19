@@ -105,6 +105,7 @@ class ToolWorkspaceBuilder
     private function billingFor(object $row, string $toolSlug, ?array $enums, array $defaults): array
     {
         return [
+            'endpoint_id' => (string) ($row->endpoint_id ?? ''),
             'unit' => (string) ($row->unit ?? 'seconds'),
             'unit_price' => (float) ($row->unit_price ?? 0),
             // Fal tiers that change $/s (or flat $/clip) by output resolution.
@@ -552,9 +553,11 @@ class ToolWorkspaceBuilder
             ];
         }
 
+        $flatVideo = \App\Services\Credits\ToolGenerationCostEstimator::isFlatVideoUnit($unit);
+
         // PixVerse V4.5 image-to-video — flat per clip; price changes with resolution (5s base).
         // https://fal.ai/models/fal-ai/pixverse/v4.5/image-to-video
-        if (str_contains($endpointId, 'pixverse/v4.5/image-to-video') && $unit === 'video') {
+        if (str_contains($endpointId, 'pixverse/v4.5/image-to-video') && $flatVideo) {
             if (str_contains($endpointId, '/fast')) {
                 return [
                     '360p' => 0.30,
@@ -574,7 +577,7 @@ class ToolWorkspaceBuilder
 
         // PixVerse Swap — flat per clip; price changes with resolution (5s base, doubles if longer).
         // https://fal.ai/models/fal-ai/pixverse/swap
-        if (str_contains($endpointId, 'pixverse/swap') && $unit === 'video') {
+        if (str_contains($endpointId, 'pixverse/swap') && $flatVideo) {
             return [
                 '360p' => 0.15,
                 '540p' => 0.15,

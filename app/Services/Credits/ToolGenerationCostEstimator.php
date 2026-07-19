@@ -59,7 +59,49 @@ class ToolGenerationCostEstimator
     }
 
     /**
+     * Wan 2.2 family bills "video seconds" at 16fps (= num_frames / 16), not wall-clock.
+     */
+    public static function usesWan22VideoSeconds(string $endpointId): bool
+    {
+        $id = strtolower($endpointId);
+
+        return str_contains($id, 'wan/v2.2-a14b/video-to-video')
+            || str_contains($id, 'wan/v2.2-14b/animate/move');
+    }
+
+    /**
+     * Match Lab FalVideoInputBuilder: odd frame count in [17, 161] at 16fps.
+     */
+    public static function wan22FramesForDuration(float $durationSeconds): int
+    {
+        $fps = 16;
+        $frames = max(17, min(161, (int) round(max(0.0, $durationSeconds) * $fps) + 1));
+        if ($frames % 2 === 0) {
+            $frames = min(161, $frames + 1);
+        }
+
+        return $frames;
+    }
+
+    public static function wan22VideoSeconds(float $durationSeconds): float
+    {
+        return self::wan22FramesForDuration($durationSeconds) / 16.0;
+    }
+
+    /**
+     * Flat per-clip Fal units (PixVerse swap / motion, VOID, etc.).
+     * DB sometimes stores plurals / "video segments".
+     */
+    public static function isFlatVideoUnit(string $unit): bool
+    {
+        $normalized = strtolower(trim(str_replace(' ', '_', $unit)));
+
+        return in_array($normalized, ['video', 'videos', 'video_segments'], true);
+    }
+
+    /**
      * @param  array{
+     *   endpoint_id?: string|null,
      *   unit?: string|null,
      *   unit_price?: float|string|null,
      *   unit_price_by_resolution?: array<string, float|int|string>|null,
@@ -80,6 +122,7 @@ class ToolGenerationCostEstimator
      */
     public function estimate(array $options): array
     {
+        $endpointId = (string) ($options['endpoint_id'] ?? '');
         $unit = $this->normalizeUnit($options['unit'] ?? 'seconds');
         $maxDuration = isset($options['max_duration']) ? (int) $options['max_duration'] : null;
         $duration = self::snapBillableDuration(
@@ -132,23 +175,48 @@ class ToolGenerationCostEstimator
             ]);
         }
 
-        if ($unit === 'minutes') {
-            $minutes = $duration / 60;
-            $falCost = round($minutes * $unitPrice, 6);
+        if ($unit === 'minutes' || $unit === 'compute_seconds') {
+            // compute_seconds is billed like wall seconds (VEED-style); minutes = duration/60.
+            if ($unit === 'minutes') {
+                $minutes = $duration / 60;
+                $falCost = round($minutes * $unitPrice, 6);
 
-            return $this->pack($falCost, round($minutes, 6), $unit, $unitPrice, [
-                'formula' => 'duration_minutes * unit_price',
+                return $this->pack($falCost, round($minutes, 6), $unit, $unitPrice, [
+                    'formula' => 'duration_minutes * unit_price',
+                    'duration_seconds' => $duration,
+                ]);
+            }
+
+            $falCost = round($duration * $unitPrice, 6);
+
+            return $this->pack($falCost, $duration, $unit, $unitPrice, [
+                'formula' => 'duration_seconds * unit_price',
                 'duration_seconds' => $duration,
             ]);
         }
 
-        if ($unit === 'video') {
+        if (self::isFlatVideoUnit($unit)) {
             $multiplier = $duration > 5 ? 2.0 : 1.0;
             $falCost = round($unitPrice * $multiplier, 6);
 
-            return $this->pack($falCost, $multiplier, $unit, $unitPrice, [
+            return $this->pack($falCost, $multiplier, 'video', $unitPrice, [
                 'formula' => 'unit_price * (duration>5 ? 2 : 1)',
                 'duration_seconds' => $duration,
+            ]);
+        }
+
+        // Wan 2.2: Fal video-seconds = num_frames / 16 (not wall-clock input length).
+        if (self::usesWan22VideoSeconds($endpointId)) {
+            $frames = self::wan22FramesForDuration($duration);
+            $videoSeconds = $frames / 16.0;
+            $falCost = round($videoSeconds * $unitPrice, 6);
+
+            return $this->pack($falCost, $videoSeconds, 'video_seconds_16fps', $unitPrice, [
+                'formula' => '(num_frames/16) * unit_price',
+                'wall_duration_seconds' => $duration,
+                'num_frames' => $frames,
+                'frames_per_second' => 16,
+                'video_seconds' => $videoSeconds,
             ]);
         }
 

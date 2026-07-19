@@ -133,6 +133,7 @@
     "signInToCreate": "Sign in to create",
     "unavailable": "This tool isn’t connected yet. Models will appear after seeding.",
     "maxDurationNotice": "Best results with clips up to {{seconds}}s.",
+    "videoTooLong": "This model supports videos up to {{seconds}}s. Trim your clip and try again.",
     "insufficientCredits": "Not enough credits for this estimate.",
     "preview": "Live preview",
     "previewHint": "See what this tool can do",

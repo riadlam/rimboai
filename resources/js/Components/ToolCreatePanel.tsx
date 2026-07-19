@@ -272,8 +272,18 @@ export default function ToolCreatePanel({
         (typeof values.prompt === 'string' && values.prompt.trim().length > 0);
 
     // Create only when uploads are ready AND we have a real (non-estimate) duration.
+    const overMaxDuration =
+        activeBilling?.max_duration != null &&
+        activeBilling.max_duration > 0 &&
+        sourceDuration != null &&
+        sourceDuration > activeBilling.max_duration + 0.05;
+
     const billingReady =
-        requiredReady && !isDurationEstimate && billDuration > 0 && creditEstimate.credits > 0;
+        requiredReady &&
+        !isDurationEstimate &&
+        billDuration > 0 &&
+        creditEstimate.credits > 0 &&
+        !overMaxDuration;
 
     const canCreate =
         workspace.available &&
@@ -463,6 +473,12 @@ export default function ToolCreatePanel({
                     {workspace.notices.includes('max_duration') && activeBilling?.max_duration && (
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-white/45">
                             {t('detail.maxDurationNotice', { seconds: activeBilling.max_duration })}
+                        </div>
+                    )}
+
+                    {overMaxDuration && activeBilling?.max_duration && (
+                        <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2.5 text-[12px] text-rose-100/90">
+                            {t('detail.videoTooLong', { seconds: activeBilling.max_duration })}
                         </div>
                     )}
 

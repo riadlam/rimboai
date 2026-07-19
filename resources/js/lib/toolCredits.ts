@@ -6,6 +6,7 @@
 import { creditsFromFalUsd, type CreditsConfig } from '@/lib/imageCredits';
 
 export type ToolBilling = {
+    endpoint_id?: string | null;
     unit: string;
     unit_price: number;
     /** When set, Fal $/unit changes with the selected output resolution. */
@@ -89,6 +90,27 @@ export function snapBillableDuration(
     return last;
 }
 
+export function usesWan22VideoSeconds(endpointId: string | null | undefined): boolean {
+    const id = String(endpointId || '').toLowerCase();
+    return id.includes('wan/v2.2-a14b/video-to-video') || id.includes('wan/v2.2-14b/animate/move');
+}
+
+/** Match Lab / PHP: odd frame count in [17, 161] at 16fps. */
+export function wan22FramesForDuration(durationSeconds: number): number {
+    const fps = 16;
+    let frames = Math.max(17, Math.min(161, Math.round(Math.max(0, durationSeconds) * fps) + 1));
+    if (frames % 2 === 0) frames = Math.min(161, frames + 1);
+    return frames;
+}
+
+export function isFlatVideoUnit(unit: string | null | undefined): boolean {
+    const normalized = String(unit || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
+    return normalized === 'video' || normalized === 'videos' || normalized === 'video_segments';
+}
+
 export function estimateToolCredits(
     billing: ToolBilling | null | undefined,
     options: ToolCreditOptions = {},
@@ -147,7 +169,17 @@ export function estimateToolCredits(
         };
     }
 
-    if (unit === 'video') {
+    if (unit === 'compute_seconds') {
+        const falCostUsd = round6(duration * unitPrice);
+        return {
+            falCostUsd,
+            credits: creditsFromFalUsd(falCostUsd, config),
+            billableUnits: duration,
+            unit,
+        };
+    }
+
+    if (isFlatVideoUnit(unit)) {
         // Flat per-clip pricing; PixVerse doubles past 5s.
         const multiplier = duration > 5 || options.videoLong ? 2 : 1;
         const falCostUsd = round6(unitPrice * multiplier);
@@ -155,7 +187,20 @@ export function estimateToolCredits(
             falCostUsd,
             credits: creditsFromFalUsd(falCostUsd, config),
             billableUnits: multiplier,
-            unit,
+            unit: 'video',
+        };
+    }
+
+    // Wan 2.2: Fal video-seconds = num_frames / 16 (not wall-clock input length).
+    if (usesWan22VideoSeconds(billing.endpoint_id)) {
+        const frames = wan22FramesForDuration(duration);
+        const videoSeconds = frames / 16;
+        const falCostUsd = round6(videoSeconds * unitPrice);
+        return {
+            falCostUsd,
+            credits: creditsFromFalUsd(falCostUsd, config),
+            billableUnits: round6(videoSeconds),
+            unit: 'video_seconds_16fps',
         };
     }
 

@@ -203,18 +203,28 @@ class ToolGenerationController extends Controller
 
         $defaults = $this->decodeJson($model->defaults) ?? [];
         $enums = $this->decodeJson($model->enums);
+        $maxDuration = $model->max_duration !== null ? (int) $model->max_duration : null;
+
+        // Fal still processes the full uploaded clip — never bill a clamped duration
+        // while sending a longer video (that was undercharging Wan 2.7 / similar).
+        if ($maxDuration !== null && $maxDuration > 0 && $durationSeconds > $maxDuration + 0.05) {
+            return response()->json([
+                'message' => "This model supports videos up to {$maxDuration}s. Trim your clip and try again.",
+            ], 422);
+        }
+
         $durationEnums = \App\Services\Tools\ToolWorkspaceBuilder::durationEnumsFor(
             (string) $data['tool_slug'],
             $enums,
             $defaults,
-            $model->max_duration !== null ? (int) $model->max_duration : null,
+            $maxDuration,
         );
 
         // Snap UP to the model's supported duration tier before charging.
         $durationSeconds = \App\Services\Credits\ToolGenerationCostEstimator::snapBillableDuration(
             $durationSeconds,
             $durationEnums,
-            $model->max_duration !== null ? (int) $model->max_duration : null,
+            $maxDuration,
         );
 
         if ($durationSeconds <= 0) {
@@ -242,6 +252,7 @@ class ToolGenerationController extends Controller
         $billDuration = $durationSeconds;
 
         $cost = $costEstimator->estimate([
+            'endpoint_id' => $model->endpoint_id,
             'unit' => $model->unit,
             'unit_price' => $model->unit_price,
             'unit_price_by_resolution' => \App\Services\Tools\ToolWorkspaceBuilder::unitPriceByResolution(

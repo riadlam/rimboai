@@ -391,10 +391,12 @@ class FalToolInputBuilder
             $input['enable_prompt_expansion'] = (bool) ($settings['enable_prompt_expansion'] ?? $defaults['enable_prompt_expansion'] ?? false);
         }
         $input = $this->applyClientGeometry($input, $settings);
+        $input = $this->applyWan22Frames($input, $endpointId, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio',
             'enable_safety_checker', 'enable_prompt_expansion', 'strength', 'guidance_scale',
+            'num_frames', 'frames_per_second',
         ]);
     }
 
@@ -587,10 +589,12 @@ class FalToolInputBuilder
             'enable_prompt_expansion' => false,
         ]);
         $input = $this->applyClientGeometry($input, $settings);
+        $input = $this->applyWan22Frames($input, $endpointId, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration',
             'aspect_ratio', 'enable_safety_checker', 'enable_prompt_expansion', 'strength',
+            'num_frames', 'frames_per_second',
         ]);
     }
 
@@ -700,9 +704,11 @@ class FalToolInputBuilder
             $input['enable_prompt_expansion'] = (bool) ($settings['enable_prompt_expansion'] ?? $defaults['enable_prompt_expansion'] ?? false);
         }
         $input = $this->applyClientGeometry($input, $settings);
+        $input = $this->applyWan22Frames($input, $endpointId, $settings);
 
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'resolution', 'acceleration', 'aspect_ratio', 'enable_safety_checker', 'enable_prompt_expansion', 'strength',
+            'num_frames', 'frames_per_second',
         ]);
     }
 
@@ -734,6 +740,27 @@ class FalToolInputBuilder
         return $this->onlyKeys($input, [
             'video_url', 'prompt', 'duration', 'num_steps', 'cfg_strength', 'negative_prompt', 'seed',
         ]);
+    }
+
+    /**
+     * Wan 2.2 A14B v2v bills num_frames/16 "video seconds". Without num_frames Fal
+     * defaults to 81 frames (~5.06s) even for shorter uploads — always set it.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function applyWan22Frames(array $input, string $endpointId, array $settings): array
+    {
+        if (! str_contains(strtolower($endpointId), 'wan/v2.2-a14b/video-to-video')) {
+            return $input;
+        }
+
+        $duration = (float) ($settings['_duration_seconds'] ?? $settings['duration'] ?? 5);
+        $input['num_frames'] = \App\Services\Credits\ToolGenerationCostEstimator::wan22FramesForDuration($duration);
+        $input['frames_per_second'] = 16;
+
+        return $input;
     }
 
     /**
