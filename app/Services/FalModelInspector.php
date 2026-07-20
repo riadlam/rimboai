@@ -605,8 +605,8 @@ class FalModelInspector
             ];
         }
 
-        $falDurations = $this->normalizeStringList($extracted['durations'] ?? []);
-        $dbEnums = $this->normalizeStringList($db['enums'] ?? []);
+        $falDurations = $this->normalizeDurationList($extracted['durations'] ?? []);
+        $dbEnums = $this->normalizeDurationList($db['enums'] ?? []);
         if ($falDurations !== [] && $dbEnums !== []) {
             $extraInDb = array_values(array_diff($dbEnums, $falDurations));
             $missingInDb = array_values(array_diff($falDurations, $dbEnums));
@@ -741,6 +741,36 @@ class FalModelInspector
         }
 
         return $issues;
+    }
+
+    /**
+     * Normalize duration tokens so "5", "5s", 5 compare equal.
+     *
+     * @param  mixed  $values
+     * @return list<string>
+     */
+    private function normalizeDurationList(mixed $values): array
+    {
+        $out = [];
+        foreach ($this->normalizeStringList($values) as $v) {
+            $lower = strtolower(trim($v));
+            if ($lower === 'auto') {
+                $out[] = 'auto';
+
+                continue;
+            }
+            if (preg_match('/^(\d+(?:\.\d+)?)s?$/', $lower, $m)) {
+                $out[] = (string) (int) $m[1];
+
+                continue;
+            }
+            $out[] = $lower;
+        }
+
+        $out = array_values(array_unique($out));
+        sort($out, SORT_NATURAL);
+
+        return $out;
     }
 
     /**

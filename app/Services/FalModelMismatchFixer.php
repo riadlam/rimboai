@@ -90,10 +90,18 @@ class FalModelMismatchFixer
             $this->bustCatalogCaches();
         }
 
+        $missingColumns = [];
+        foreach ($skipped as $key) {
+            if ($key !== 'pricing' && ! Schema::hasColumn($model->getTable(), $key)) {
+                $missingColumns[] = $key;
+            }
+        }
+
         return [
             'ok' => true,
             'applied' => $applied,
             'skipped' => $skipped,
+            'missing_columns' => $missingColumns,
             'changes' => $changes,
         ];
     }

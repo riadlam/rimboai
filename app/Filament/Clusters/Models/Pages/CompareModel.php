@@ -124,6 +124,7 @@ class CompareModel extends Page
         }
 
         $applied = $result['applied'] ?? [];
+        $missingColumns = $result['missing_columns'] ?? [];
         $model->refresh();
         $this->dbRow = $model->toArray();
         $this->loadFal(fresh: false);
@@ -137,10 +138,23 @@ class CompareModel extends Page
             fetchIfMissing: true,
         );
 
+        if ($missingColumns !== []) {
+            Notification::make()
+                ->title('Fix blocked: missing DB columns')
+                ->body('Run on server: php artisan migrate — missing: '.implode(', ', $missingColumns))
+                ->danger()
+                ->persistent()
+                ->send();
+        }
+
         if ($applied === []) {
             Notification::make()
                 ->title('Nothing to apply')
-                ->body('No writable Fal values for the selected fields.')
+                ->body(
+                    $missingColumns !== []
+                        ? 'Needed columns are missing on this database.'
+                        : 'No writable Fal values for the selected fields.'
+                )
                 ->warning()
                 ->send();
 
