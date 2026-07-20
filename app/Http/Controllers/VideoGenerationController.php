@@ -76,8 +76,8 @@ class VideoGenerationController extends Controller
             $data = $request->validate([
                 'prompt' => ['required', 'string', 'min:2', 'max:2000'],
                 'endpoint_id' => ['nullable', 'string', 'max:191'],
-                'aspect' => ['nullable', 'string', Rule::in(['16:9', '9:16', '1:1', '4:5', '3:4'])],
-                'resolution' => ['nullable', 'string', Rule::in(['720p', '1080p', '4K', '4k'])],
+                'aspect' => ['nullable', 'string', 'max:32'],
+                'resolution' => ['nullable', 'string', 'max:32'],
                 'duration' => ['nullable'],
                 'audio' => ['nullable', 'boolean'],
                 'speed' => ['nullable', 'string', Rule::in(['fast', 'pro'])],
@@ -235,8 +235,16 @@ class VideoGenerationController extends Controller
         $built = $inputBuilder->build($submitEndpoint, [
             'prompt' => $providerPrompt,
             'negative_prompt' => $negativePrompt,
-            'aspect' => $data['aspect'] ?? '16:9',
-            'resolution' => $data['resolution'] ?? '720p',
+            'aspect' => $this->pickSupportedOption(
+                (string) ($data['aspect'] ?? '16:9'),
+                $model->aspect_ratios ?? null,
+                '16:9',
+            ),
+            'resolution' => $this->pickSupportedOption(
+                (string) ($data['resolution'] ?? '720p'),
+                $model->resolutions ?? null,
+                '720p',
+            ),
             'duration' => $data['duration'] ?? null,
             'audio' => array_key_exists('audio', $data) ? (bool) $data['audio'] : true,
             'allowed_durations' => $allowedDurations,
@@ -606,5 +614,36 @@ class VideoGenerationController extends Controller
             'mode' => $creation->mode,
             'created_at' => optional($creation->created_at)->toIso8601String(),
         ];
+    }
+
+    /**
+     * Prefer the requested option when the model lists it; otherwise first listed / fallback.
+     */
+    private function pickSupportedOption(string $requested, mixed $rawList, string $fallback): string
+    {
+        $list = [];
+        if (is_string($rawList) && $rawList !== '') {
+            $decoded = json_decode($rawList, true);
+            $rawList = is_array($decoded) ? $decoded : [];
+        }
+        if (is_array($rawList)) {
+            foreach ($rawList as $item) {
+                if (is_scalar($item) && (string) $item !== '') {
+                    $list[] = (string) $item;
+                }
+            }
+        }
+
+        if ($list === []) {
+            return $requested !== '' ? $requested : $fallback;
+        }
+
+        foreach ($list as $item) {
+            if (strcasecmp($item, $requested) === 0) {
+                return $item;
+            }
+        }
+
+        return $list[0];
     }
 }

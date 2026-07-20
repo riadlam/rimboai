@@ -42,6 +42,10 @@ export type BrandModel = {
     unit: string | null;
     max_duration: number | null;
     enums: Array<string | number> | null;
+    /** Per-model aspect chips from DB (Fal-synced). Null = Lab defaults. */
+    aspect_ratios?: string[] | null;
+    /** Per-model resolution chips from DB (Fal-synced). Null = Lab defaults. */
+    resolutions?: string[] | null;
     duration: string | null;
     credits: number | null;
     tags: string[];

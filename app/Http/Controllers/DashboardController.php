@@ -426,7 +426,7 @@ class DashboardController extends Controller
 
     private function loadBrands(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection
     {
-        $cacheKey = "catalog.brands.v3.{$modelsTable}.{$categoriesTable}";
+        $cacheKey = "catalog.brands.v4.{$modelsTable}.{$categoriesTable}";
 
         /** @var list<array<string, mixed>> $cached */
         $cached = Cache::remember(
@@ -469,6 +469,8 @@ class DashboardController extends Controller
             'tags',
             'status',
             'sort',
+            'aspect_ratios',
+            'resolutions',
             'supports_audio',
             'supports_first_frame',
             'supports_last_frame',
@@ -634,12 +636,36 @@ class DashboardController extends Controller
                             'unit' => $m->unit ?? null,
                             'max_duration' => $m->max_duration ?? null,
                             'enums' => isset($m->enums) ? (is_string($m->enums) ? json_decode($m->enums, true) : $m->enums) : null,
+                            'aspect_ratios' => isset($m->aspect_ratios)
+                                ? (is_string($m->aspect_ratios) ? json_decode($m->aspect_ratios, true) : $m->aspect_ratios)
+                                : null,
+                            'resolutions' => isset($m->resolutions)
+                                ? (is_string($m->resolutions) ? json_decode($m->resolutions, true) : $m->resolutions)
+                                : null,
                             'duration' => null,
                             'credits' => null,
                             'tags' => $tags,
                             'image_cover' => $imageCover,
                             'sort' => $m->sort ?? 999,
                         ];
+
+                        if (is_array($payload['aspect_ratios'])) {
+                            $payload['aspect_ratios'] = array_values(array_filter(
+                                $payload['aspect_ratios'],
+                                static fn ($v) => is_scalar($v) && (string) $v !== '',
+                            ));
+                        } else {
+                            $payload['aspect_ratios'] = null;
+                        }
+
+                        if (is_array($payload['resolutions'])) {
+                            $payload['resolutions'] = array_values(array_filter(
+                                $payload['resolutions'],
+                                static fn ($v) => is_scalar($v) && (string) $v !== '',
+                            ));
+                        } else {
+                            $payload['resolutions'] = null;
+                        }
 
                         if ($hasSupportsAudio) {
                             $payload['supports_audio'] = (bool) ($m->supports_audio ?? false);

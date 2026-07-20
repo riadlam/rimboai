@@ -1,9 +1,7 @@
 <?php
 
-use App\Providers\AppServiceProvider;
-use Laravel\Socialite\SocialiteServiceProvider;
-
 return [
-    AppServiceProvider::class,
-    SocialiteServiceProvider::class,
+    App\Providers\AppServiceProvider::class,
+    App\Providers\Filament\AdminPanelProvider::class,
+    Laravel\Socialite\SocialiteServiceProvider::class,
 ];

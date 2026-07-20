@@ -28,6 +28,12 @@ import {
     type LabReuseDraft,
 } from '@/lib/labReuse';
 import { hasMeaningfulPrompt } from '@/lib/promptText';
+import {
+    aspectBox,
+    pickSupportedValue,
+    videoAspectOptions,
+    videoResolutionOptions,
+} from '@/lib/labModelOptions';
 
 export type VideoGenerateOptions = {
     quantity: number;
@@ -54,21 +60,6 @@ type Props = {
     tokenBalance?: number;
     /** Apply reuse / use-result from details modal or History */
     draft?: LabReuseDraft | null;
-};
-
-const ASPECTS = ['16:9', '9:16', '1:1', '4:5', '3:4'] as const;
-const RESOLUTIONS = [
-    { id: '720p', sub: 'Standard' },
-    { id: '1080p', sub: 'HD' },
-    { id: '4K', sub: 'Cinema' },
-] as const;
-
-const aspectMeta: Record<string, { w: number; h: number; label: string }> = {
-    '16:9': { w: 18, h: 10, label: 'Wide' },
-    '9:16': { w: 10, h: 18, label: 'Vertical' },
-    '1:1': { w: 14, h: 14, label: 'Square' },
-    '4:5': { w: 12, h: 15, label: 'Social' },
-    '3:4': { w: 12, h: 16, label: 'Photo' },
 };
 
 const PROMPT_CHIPS = [
@@ -168,8 +159,8 @@ export default function VideoLabCreateForm({
         return opts.allowAuto ? 'auto' : opts.values.includes(5) ? 5 : opts.max;
     });
     const [audioOn, setAudioOn] = useState(true);
-    const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]['id']>('720p');
-    const [aspect, setAspect] = useState<(typeof ASPECTS)[number]>('16:9');
+    const [resolution, setResolution] = useState('720p');
+    const [aspect, setAspect] = useState('16:9');
     const [media, setMedia] = useState<MediaItem[]>([]);
     const [framesMode, setFramesMode] = useState(false);
     const [firstFrame, setFirstFrame] = useState<MediaItem | null>(null);
@@ -279,6 +270,37 @@ export default function VideoLabCreateForm({
     const selectedEndpointId = 'endpoint_id' in selectedMeta ? selectedMeta.endpoint_id || selectedMeta.name : selectedMeta.name;
     const selectedEnums = 'enums' in selectedMeta ? selectedMeta.enums : null;
     const selectedMaxDuration = 'max_duration' in selectedMeta ? selectedMeta.max_duration : null;
+
+    const availableAspects = useMemo(
+        () =>
+            videoAspectOptions(
+                selectedModelRecord && 'aspect_ratios' in selectedModelRecord
+                    ? selectedModelRecord.aspect_ratios
+                    : null,
+            ),
+        [selectedModelRecord],
+    );
+
+    const availableResolutions = useMemo(
+        () =>
+            videoResolutionOptions(
+                selectedModelRecord && 'resolutions' in selectedModelRecord
+                    ? selectedModelRecord.resolutions
+                    : null,
+            ),
+        [selectedModelRecord],
+    );
+
+    useEffect(() => {
+        setAspect((prev) => pickSupportedValue(prev, availableAspects, '16:9'));
+        setResolution((prev) =>
+            pickSupportedValue(
+                prev,
+                availableResolutions.map((r) => r.id),
+                '720p',
+            ),
+        );
+    }, [availableAspects, availableResolutions]);
 
     const routeMode = resolveMediaRouteMode(
         selectedModelRecord,
@@ -584,11 +606,13 @@ export default function VideoLabCreateForm({
                 setSelectedModel(matched.name);
             }
 
-            if (draft.aspect && (ASPECTS as readonly string[]).includes(draft.aspect)) {
-                setAspect(draft.aspect as (typeof ASPECTS)[number]);
+            const draftAspects = videoAspectOptions(matched?.aspect_ratios);
+            const draftResolutions = videoResolutionOptions(matched?.resolutions);
+            if (draft.aspect && draftAspects.includes(draft.aspect)) {
+                setAspect(draft.aspect);
             }
-            if (draft.resolution && RESOLUTIONS.some((r) => r.id === draft.resolution)) {
-                setResolution(draft.resolution as (typeof RESOLUTIONS)[number]['id']);
+            if (draft.resolution && draftResolutions.some((r) => r.id === draft.resolution)) {
+                setResolution(draft.resolution);
             }
 
             const parsedDuration = parseDurationDraft(draft.duration);
@@ -1357,8 +1381,13 @@ export default function VideoLabCreateForm({
                                         {/* Resolution */}
                                         <div>
                                             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('resolution')}</p>
-                                            <div className="grid grid-cols-4 gap-1.5">
-                                                {RESOLUTIONS.map((r) => {
+                                            <div
+                                                className="grid gap-1.5"
+                                                style={{
+                                                    gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, availableResolutions.length))}, minmax(0, 1fr))`,
+                                                }}
+                                            >
+                                                {availableResolutions.map((r) => {
                                                     const active = resolution === r.id;
                                                     return (
                                                         <button
@@ -1384,9 +1413,14 @@ export default function VideoLabCreateForm({
                                         {/* Aspect */}
                                         <div>
                                             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('aspectRatio')}</p>
-                                            <div className="grid grid-cols-5 gap-1.5">
-                                                {ASPECTS.map((key) => {
-                                                    const meta = aspectMeta[key];
+                                            <div
+                                                className="grid gap-1.5"
+                                                style={{
+                                                    gridTemplateColumns: `repeat(${Math.min(5, Math.max(2, availableAspects.length))}, minmax(0, 1fr))`,
+                                                }}
+                                            >
+                                                {availableAspects.map((key) => {
+                                                    const meta = aspectBox(key);
                                                     const active = aspect === key;
                                                     return (
                                                         <button
@@ -1426,8 +1460,8 @@ export default function VideoLabCreateForm({
                             <span
                                 className="rounded-[2px] border border-orange-300/50"
                                 style={{
-                                    width: Math.max(8, (aspectMeta[aspect]?.w || 14) * 0.7),
-                                    height: Math.max(8, (aspectMeta[aspect]?.h || 14) * 0.7),
+                                    width: Math.max(8, (aspectBox(aspect).w || 14) * 0.7),
+                                    height: Math.max(8, (aspectBox(aspect).h || 14) * 0.7),
                                 }}
                             />
                             {aspect}

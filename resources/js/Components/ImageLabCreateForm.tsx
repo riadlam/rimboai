@@ -10,6 +10,12 @@ import AssetMentionTextarea, {
 } from '@/Components/AssetMentionTextarea';
 import { loadDraftMediaFiles, matchLabModel, type LabReuseDraft } from '@/lib/labReuse';
 import { hasMeaningfulPrompt } from '@/lib/promptText';
+import {
+    aspectBox,
+    imageAspectOptions,
+    imageResolutionOptions,
+    pickSupportedValue,
+} from '@/lib/labModelOptions';
 
 export type ImageGenerateOptions = {
     quantity: number;
@@ -33,14 +39,6 @@ type Props = {
 
 const createTabGlow =
     'radial-gradient(40.23% 21.05% at 49.78% 0%, rgba(255, 255, 255, 0.25) 0%, rgba(255, 87, 51, 0) 100%), radial-gradient(64.38% 127.63% at 51.44% 189.47%, rgb(255, 87, 51) 0%, rgba(255, 87, 51, 0.14) 75.41%, rgba(255, 87, 51, 0) 100%), radial-gradient(62.56% 123.04% at 56.08% -62.5%, rgb(255, 87, 51) 0%, rgba(255, 87, 51, 0.14) 63.27%, rgba(255, 87, 51, 0) 100%), radial-gradient(132.84% 167.33% at 3.65% -101.97%, rgba(255, 87, 51, 0.7) 0%, rgba(255, 87, 51, 0.3) 52.68%, rgba(255, 87, 51, 0.24) 62.41%, rgba(255, 87, 51, 0) 100%), radial-gradient(108.19% 123.4% at 103.21% -59.87%, rgba(255, 87, 51, 0.7) 0%, rgba(255, 87, 51, 0.3) 45.38%, rgba(255, 87, 51, 0.24) 56.19%, rgba(255, 87, 51, 0) 100%)';
-
-const aspectMeta: Record<string, { w: number; h: number; label: string }> = {
-    '1:1': { w: 14, h: 14, label: 'Square' },
-    '16:9': { w: 18, h: 10, label: 'Landscape' },
-    '9:16': { w: 10, h: 18, label: 'Portrait' },
-    '4:5': { w: 12, h: 15, label: 'Social' },
-    '3:4': { w: 12, h: 16, label: 'Photo' },
-};
 
 export default function ImageLabCreateForm({
     brands = [],
@@ -97,6 +95,27 @@ export default function ImageLabCreateForm({
         () => allModels.find((m) => m.name === selectedModel),
         [allModels, selectedModel],
     );
+
+    const availableAspects = useMemo(
+        () => imageAspectOptions(selectedModelRecord?.aspect_ratios),
+        [selectedModelRecord],
+    );
+
+    const availableResolutions = useMemo(
+        () => imageResolutionOptions(selectedModelRecord?.resolutions),
+        [selectedModelRecord],
+    );
+
+    useEffect(() => {
+        setAspect((prev) => pickSupportedValue(prev, availableAspects, '1:1'));
+        setResolution((prev) =>
+            pickSupportedValue(
+                prev,
+                availableResolutions.map((r) => r.id),
+                '1K',
+            ),
+        );
+    }, [availableAspects, availableResolutions]);
 
     const selectedSupportsVariations = selectedModelRecord?.supports_variations === true;
 
@@ -178,10 +197,14 @@ export default function ImageLabCreateForm({
                 .trim()
                 .replace(/\s+/g, '')
                 .replace(/[xX×/／：]/g, ':');
-            if (nextAspect && aspectMeta[nextAspect]) {
+            const draftAspects = imageAspectOptions(matched?.aspect_ratios);
+            const draftResolutions = imageResolutionOptions(matched?.resolutions);
+            if (nextAspect && draftAspects.includes(nextAspect)) {
                 setAspect(nextAspect);
             }
-            if (draft.resolution && ['1K', '2K', '4K'].includes(draft.resolution)) setResolution(draft.resolution);
+            if (draft.resolution && draftResolutions.some((r) => r.id === draft.resolution)) {
+                setResolution(draft.resolution);
+            }
             if (draft.quantity && draft.quantity >= 1) setQuantity(Math.min(4, draft.quantity));
 
             // Use Image must land on Create Image — never Variations / Remix refs.
@@ -246,10 +269,12 @@ export default function ImageLabCreateForm({
                         .trim()
                         .replace(/\s+/g, '')
                         .replace(/[xX×/／：]/g, ':');
-                    if (retryAspect && aspectMeta[retryAspect]) {
+                    const retryAspects = imageAspectOptions(matched?.aspect_ratios);
+                    const retryResolutions = imageResolutionOptions(matched?.resolutions);
+                    if (retryAspect && retryAspects.includes(retryAspect)) {
                         setAspect(retryAspect);
                     }
-                    if (draft.resolution && ['1K', '2K', '4K'].includes(draft.resolution)) {
+                    if (draft.resolution && retryResolutions.some((r) => r.id === draft.resolution)) {
                         setResolution(draft.resolution);
                     }
                     if (draft.intent === 'use-result') {
@@ -646,8 +671,14 @@ export default function ImageLabCreateForm({
                     {/* Aspect visual picker */}
                     <div>
                         <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('aspectRatio')}</p>
-                        <div className="grid grid-cols-5 gap-1.5">
-                            {Object.entries(aspectMeta).map(([key, meta]) => {
+                        <div
+                            className="grid gap-1.5"
+                            style={{
+                                gridTemplateColumns: `repeat(${Math.min(5, Math.max(2, availableAspects.length))}, minmax(0, 1fr))`,
+                            }}
+                        >
+                            {availableAspects.map((key) => {
+                                const meta = aspectBox(key);
                                 const active = aspect === key;
                                 return (
                                     <button
@@ -674,26 +705,39 @@ export default function ImageLabCreateForm({
                     {/* Resolution */}
                     <div>
                         <p className="mb-2 px-0.5 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('resolution')}</p>
-                        <div className="grid grid-cols-3 gap-1.5">
-                            {[
-                                { id: '1K', sub: t('image.resFast') },
-                                { id: '2K', sub: t('image.resBalanced') },
-                                { id: '4K', sub: t('image.resMax') },
-                            ].map((r) => (
-                                <button
-                                    key={r.id}
-                                    type="button"
-                                    onClick={() => setResolution(r.id)}
-                                    className={`rounded-xl border px-2 py-2.5 text-center transition ${
-                                        resolution === r.id
-                                            ? 'border-orange-400/50 bg-orange-500/15 text-orange-100'
-                                            : 'border-white/[0.07] bg-white/[0.03] text-white/55 hover:text-white'
-                                    }`}
-                                >
-                                    <span className="block text-sm font-semibold">{r.id}</span>
-                                    <span className={`mt-0.5 block text-[10px] ${resolution === r.id ? 'text-orange-200/70' : 'text-white/30'}`}>{r.sub}</span>
-                                </button>
-                            ))}
+                        <div
+                            className="grid gap-1.5"
+                            style={{
+                                gridTemplateColumns: `repeat(${Math.min(3, Math.max(2, availableResolutions.length))}, minmax(0, 1fr))`,
+                            }}
+                        >
+                            {availableResolutions.map((r) => {
+                                const sub =
+                                    r.subKey === 'fast'
+                                        ? t('image.resFast')
+                                        : r.subKey === 'balanced'
+                                          ? t('image.resBalanced')
+                                          : r.subKey === 'max'
+                                            ? t('image.resMax')
+                                            : r.id;
+                                return (
+                                    <button
+                                        key={r.id}
+                                        type="button"
+                                        onClick={() => setResolution(r.id)}
+                                        className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                                            resolution === r.id
+                                                ? 'border-orange-400/50 bg-orange-500/15 text-orange-100'
+                                                : 'border-white/[0.07] bg-white/[0.03] text-white/55 hover:text-white'
+                                        }`}
+                                    >
+                                        <span className="block text-sm font-semibold">{r.id}</span>
+                                        <span className={`mt-0.5 block text-[10px] ${resolution === r.id ? 'text-orange-200/70' : 'text-white/30'}`}>
+                                            {sub}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -736,8 +780,8 @@ export default function ImageLabCreateForm({
                             <span
                                 className="rounded-[2px] border border-orange-300/50"
                                 style={{
-                                    width: Math.max(8, (aspectMeta[aspect]?.w || 14) * 0.7),
-                                    height: Math.max(8, (aspectMeta[aspect]?.h || 14) * 0.7),
+                                    width: Math.max(8, (aspectBox(aspect).w || 14) * 0.7),
+                                    height: Math.max(8, (aspectBox(aspect).h || 14) * 0.7),
                                 }}
                             />
                             {aspect}
