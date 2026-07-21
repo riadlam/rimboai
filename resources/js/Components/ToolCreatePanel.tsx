@@ -6,8 +6,6 @@ import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
 import { estimateToolCredits, snapBillableDuration } from '@/lib/toolCredits';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import type { PageProps, Tool, ToolControlSpec, ToolUploadSpec, ToolWorkspace } from '@/types';
-import { LabModelPickerModal, LabModelPickerTrigger } from '@/Components/LabModelPicker';
-
 type FileSlot = {
     file: File | null;
     preview: string | null;
@@ -101,8 +99,6 @@ export default function ToolCreatePanel({
     );
     const [slots, setSlots] = useState<Record<string, FileSlot>>(() => initSlots(workspace.uploads));
     const [settingsOpen, setSettingsOpen] = useState(true);
-    const [modelOpen, setModelOpen] = useState(false);
-    const [selectedModelId, setSelectedModelId] = useState<number | null>(workspace.model_id);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -110,10 +106,11 @@ export default function ToolCreatePanel({
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // Always use the primary model — AI Model picker is hidden from the tools UI.
     const modelOptions = workspace.models ?? [];
     const selectedModel =
-        modelOptions.find((m) => m.id === selectedModelId) ??
         modelOptions.find((m) => m.id === workspace.model_id) ??
+        modelOptions.find((m) => m.is_primary) ??
         modelOptions[0] ??
         null;
     const activeBilling = selectedModel?.billing ?? workspace.billing;
@@ -127,7 +124,6 @@ export default function ToolCreatePanel({
             });
             return initSlots(workspace.uploads);
         });
-        setSelectedModelId(workspace.model_id);
         setError(null);
         setStatusMessage(null);
     }, [workspace.tool_slug, workspace.model_id]);
@@ -482,24 +478,6 @@ export default function ToolCreatePanel({
                             </h1>
                             <p className="mt-1.5 text-[13px] leading-relaxed text-white/45">{description}</p>
                         </div>
-
-                        {modelOptions.length > 0 && selectedModel && (
-                            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
-                                <div className="min-w-0">
-                                    <p className="text-[10px] font-medium uppercase tracking-wider text-white/35">
-                                        {t('detail.aiModel', { defaultValue: 'AI Model' })}
-                                    </p>
-                                    <p className="truncate text-[13px] font-medium text-white/85">{selectedModel.name}</p>
-                                </div>
-                                {modelOptions.length > 1 ? (
-                                    <LabModelPickerTrigger
-                                        modelName={selectedModel.name}
-                                        icon={selectedModel.image_url}
-                                        onClick={() => setModelOpen(true)}
-                                    />
-                                ) : null}
-                            </div>
-                        )}
                     </div>
 
                     {!workspace.available && (
@@ -685,34 +663,6 @@ export default function ToolCreatePanel({
                 </div>
             </div>
         </motion.aside>
-        <LabModelPickerModal
-            open={modelOpen}
-            models={modelOptions.map((m) => ({
-                name: m.name,
-                description: m.description,
-                icon: m.image_url ?? null,
-                image_cover: m.image_url ?? null,
-                endpoint_id: String(m.id),
-                unit_price: m.billing.unit_price,
-                unit: m.billing.unit,
-                max_duration: m.billing.max_duration ?? null,
-                enums: null,
-                duration: null,
-                credits: null,
-                tags: m.is_primary ? ['Primary'] : [],
-                brandName: tool.name,
-                brandIcon: null,
-            }))}
-            selectedName={selectedModel?.name ?? ''}
-            onSelect={(m) => {
-                const match = modelOptions.find((opt) => opt.name === m.name);
-                if (match) setSelectedModelId(match.id);
-                setModelOpen(false);
-            }}
-            onClose={() => setModelOpen(false)}
-            title={t('detail.aiModel', { defaultValue: 'AI Model' })}
-            subtitle={t('detail.selectModelSub', { defaultValue: 'Pick a model for this tool' })}
-        />
         </>
     );
 }
