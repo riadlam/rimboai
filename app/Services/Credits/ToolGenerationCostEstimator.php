@@ -131,6 +131,7 @@ class ToolGenerationCostEstimator
      *   max_duration?: int|null,
      *   resolution?: string|null,
      *   fps?: float|int|null,
+     *   pricing_defaults?: array<string, mixed>|null,
      * }  $options
      * @return array{
      *   fal_cost_usd: float,
@@ -164,6 +165,28 @@ class ToolGenerationCostEstimator
         if (! ($duration > 0) || $unitPrice <= 0) {
             return $this->pack(0.0, 0.0, $unit !== '' ? $unit : 'seconds', $unitPrice, [
                 'formula' => 'no_billable_duration',
+                'duration_seconds' => $duration,
+            ]);
+        }
+
+        // Kling 2.5 Turbo Pro i2v — base clip + per-second beyond (defaults.pricing overridable).
+        // https://fal.ai/models/fal-ai/kling-video/v2.5-turbo/pro/image-to-video
+        if (str_contains($endpointId, 'kling-video/v2.5-turbo/pro/image-to-video')) {
+            $pricingDefaults = is_array($options['pricing_defaults'] ?? null)
+                ? $options['pricing_defaults']
+                : [];
+            $kling = \App\Services\Tools\ToolPricingTiers::klingTurboProPricing($pricingDefaults, $unitPrice);
+            $baseSeconds = $kling['base_seconds'];
+            $baseCost = $kling['base_cost_usd'];
+            $perSecond = $kling['extra_unit_price'];
+            $extra = max(0.0, $duration - $baseSeconds);
+            $falCost = round($baseCost + $extra * $perSecond, 6);
+
+            return $this->pack($falCost, $duration, 'seconds', $perSecond, [
+                'formula' => 'base_cost + extra_unit_price * max(0, duration - base_seconds)',
+                'base_cost_usd' => $baseCost,
+                'base_seconds' => $baseSeconds,
+                'extra_seconds' => $extra,
                 'duration_seconds' => $duration,
             ]);
         }
@@ -258,11 +281,24 @@ class ToolGenerationCostEstimator
             ]);
         }
 
-        $falCost = round($duration * $unitPrice, 6);
+        // Topaz / ByteDance upscalers double the per-second price for 60fps output.
+        $fpsMultiplier = 1.0;
+        if (
+            $fps >= 50
+            && (str_contains($endpointId, 'topaz/upscale/video')
+                || str_contains($endpointId, 'bytedance-upscaler'))
+        ) {
+            $fpsMultiplier = 2.0;
+        }
+
+        $falCost = round($duration * $unitPrice * $fpsMultiplier, 6);
 
         return $this->pack($falCost, $duration, $unit !== '' ? $unit : 'seconds', $unitPrice, [
-            'formula' => 'duration_seconds * unit_price',
+            'formula' => $fpsMultiplier > 1.0
+                ? 'duration_seconds * unit_price * 2 (60fps)'
+                : 'duration_seconds * unit_price',
             'duration_seconds' => $duration,
+            'fps_multiplier' => $fpsMultiplier,
         ]);
     }
 

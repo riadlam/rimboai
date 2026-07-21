@@ -148,6 +148,13 @@ export type ToolBilling = {
     unit_price: number;
     /** When set, Fal $/unit changes with the selected output resolution. */
     unit_price_by_resolution?: Record<string, number> | null;
+    /** Default upscale factor (Topaz/ByteDance output = input short edge × factor). */
+    upscale_factor?: number | null;
+    /** Kling Turbo etc. — base clip pricing from DB defaults. */
+    pricing?: {
+        base_cost_usd?: number;
+        base_seconds?: number;
+    } | null;
     max_duration?: number | null;
     ref_duration_seconds?: number | null;
     /** Supported billable duration steps (seconds); uploads snap up to the next step. */

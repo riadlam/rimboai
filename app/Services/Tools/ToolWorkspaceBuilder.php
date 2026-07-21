@@ -108,12 +108,17 @@ class ToolWorkspaceBuilder
             'endpoint_id' => (string) ($row->endpoint_id ?? ''),
             'unit' => (string) ($row->unit ?? 'seconds'),
             'unit_price' => (float) ($row->unit_price ?? 0),
-            // Fal tiers that change $/s (or flat $/clip) by output resolution.
+            // Default upscale factor (Topaz/ByteDance output = input short edge × factor).
+            'upscale_factor' => self::upscaleFactorFor(is_array($defaults) ? $defaults : [], []),
+            // Fal tiers: DB column preferred, hardcoded safety-net floor (never undercharge).
             'unit_price_by_resolution' => self::unitPriceByResolution(
                 (string) $row->endpoint_id,
                 (string) ($row->unit ?? 'seconds'),
                 is_array($defaults) ? $defaults : [],
+                $this->decodeJson($row->unit_price_by_resolution ?? null),
             ),
+            // Kling Turbo etc. — base clip pricing overridable via defaults.pricing
+            'pricing' => is_array($defaults['pricing'] ?? null) ? $defaults['pricing'] : null,
             'max_duration' => $row->max_duration !== null ? (int) $row->max_duration : null,
             'ref_duration_seconds' => $row->ref_duration_seconds !== null
                 ? (int) $row->ref_duration_seconds
@@ -520,111 +525,104 @@ class ToolWorkspaceBuilder
     }
 
     /**
-     * Resolution-tiered Fal prices for models that bill differently by output size.
-     * Keys are lowercase resolution labels; values are USD per billing unit.
+     * Resolution-tiered Fal prices. Prefers DB JSON, never bills below hardcoded floor.
      *
      * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>|null  $dbTiers
      * @return array<string, float>|null
      */
-    public static function unitPriceByResolution(string $endpointId, string $unit, array $defaults = []): ?array
+    public static function unitPriceByResolution(
+        string $endpointId,
+        string $unit,
+        array $defaults = [],
+        ?array $dbTiers = null,
+    ): ?array {
+        return ToolPricingTiers::resolve($endpointId, $unit, $defaults, $dbTiers);
+    }
+
+    /**
+     * Upscale factor selected for an upscaler/enhancer request.
+     * Reads the "2x"/"4x" scale control, else falls back to the model defaults.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     */
+    public static function upscaleFactorFor(array $defaults, array $settings): float
     {
-        // Wan 2.7 family — $0.10/s @ 720p, $0.15/s @ 1080p
-        // https://fal.ai/models/fal-ai/wan/v2.7/edit-video
-        // https://fal.ai/models/fal-ai/wan/v2.7/image-to-video
-        // https://fal.ai/models/fal-ai/wan/v2.7/text-to-video
-        if (
-            str_contains($endpointId, 'wan/v2.7/edit-video')
-            || str_contains($endpointId, 'wan/v2.7/image-to-video')
-            || str_contains($endpointId, 'wan/v2.7/text-to-video')
-            || str_contains($endpointId, 'wan/v2.7/reference-to-video')
-        ) {
-            return [
-                '720p' => 0.10,
-                '1080p' => 0.15,
-            ];
+        $scale = $settings['scale'] ?? null;
+        if (is_string($scale) && preg_match('/^(\d+(?:\.\d+)?)x$/i', trim($scale), $m)) {
+            return max(1.0, (float) $m[1]);
+        }
+        if (is_numeric($scale) && (float) $scale > 0) {
+            return max(1.0, (float) $scale);
+        }
+        foreach (['upscale_factor', 'scale_ratio'] as $key) {
+            if (isset($defaults[$key]) && is_numeric($defaults[$key]) && (float) $defaults[$key] > 0) {
+                return max(1.0, (float) $defaults[$key]);
+            }
         }
 
-        // Wan Animate Move / Wan 2.2 v2v — billed per "video second" (16fps-normalized).
-        // https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/move
-        // https://fal.ai/models/fal-ai/wan/v2.2-a14b/video-to-video
-        if (
-            str_contains($endpointId, 'wan/v2.2-14b/animate/move')
-            || str_contains($endpointId, 'wan/v2.2-a14b/video-to-video')
-        ) {
-            return [
-                '480p' => 0.04,
-                '580p' => 0.06,
-                '720p' => 0.08,
-            ];
+        return 1.0;
+    }
+
+    /**
+     * Resolution tier to bill on. For Topaz / ByteDance upscalers Fal charges by the
+     * ACTUAL OUTPUT resolution (= input short edge × upscale factor), NOT by any label
+     * the user picked. Everything else keeps the selected resolution unchanged.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $settings
+     */
+    public static function outputBillingResolution(
+        string $endpointId,
+        array $defaults,
+        array $settings,
+        ?int $inputWidth,
+        ?int $inputHeight,
+        ?string $selectedResolution,
+    ): ?string {
+        $isTopaz = str_contains($endpointId, 'topaz/upscale/video');
+        $isBytedance = str_contains($endpointId, 'bytedance-upscaler');
+
+        if (! $isTopaz && ! $isBytedance) {
+            return $selectedResolution;
         }
 
-        // Topaz Video Upscale — output-resolution tiers (Gaia 2 is half price).
-        // https://fal.ai/models/fal-ai/topaz/upscale/video
-        // ≤720p: $0.01/s · 720p→1080p: $0.02/s · above 1080p: $0.08/s
-        if (str_contains($endpointId, 'topaz/upscale/video')) {
-            $model = strtolower((string) ($defaults['model'] ?? ''));
-            $half = str_contains($model, 'gaia 2') || $model === 'gaia2';
-            $tiers = [
-                '720p' => 0.01,
-                '1080p' => 0.02,
-                '1440p' => 0.08,
-                '2k' => 0.08,
-                '2160p' => 0.08,
-                '4k' => 0.08,
-            ];
-            if ($half) {
-                foreach ($tiers as $key => $price) {
-                    $tiers[$key] = round($price / 2, 6);
-                }
+        $factor = self::upscaleFactorFor($defaults, $settings);
+
+        $shortEdge = null;
+        if ($inputWidth !== null && $inputHeight !== null && $inputWidth > 0 && $inputHeight > 0) {
+            $shortEdge = min($inputWidth, $inputHeight) * $factor;
+        }
+
+        if ($isBytedance) {
+            if ($shortEdge === null) {
+                // Unknown input dims: assume the scale pushes into a paid tier.
+                return $factor >= 3.5 ? '4k' : '2k';
+            }
+            if ($shortEdge <= 1081) {
+                return '1080p';
+            }
+            if ($shortEdge <= 1441) {
+                return '2k';
             }
 
-            return $tiers;
+            return '4k';
         }
 
-        $flatVideo = \App\Services\Credits\ToolGenerationCostEstimator::isFlatVideoUnit($unit);
-
-        // PixVerse V4.5 image-to-video — flat per clip; price changes with resolution (5s base).
-        // https://fal.ai/models/fal-ai/pixverse/v4.5/image-to-video
-        if (str_contains($endpointId, 'pixverse/v4.5/image-to-video') && $flatVideo) {
-            if (str_contains($endpointId, '/fast')) {
-                return [
-                    '360p' => 0.30,
-                    '540p' => 0.30,
-                    '720p' => 0.40,
-                    '1080p' => 0.80,
-                ];
-            }
-
-            return [
-                '360p' => 0.15,
-                '540p' => 0.15,
-                '720p' => 0.20,
-                '1080p' => 0.40,
-            ];
+        // Topaz: ≤720p / 720p→1080p / above 1080p.
+        if ($shortEdge === null) {
+            // Unknown input dims: upscaling almost always exceeds 1080p; denoise (≈1×) stays 1080p.
+            return $factor >= 1.5 ? '2160p' : '1080p';
+        }
+        if ($shortEdge <= 721) {
+            return '720p';
+        }
+        if ($shortEdge <= 1081) {
+            return '1080p';
         }
 
-        // PixVerse Swap — flat per clip; price changes with resolution (5s base, doubles if longer).
-        // https://fal.ai/models/fal-ai/pixverse/swap
-        if (str_contains($endpointId, 'pixverse/swap') && $flatVideo) {
-            return [
-                '360p' => 0.15,
-                '540p' => 0.15,
-                '720p' => 0.20,
-            ];
-        }
-
-        // PixVerse V6 Extend — per second by resolution.
-        // https://fal.ai/models/fal-ai/pixverse/v6/extend
-        if (str_contains($endpointId, 'pixverse/v6/extend')) {
-            return [
-                '360p' => 0.03,
-                '540p' => 0.03,
-                '720p' => 0.045,
-                '1080p' => 0.09,
-            ];
-        }
-
-        return null;
+        return '2160p';
     }
 
     /**

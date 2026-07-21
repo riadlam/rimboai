@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\FalVideoPricingNormalizer;
 use App\Services\TelegramNotifier;
+use App\Services\Tools\ToolPricingTiers;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -93,11 +94,21 @@ class FalSyncPricing extends Command
                 continue;
             }
 
+            $select = ['id', 'endpoint_id', 'name', 'status', 'unit', 'unit_price'];
+            if ($table === 'video_tools_models') {
+                if (Schema::hasColumn($table, 'unit_price_by_resolution')) {
+                    $select[] = 'unit_price_by_resolution';
+                }
+                if (Schema::hasColumn($table, 'defaults')) {
+                    $select[] = 'defaults';
+                }
+            }
+
             $rows = DB::table($table)
                 ->whereNotNull('endpoint_id')
                 ->where('endpoint_id', '!=', '')
                 ->orderBy('id')
-                ->get(['endpoint_id', 'name', 'status', 'unit', 'unit_price']);
+                ->get($select);
 
             $count = $rows->count();
             $this->info("[{$table}] syncing {$count} endpoints...");
@@ -106,7 +117,7 @@ class FalSyncPricing extends Command
             $chunks = $rows->chunk(self::BATCH_SIZE)->values();
 
             foreach ($chunks as $chunkIndex => $chunk) {
-                $endpointIds = $chunk->pluck('endpoint_id')->all();
+                $endpointIds = $chunk->pluck('endpoint_id')->unique()->values()->all();
 
                 // One request for status, one for pricing — for the whole chunk.
                 $statusMap = $skipStatus ? [] : $this->fetchStatusBatch($key, $endpointIds);
@@ -173,15 +184,44 @@ class FalSyncPricing extends Command
                             }
 
                             if ($oldPrice === null || round($oldPrice, 6) !== round($unitPrice, 6)) {
-                                $changes['unit_price'] = $unitPrice;
-                                $changeEvents[] = [
-                                    'table' => $table,
-                                    'endpoint' => $endpointId,
-                                    'name' => $label,
-                                    'field' => 'unit_price',
-                                    'old' => $oldPrice,
-                                    'new' => $unitPrice,
-                                ];
+                                if ($table === 'video_tools_models') {
+                                    $defaultsForLock = $this->decodeDefaults($row->defaults ?? null);
+                                    if (ToolPricingTiers::isTierScaleLocked($defaultsForLock)) {
+                                        // Shared Fal endpoint (Topaz) list price must not overwrite Gaia’s halved rates.
+                                        $this->applyLockedToolListPriceScale(
+                                            $row,
+                                            $defaultsForLock,
+                                            $unitPrice,
+                                            $changes,
+                                            $changeEvents,
+                                            $label,
+                                        );
+                                    } else {
+                                        $changes['unit_price'] = $unitPrice;
+                                        $changeEvents[] = [
+                                            'table' => $table,
+                                            'endpoint' => $endpointId,
+                                            'name' => $label,
+                                            'field' => 'unit_price',
+                                            'old' => $oldPrice,
+                                            'new' => $unitPrice,
+                                        ];
+
+                                        if ($oldPrice !== null && $oldPrice > 0) {
+                                            $this->applyToolTierScale($row, $oldPrice, $unitPrice, $changes, $changeEvents, $label);
+                                        }
+                                    }
+                                } else {
+                                    $changes['unit_price'] = $unitPrice;
+                                    $changeEvents[] = [
+                                        'table' => $table,
+                                        'endpoint' => $endpointId,
+                                        'name' => $label,
+                                        'field' => 'unit_price',
+                                        'old' => $oldPrice,
+                                        'new' => $unitPrice,
+                                    ];
+                                }
                             }
                         }
                     }
@@ -192,7 +232,8 @@ class FalSyncPricing extends Command
                         $this->line("  ~ {$endpointId}: " . $this->describe($changes) . ' (dry-run)');
                     } else {
                         $changes['updated_at'] = now();
-                        DB::table($table)->where('endpoint_id', $endpointId)->update($changes);
+                        // Update by row id so shared endpoints (Topaz Proteus vs Gaia) keep separate tiers.
+                        DB::table($table)->where('id', $row->id)->update($changes);
                         $this->line("  + {$endpointId}: " . $this->describe($changes));
                     }
                 }
@@ -506,13 +547,178 @@ class FalSyncPricing extends Command
     private function describe(array $changes): string
     {
         $parts = [];
-        foreach (['status', 'unit', 'unit_price'] as $field) {
-            if (array_key_exists($field, $changes)) {
+        foreach (['status', 'unit', 'unit_price', 'unit_price_by_resolution', 'defaults'] as $field) {
+            if (! array_key_exists($field, $changes)) {
+                continue;
+            }
+            if ($field === 'unit_price_by_resolution') {
+                $parts[] = 'tiers=scaled';
+            } elseif ($field === 'defaults') {
+                $parts[] = 'defaults=scaled';
+            } else {
                 $parts[] = "{$field}={$changes[$field]}";
             }
         }
 
         return implode(' ', $parts);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function decodeDefaults(mixed $defaults): ?array
+    {
+        if (is_array($defaults)) {
+            return $defaults;
+        }
+        if (is_string($defaults) && $defaults !== '') {
+            $decoded = json_decode($defaults, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Gaia / locked tools: scale from Fal list-price snapshot, never adopt Proteus unit_price.
+     *
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $changes
+     * @param  list<array<string, mixed>>  $changeEvents
+     */
+    private function applyLockedToolListPriceScale(
+        object $row,
+        array $defaults,
+        float $falListPrice,
+        array &$changes,
+        array &$changeEvents,
+        string $label,
+    ): void {
+        $prevFal = isset($defaults['fal_list_unit_price']) && is_numeric($defaults['fal_list_unit_price'])
+            ? (float) $defaults['fal_list_unit_price']
+            : null;
+
+        if ($prevFal === null || $prevFal <= 0) {
+            $defaults['fal_list_unit_price'] = round($falListPrice, 6);
+            $changes['defaults'] = json_encode($defaults, JSON_UNESCAPED_SLASHES);
+
+            return;
+        }
+
+        if (abs($prevFal - $falListPrice) < 1e-9) {
+            return;
+        }
+
+        $oldRowPrice = $row->unit_price !== null ? (float) $row->unit_price : null;
+        $existing = ToolPricingTiers::normalize($row->unit_price_by_resolution ?? null);
+        if ($existing === []) {
+            $existing = ToolPricingTiers::hardcoded(
+                (string) $row->endpoint_id,
+                (string) ($row->unit ?? 'seconds'),
+                $defaults,
+            ) ?? [];
+        }
+        $scaledTiers = ToolPricingTiers::scale($existing, $prevFal, $falListPrice);
+
+        if ($scaledTiers !== null && $scaledTiers !== []) {
+            $changes['unit_price_by_resolution'] = json_encode($scaledTiers, JSON_UNESCAPED_SLASHES);
+            $changeEvents[] = [
+                'table' => 'video_tools_models',
+                'endpoint' => (string) $row->endpoint_id,
+                'name' => $label,
+                'field' => 'unit_price_by_resolution',
+                'old' => 'locked-scaled',
+                'new' => 'tiers',
+            ];
+        }
+
+        if ($oldRowPrice !== null && $oldRowPrice > 0) {
+            $scaledPrice = ToolPricingTiers::scale(
+                ['x' => $oldRowPrice],
+                $prevFal,
+                $falListPrice,
+            );
+            if ($scaledPrice !== null) {
+                $changes['unit_price'] = $scaledPrice['x'];
+                $changeEvents[] = [
+                    'table' => 'video_tools_models',
+                    'endpoint' => (string) $row->endpoint_id,
+                    'name' => $label,
+                    'field' => 'unit_price',
+                    'old' => $oldRowPrice,
+                    'new' => $scaledPrice['x'],
+                ];
+            }
+        }
+
+        $defaults['fal_list_unit_price'] = round($falListPrice, 6);
+        $changes['defaults'] = json_encode($defaults, JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * When Fal base unit_price moves, proportionally rescale DB resolution tiers
+     * (and Kling Turbo base_cost). Locked rows (Gaia 2) are skipped so we never
+     * apply Proteus list price to halved animation tiers.
+     *
+     * @param  object  $row
+     * @param  array<string, mixed>  $changes
+     * @param  list<array<string, mixed>>  $changeEvents
+     */
+    private function applyToolTierScale(
+        object $row,
+        float $oldPrice,
+        float $newPrice,
+        array &$changes,
+        array &$changeEvents,
+        string $label,
+    ): void {
+        $defaults = $this->decodeDefaults($row->defaults ?? null);
+
+        if (ToolPricingTiers::isTierScaleLocked($defaults)) {
+            return;
+        }
+
+        $existing = ToolPricingTiers::normalize($row->unit_price_by_resolution ?? null);
+        if ($existing === []) {
+            // Bootstrap from hardcoded safety net so future syncs have something to scale.
+            $existing = ToolPricingTiers::hardcoded(
+                (string) $row->endpoint_id,
+                (string) ($changes['unit'] ?? $row->unit ?? 'seconds'),
+                is_array($defaults) ? $defaults : [],
+            ) ?? [];
+        }
+
+        $scaled = ToolPricingTiers::scale($existing, $oldPrice, $newPrice);
+        if ($scaled !== null && $scaled !== []) {
+            $changes['unit_price_by_resolution'] = json_encode($scaled, JSON_UNESCAPED_SLASHES);
+            $changeEvents[] = [
+                'table' => 'video_tools_models',
+                'endpoint' => (string) $row->endpoint_id,
+                'name' => $label,
+                'field' => 'unit_price_by_resolution',
+                'old' => 'scaled×'.round($newPrice / $oldPrice, 4),
+                'new' => 'tiers',
+            ];
+        }
+
+        // Kling Turbo Pro: keep base_cost_usd in lockstep with extra $/s (unit_price).
+        if (
+            is_array($defaults)
+            && str_contains((string) $row->endpoint_id, 'kling-video/v2.5-turbo/pro/image-to-video')
+            && is_array($defaults['pricing'] ?? null)
+            && isset($defaults['pricing']['base_cost_usd'])
+            && is_numeric($defaults['pricing']['base_cost_usd'])
+        ) {
+            $ratio = $newPrice / $oldPrice;
+            if ($ratio >= 0.25 && $ratio <= 4.0) {
+                $defaults['pricing']['base_cost_usd'] = round(
+                    (float) $defaults['pricing']['base_cost_usd'] * $ratio,
+                    6,
+                );
+                $changes['defaults'] = json_encode($defaults, JSON_UNESCAPED_SLASHES);
+            }
+        }
     }
 
     /**

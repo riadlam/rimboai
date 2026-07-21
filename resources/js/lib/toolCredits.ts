@@ -11,6 +11,13 @@ export type ToolBilling = {
     unit_price: number;
     /** When set, Fal $/unit changes with the selected output resolution. */
     unit_price_by_resolution?: Record<string, number> | null;
+    /** Default upscale factor (Topaz/ByteDance output = input short edge × factor). */
+    upscale_factor?: number | null;
+    /** Kling Turbo etc. — base clip + per-second beyond (from DB defaults.pricing). */
+    pricing?: {
+        base_cost_usd?: number;
+        base_seconds?: number;
+    } | null;
     max_duration?: number | null;
     ref_duration_seconds?: number | null;
     /**
@@ -30,6 +37,11 @@ export type ToolCreditOptions = {
     fps?: number;
     /** Flat video units (PixVerse-style: doubles when duration > 5s) */
     videoLong?: boolean;
+    /** Source video short/long dimensions — upscalers bill by real output resolution. */
+    inputWidth?: number;
+    inputHeight?: number;
+    /** Selected "2x"/"4x" scale control (upscaler). */
+    scale?: string;
 };
 
 export type ToolCreditEstimate = {
@@ -134,6 +146,63 @@ export function isFlatVideoUnit(unit: string | null | undefined): boolean {
     return normalized === 'video' || normalized === 'videos' || normalized === 'video_segments';
 }
 
+function isTopazUpscale(endpointId: string | null | undefined): boolean {
+    return String(endpointId || '')
+        .toLowerCase()
+        .includes('topaz/upscale/video');
+}
+
+function isBytedanceUpscale(endpointId: string | null | undefined): boolean {
+    return String(endpointId || '')
+        .toLowerCase()
+        .includes('bytedance-upscaler');
+}
+
+function parseScaleFactor(scale: string | number | null | undefined): number | null {
+    if (scale == null || scale === '') return null;
+    if (typeof scale === 'number') return scale > 0 ? scale : null;
+    const m = /^(\d+(?:\.\d+)?)x$/i.exec(String(scale).trim());
+    if (m) return Number(m[1]);
+    const n = Number(scale);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Resolution tier to bill on for Topaz / ByteDance upscalers: the real output
+ * resolution (= input short edge × upscale factor), mirroring the server.
+ */
+function upscalerOutputResolution(
+    billing: ToolBilling,
+    options: ToolCreditOptions,
+    fallback: string,
+): string {
+    const endpoint = billing.endpoint_id;
+    const topaz = isTopazUpscale(endpoint);
+    const bytedance = isBytedanceUpscale(endpoint);
+    if (!topaz && !bytedance) return fallback;
+
+    const factor =
+        parseScaleFactor(options.scale) ??
+        (billing.upscale_factor && billing.upscale_factor > 0 ? billing.upscale_factor : 1);
+
+    const w = options.inputWidth ?? 0;
+    const h = options.inputHeight ?? 0;
+    const shortEdge = w > 0 && h > 0 ? Math.min(w, h) * factor : null;
+
+    if (bytedance) {
+        if (shortEdge == null) return factor >= 3.5 ? '4k' : '2k';
+        if (shortEdge <= 1081) return '1080p';
+        if (shortEdge <= 1441) return '2k';
+        return '4k';
+    }
+
+    // Topaz
+    if (shortEdge == null) return factor >= 1.5 ? '2160p' : '1080p';
+    if (shortEdge <= 721) return '720p';
+    if (shortEdge <= 1081) return '1080p';
+    return '2160p';
+}
+
 export function estimateToolCredits(
     billing: ToolBilling | null | undefined,
     options: ToolCreditOptions = {},
@@ -144,7 +213,12 @@ export function estimateToolCredits(
     }
 
     const unit = normalizeUnit(billing.unit);
-    const resolution = (options.resolution || '1080p').toLowerCase();
+    // Upscalers bill by real output resolution (input short edge × scale factor).
+    const resolution = upscalerOutputResolution(
+        billing,
+        options,
+        (options.resolution || '1080p').toLowerCase(),
+    ).toLowerCase();
     const unitPrice = resolveUnitPrice(billing, resolution);
     const duration = snapBillableDuration(
         options.durationSeconds ?? 0,
@@ -155,6 +229,27 @@ export function estimateToolCredits(
         return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: unit || 'seconds' };
     }
     const fps = Math.max(1, options.fps ?? 24);
+
+    // Kling 2.5 Turbo Pro i2v — base clip + per-second beyond (DB defaults.pricing).
+    if (String(billing.endpoint_id || '').includes('kling-video/v2.5-turbo/pro/image-to-video')) {
+        const baseCost =
+            typeof billing.pricing?.base_cost_usd === 'number' && billing.pricing.base_cost_usd > 0
+                ? billing.pricing.base_cost_usd
+                : 0.35;
+        const baseSeconds =
+            typeof billing.pricing?.base_seconds === 'number' && billing.pricing.base_seconds > 0
+                ? billing.pricing.base_seconds
+                : 5;
+        const perSecond = unitPrice > 0 ? unitPrice : 0.07;
+        const extra = Math.max(0, duration - baseSeconds);
+        const falCostUsd = round6(baseCost + extra * perSecond);
+        return {
+            falCostUsd,
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
+            billableUnits: duration,
+            unit: 'seconds',
+        };
+    }
 
     if (unit === 'megapixels' || unit === 'processed_megapixels') {
         const [w, h] = RES_DIMS[resolution] ?? RES_DIMS['1080p'];
@@ -241,8 +336,14 @@ export function estimateToolCredits(
         };
     }
 
+    // Topaz / ByteDance upscalers double the per-second price for 60fps output.
+    const fpsMultiplier =
+        fps >= 50 && (isTopazUpscale(billing.endpoint_id) || isBytedanceUpscale(billing.endpoint_id))
+            ? 2
+            : 1;
+
     // Default: per second (or per extension second)
-    const falCostUsd = round6(duration * unitPrice);
+    const falCostUsd = round6(duration * unitPrice * fpsMultiplier);
     return {
         falCostUsd,
         credits: toolCreditsFromFalUsd(falCostUsd, config),

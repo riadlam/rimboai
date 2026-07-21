@@ -98,6 +98,9 @@ class ToolGenerationController extends Controller
                 'tool_slug' => ['required', 'string', 'max:64'],
                 'duration_seconds' => ['nullable', 'numeric', 'min:0.5', 'max:600'],
                 'fps' => ['nullable', 'numeric', 'min:1', 'max:120'],
+                // Source video dimensions — used to bill upscalers by real output resolution.
+                'input_width' => ['nullable', 'integer', 'min:1', 'max:16384'],
+                'input_height' => ['nullable', 'integer', 'min:1', 'max:16384'],
                 'settings' => ['nullable', 'array'],
                 // 1️⃣ Upscaler
                 'settings.scale' => ['nullable', 'string', 'max:16'],
@@ -260,6 +263,23 @@ class ToolGenerationController extends Controller
                 ? 30.0
                 : (str_contains((string) $model->unit, 'frames') ? 30.0 : 24.0));
 
+        $selectedResolution = $settings['resolution']
+            ?? $built['resolution']
+            ?? ($defaults['resolution'] ?? '720p');
+
+        // Upscalers (Topaz / ByteDance) bill by the ACTUAL output resolution, which is
+        // the source's short edge × upscale factor — never the cheapest label default.
+        $billingResolution = \App\Services\Tools\ToolWorkspaceBuilder::outputBillingResolution(
+            $endpointId,
+            $defaults,
+            $settings,
+            isset($data['input_height']) ? (int) $data['input_height'] : null,
+            isset($data['input_width']) ? (int) $data['input_width'] : null,
+            is_string($selectedResolution) ? $selectedResolution : null,
+        ) ?? (is_string($selectedResolution) ? $selectedResolution : '720p');
+
+        $dbTiers = $this->decodeJson($model->unit_price_by_resolution ?? null);
+
         $cost = $costEstimator->estimate([
             'endpoint_id' => $endpointId,
             'unit' => $model->unit,
@@ -268,14 +288,14 @@ class ToolGenerationController extends Controller
                 $endpointId,
                 (string) ($model->unit ?? 'seconds'),
                 $defaults,
+                $dbTiers,
             ),
             'duration_seconds' => $billDuration,
             'duration_enums' => $durationEnums,
             'max_duration' => $model->max_duration,
-            'resolution' => $settings['resolution']
-                ?? $built['resolution']
-                ?? ($defaults['resolution'] ?? '720p'),
+            'resolution' => $billingResolution,
             'fps' => $estimateFps,
+            'pricing_defaults' => $defaults,
         ]);
 
         if ((int) $cost['credits'] <= 0) {

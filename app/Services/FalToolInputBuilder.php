@@ -70,8 +70,16 @@ class FalToolInputBuilder
             $input = array_merge($defaults, [
                 'video_url' => $videoUrl,
             ]);
+            // The shared 2×/4× "scale" control maps to ByteDance's scale_ratio (overrides
+            // target_resolution) so picking 4× actually upscales 4× instead of a no-op.
+            $factor = $this->scaleToFactor($settings['scale'] ?? null);
+            if ($factor !== null && $factor > 1) {
+                $input['scale_ratio'] = $factor;
+                unset($input['target_resolution']);
+            }
             if (! empty($settings['resolution'])) {
                 $input['target_resolution'] = $this->mapByteDanceResolution((string) $settings['resolution']);
+                unset($input['scale_ratio']);
             }
 
             return $this->onlyKeys($input, [

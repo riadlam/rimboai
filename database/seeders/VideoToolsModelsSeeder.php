@@ -55,6 +55,7 @@ class VideoToolsModelsSeeder extends Seeder
                 'status' => 'active',
                 'unit' => $row['unit'],
                 'unit_price' => number_format((float) $row['unit_price'], 6, '.', ''),
+                'unit_price_by_resolution' => $this->tiersJsonFor($row),
                 'token_cost' => $tokenCost,
                 'ref_cost_usd' => number_format($refUsd, 6, '.', ''),
                 'ref_duration_seconds' => $row['ref_duration_seconds'] ?? self::REF_SECONDS,
@@ -495,6 +496,9 @@ class VideoToolsModelsSeeder extends Seeder
                     'model' => 'Gaia 2',
                     'upscale_factor' => 2,
                     'resolution' => '1440p',
+                    // Halved Topaz tiers — cron scales via fal_list_unit_price, never adopts Proteus $/s.
+                    'pricing_tiers_locked' => true,
+                    'fal_list_unit_price' => 0.01,
                 ],
                 'tags' => ['anime', 'enhance', 'topaz', 'gaia', 'primary'],
             ],
@@ -528,14 +532,24 @@ class VideoToolsModelsSeeder extends Seeder
                 'name' => 'Kling 2.5 Turbo Pro',
                 'description' => 'Kling 2.5 Turbo Pro — top-tier image-to-video with unparalleled motion fluidity, cinematic visuals and precise prompt adherence.',
                 'unit' => 'seconds',
-                // Fal: $0.21 for 5s (+$0.042/s) => $0.042/s
-                'unit_price' => 0.042,
-                'ref_cost_usd' => 0.042 * $s,
+                // Fal: $0.35 for the first 5s, then $0.07/additional second.
+                // Estimator special-cases this endpoint (base + per-second); unit_price is
+                // the per-second rate beyond 5s.
+                'unit_price' => 0.07,
+                'ref_cost_usd' => 0.35,
                 'ref_duration_seconds' => 5,
                 'max_duration' => 10,
                 'enums' => ['5', '10'],
                 'is_primary' => true,
-                'defaults' => ['duration' => 5, 'cfg_scale' => 0.5],
+                'defaults' => [
+                    'duration' => 5,
+                    'cfg_scale' => 0.5,
+                    // Overridable by fal:sync-pricing when unit_price (extra $/s) changes.
+                    'pricing' => [
+                        'base_cost_usd' => 0.35,
+                        'base_seconds' => 5,
+                    ],
+                ],
                 'tags' => ['animate', 'kling', 'turbo', 'i2v', 'primary'],
             ],
             [
@@ -771,5 +785,26 @@ class VideoToolsModelsSeeder extends Seeder
         }
 
         return (int) ceil(($falCostUsd * self::MARKUP) / self::USD_PER_CREDIT);
+    }
+
+    /**
+     * Seed resolution tiers into DB (same maps billing uses as safety net).
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function tiersJsonFor(array $row): ?string
+    {
+        $defaults = is_array($row['defaults'] ?? null) ? $row['defaults'] : [];
+        $tiers = \App\Services\Tools\ToolPricingTiers::hardcoded(
+            (string) $row['endpoint_id'],
+            (string) $row['unit'],
+            $defaults,
+        );
+
+        if ($tiers === null || $tiers === []) {
+            return null;
+        }
+
+        return json_encode($tiers, JSON_UNESCAPED_SLASHES);
     }
 }

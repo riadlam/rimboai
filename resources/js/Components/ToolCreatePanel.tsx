@@ -13,6 +13,8 @@ type FileSlot = {
     preview: string | null;
     duration: number | null;
     fps: number | null;
+    width: number | null;
+    height: number | null;
 };
 
 type ToolCreationResponse = {
@@ -191,6 +193,8 @@ export default function ToolCreatePanel({
 
     const videoDuration = slots.video?.duration ?? null;
     const videoFps = slots.video?.fps ?? null;
+    const videoWidth = slots.video?.width ?? null;
+    const videoHeight = slots.video?.height ?? null;
     const hasDurationControl = workspace.controls.some((c) => c.key === 'duration');
     const selectedDuration =
         typeof values.duration === 'string' || typeof values.duration === 'number'
@@ -259,10 +263,22 @@ export default function ToolCreatePanel({
                           ? undefined
                           : '720p',
                 fps: videoFps && videoFps > 0 ? videoFps : undefined,
+                inputWidth: videoWidth && videoWidth > 0 ? videoWidth : undefined,
+                inputHeight: videoHeight && videoHeight > 0 ? videoHeight : undefined,
+                scale: typeof values.scale === 'string' ? values.scale : undefined,
             },
             creditsConfig,
         );
-    }, [activeBilling, billDuration, values.resolution, values.scale, creditsConfig, videoFps]);
+    }, [
+        activeBilling,
+        billDuration,
+        values.resolution,
+        values.scale,
+        creditsConfig,
+        videoFps,
+        videoWidth,
+        videoHeight,
+    ]);
 
     const requiredReady = workspace.uploads.every((u) => {
         if (!u.required) return true;
@@ -333,6 +349,8 @@ export default function ToolCreatePanel({
                 tool_slug: workspace.tool_slug,
                 duration_seconds: billDuration,
                 fps: videoFps && videoFps > 0 ? videoFps : null,
+                input_width: videoWidth && videoWidth > 0 ? videoWidth : null,
+                input_height: videoHeight && videoHeight > 0 ? videoHeight : null,
                 settings,
                 video_url: urls.video_url ?? null,
                 image_url: urls.image_url ?? null,
@@ -370,6 +388,9 @@ export default function ToolCreatePanel({
         stopPolling,
         t,
         values,
+        videoFps,
+        videoWidth,
+        videoHeight,
         workspace.available,
         workspace.tool_slug,
         workspace.uploads,
@@ -387,6 +408,8 @@ export default function ToolCreatePanel({
                     preview: URL.createObjectURL(file),
                     duration: prev[key]?.duration ?? null,
                     fps: prev[key]?.fps ?? null,
+                    width: prev[key]?.width ?? null,
+                    height: prev[key]?.height ?? null,
                 },
             };
         });
@@ -396,11 +419,20 @@ export default function ToolCreatePanel({
             setSlots((prev) => ({
                 ...prev,
                 [key]: {
-                    ...(prev[key] ?? { file: null, preview: null, duration: null, fps: null }),
+                    ...(prev[key] ?? {
+                        file: null,
+                        preview: null,
+                        duration: null,
+                        fps: null,
+                        width: null,
+                        height: null,
+                    }),
                     file,
                     preview: prev[key]?.preview ?? URL.createObjectURL(file),
                     duration: meta.duration,
                     fps: meta.fps,
+                    width: meta.width,
+                    height: meta.height,
                 },
             }));
         }
@@ -699,7 +731,7 @@ function initControlValues(controls: ToolControlSpec[]): Record<string, string |
 function initSlots(uploads: ToolUploadSpec[]): Record<string, FileSlot> {
     const out: Record<string, FileSlot> = {};
     for (const u of uploads) {
-        out[u.key] = { file: null, preview: null, duration: null, fps: null };
+        out[u.key] = { file: null, preview: null, duration: null, fps: null, width: null, height: null };
     }
     return out;
 }
@@ -710,8 +742,14 @@ function hintFor(upload: ToolUploadSpec, t: (k: string) => string): string {
     return t('detail.uploadVideoTypes');
 }
 
-/** Duration from <video> metadata. FPS is left null (browsers rarely expose it); Animate Move defaults to 30fps. */
-function readVideoMeta(file: File): Promise<{ duration: number | null; fps: number | null }> {
+/**
+ * Duration + pixel dimensions from <video> metadata. FPS is left null (browsers rarely
+ * expose it); Animate Move defaults to 30fps. Dimensions let upscalers bill by the real
+ * output resolution (input short edge × scale factor).
+ */
+function readVideoMeta(
+    file: File,
+): Promise<{ duration: number | null; fps: number | null; width: number | null; height: number | null }> {
     return new Promise((resolve) => {
         const url = URL.createObjectURL(file);
         const el = document.createElement('video');
@@ -719,15 +757,25 @@ function readVideoMeta(file: File): Promise<{ duration: number | null; fps: numb
         el.muted = true;
         el.playsInline = true;
 
-        const finish = (duration: number | null, fps: number | null) => {
+        const finish = (
+            duration: number | null,
+            fps: number | null,
+            width: number | null,
+            height: number | null,
+        ) => {
             URL.revokeObjectURL(url);
-            resolve({ duration, fps });
+            resolve({ duration, fps, width, height });
         };
 
         el.onloadedmetadata = () => {
-            finish(Number.isFinite(el.duration) ? el.duration : null, null);
+            finish(
+                Number.isFinite(el.duration) ? el.duration : null,
+                null,
+                el.videoWidth > 0 ? el.videoWidth : null,
+                el.videoHeight > 0 ? el.videoHeight : null,
+            );
         };
-        el.onerror = () => finish(null, null);
+        el.onerror = () => finish(null, null, null, null);
         el.src = url;
     });
 }
