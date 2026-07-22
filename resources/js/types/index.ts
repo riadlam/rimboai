@@ -138,6 +138,7 @@ export type ToolControlSpec = {
     max?: number;
     step?: number;
     required?: boolean;
+    max_length?: number;
     /** Lab-style presentation for aspect / resolution choice grids */
     ui?: 'aspect' | 'resolution';
 };

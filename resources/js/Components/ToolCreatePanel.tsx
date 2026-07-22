@@ -999,16 +999,26 @@ function ControlField({
     }
 
     if (control.type === 'textarea') {
+        const maxLength =
+            control.max_length ??
+            (control.key === 'negative_prompt' ? 500 : 5000);
+        const text = typeof value === 'string' ? value : '';
         return (
             <section className="space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
+                <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">{label}</p>
+                    <p className="text-[10px] tabular-nums text-white/30">
+                        {text.length}/{maxLength}
+                    </p>
+                </div>
                 <textarea
-                    value={typeof value === 'string' ? value : ''}
-                    onChange={(e) => onChange(e.target.value)}
+                    value={text}
+                    onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
                     placeholder={
                         control.placeholder_key ? t(`detail.${control.placeholder_key}`) : undefined
                     }
                     rows={4}
+                    maxLength={maxLength}
                     className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
                 />
             </section>

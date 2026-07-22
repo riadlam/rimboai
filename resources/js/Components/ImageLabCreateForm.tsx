@@ -615,7 +615,7 @@ export default function ImageLabCreateForm({
                                     value={prompt}
                                     onChange={setPrompt}
                                     mentions={assetMentions}
-                                    maxLength={1200}
+                                    maxLength={5000}
                                     placeholder={
                                         isVariations
                                             ? t('image.placeholderVariation')
@@ -876,7 +876,7 @@ export default function ImageLabCreateForm({
                                 value={prompt}
                                 onChange={setPrompt}
                                 mentions={assetMentions}
-                                maxLength={1200}
+                                maxLength={5000}
                                 rows={10}
                                 className="w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3 text-sm leading-relaxed text-white outline-none focus:border-orange-400/40"
                                 placeholder={placeholder}

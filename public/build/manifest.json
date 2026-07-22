@@ -1,48 +1,52 @@
 {
-  "_AppLayout-DYnr5Jx6.js": {
-    "file": "assets/AppLayout-DYnr5Jx6.js",
+  "_AppLayout-BtSAc_PZ.js": {
+    "file": "assets/AppLayout-BtSAc_PZ.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.tsx",
-      "_Button-Obt3WJ3h.js"
+      "_Button-C79uFvyw.js"
     ]
   },
-  "_Button-Obt3WJ3h.js": {
-    "file": "assets/Button-Obt3WJ3h.js",
+  "_Button-C79uFvyw.js": {
+    "file": "assets/Button-C79uFvyw.js",
     "name": "Button",
     "imports": [
       "resources/js/app.tsx"
     ]
   },
-  "_GoogleAuthButton-DniiJSuP.js": {
-    "file": "assets/GoogleAuthButton-DniiJSuP.js",
+  "_GoogleAuthButton-DMq5h0tE.js": {
+    "file": "assets/GoogleAuthButton-DMq5h0tE.js",
     "name": "GoogleAuthButton",
     "imports": [
       "resources/js/app.tsx",
-      "_Button-Obt3WJ3h.js"
+      "_Button-C79uFvyw.js"
     ]
   },
-  "_ImageLabLibrary-BbnQbOq8.js": {
-    "file": "assets/ImageLabLibrary-BbnQbOq8.js",
+  "_ImageLabLibrary-Cp3VH6tJ.js": {
+    "file": "assets/ImageLabLibrary-Cp3VH6tJ.js",
     "name": "ImageLabLibrary",
     "imports": [
       "resources/js/app.tsx",
-      "_api-C16lfBvs.js",
-      "_Button-Obt3WJ3h.js",
-      "_AppLayout-DYnr5Jx6.js",
-      "_VideoThumb-WSegrsV8.js"
+      "_api-CCSDykKD.js",
+      "_Button-C79uFvyw.js",
+      "_AppLayout-BtSAc_PZ.js",
+      "_VideoThumb-CtCC_nB4.js"
     ]
   },
-  "_Input-CRiz4s7u.js": {
-    "file": "assets/Input-CRiz4s7u.js",
+  "_Input-BYW_hsCj.js": {
+    "file": "assets/Input-BYW_hsCj.js",
     "name": "Input",
     "imports": [
       "resources/js/app.tsx",
-      "_Button-Obt3WJ3h.js"
+      "_Button-C79uFvyw.js"
     ]
   },
-  "_LabVideoPlayer-BAQGDORh.js": {
-    "file": "assets/LabVideoPlayer-BAQGDORh.js",
+  "_LabVideoPlayer-CG92-drw.css": {
+    "file": "assets/LabVideoPlayer-CG92-drw.css",
+    "src": "_LabVideoPlayer-CG92-drw.css"
+  },
+  "_LabVideoPlayer-D2Wu-HOg.js": {
+    "file": "assets/LabVideoPlayer-D2Wu-HOg.js",
     "name": "LabVideoPlayer",
     "imports": [
       "resources/js/app.tsx"
@@ -51,34 +55,30 @@
       "assets/LabVideoPlayer-CG92-drw.css"
     ]
   },
-  "_LabVideoPlayer-CG92-drw.css": {
-    "file": "assets/LabVideoPlayer-CG92-drw.css",
-    "src": "_LabVideoPlayer-CG92-drw.css"
-  },
-  "_VideoThumb-WSegrsV8.js": {
-    "file": "assets/VideoThumb-WSegrsV8.js",
+  "_VideoThumb-CtCC_nB4.js": {
+    "file": "assets/VideoThumb-CtCC_nB4.js",
     "name": "VideoThumb",
     "imports": [
       "resources/js/app.tsx",
-      "_LabVideoPlayer-BAQGDORh.js"
+      "_LabVideoPlayer-D2Wu-HOg.js"
     ]
   },
-  "_api-C16lfBvs.js": {
-    "file": "assets/api-C16lfBvs.js",
+  "_api-CCSDykKD.js": {
+    "file": "assets/api-CCSDykKD.js",
     "name": "api",
     "imports": [
       "resources/js/app.tsx",
-      "_LabVideoPlayer-BAQGDORh.js",
+      "_LabVideoPlayer-D2Wu-HOg.js",
       "_labReuse-DpYNawv1.js",
-      "_Button-Obt3WJ3h.js",
-      "_AppLayout-DYnr5Jx6.js"
+      "_Button-C79uFvyw.js",
+      "_AppLayout-BtSAc_PZ.js"
     ]
   },
-  "_discardCreations-Crnkekg0.js": {
-    "file": "assets/discardCreations-Crnkekg0.js",
+  "_discardCreations-CX2RBIC0.js": {
+    "file": "assets/discardCreations-CX2RBIC0.js",
     "name": "discardCreations",
     "imports": [
-      "_api-C16lfBvs.js"
+      "_api-CCSDykKD.js"
     ]
   },
   "_innovationPrompts-IMijdoU4.js": {
@@ -99,179 +99,179 @@
     ]
   },
   "resources/js/Pages/Auth/Login.tsx": {
-    "file": "assets/Login-uPplHR0y.js",
+    "file": "assets/Login-1kvxBjFW.js",
     "name": "Login",
     "src": "resources/js/Pages/Auth/Login.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_Input-CRiz4s7u.js",
-      "_Button-Obt3WJ3h.js",
-      "_GoogleAuthButton-DniiJSuP.js"
+      "_Input-BYW_hsCj.js",
+      "_Button-C79uFvyw.js",
+      "_GoogleAuthButton-DMq5h0tE.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/Auth/Register.tsx": {
-    "file": "assets/Register-DtZ7MfLF.js",
+    "file": "assets/Register-BGEd_I11.js",
     "name": "Register",
     "src": "resources/js/Pages/Auth/Register.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_Input-CRiz4s7u.js",
-      "_Button-Obt3WJ3h.js",
-      "_GoogleAuthButton-DniiJSuP.js"
+      "_Input-BYW_hsCj.js",
+      "_Button-C79uFvyw.js",
+      "_GoogleAuthButton-DMq5h0tE.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/BillingHistory.tsx": {
-    "file": "assets/BillingHistory-xbFxsKLj.js",
+    "file": "assets/BillingHistory-DJ65HhtN.js",
     "name": "BillingHistory",
     "src": "resources/js/Pages/BillingHistory.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_Button-Obt3WJ3h.js"
+      "_AppLayout-BtSAc_PZ.js",
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/History.tsx": {
-    "file": "assets/History-BZnbd6Bj.js",
+    "file": "assets/History-Bv-fdAZj.js",
     "name": "History",
     "src": "resources/js/Pages/History.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_api-C16lfBvs.js",
-      "_VideoThumb-WSegrsV8.js",
-      "_AppLayout-DYnr5Jx6.js",
-      "_discardCreations-Crnkekg0.js",
+      "_api-CCSDykKD.js",
+      "_VideoThumb-CtCC_nB4.js",
+      "_AppLayout-BtSAc_PZ.js",
+      "_discardCreations-CX2RBIC0.js",
       "_labReuse-DpYNawv1.js",
-      "_Button-Obt3WJ3h.js",
-      "_LabVideoPlayer-BAQGDORh.js"
+      "_Button-C79uFvyw.js",
+      "_LabVideoPlayer-D2Wu-HOg.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/Home.tsx": {
-    "file": "assets/Home-CIF-F0z0.js",
+    "file": "assets/Home-Dpm7aHtK.js",
     "name": "Home",
     "src": "resources/js/Pages/Home.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_GoogleAuthButton-DniiJSuP.js",
-      "_VideoThumb-WSegrsV8.js",
-      "_AppLayout-DYnr5Jx6.js",
+      "_GoogleAuthButton-DMq5h0tE.js",
+      "_VideoThumb-CtCC_nB4.js",
+      "_AppLayout-BtSAc_PZ.js",
       "resources/js/Pages/Trends.tsx",
-      "_LabVideoPlayer-BAQGDORh.js",
-      "_Button-Obt3WJ3h.js"
+      "_LabVideoPlayer-D2Wu-HOg.js",
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/Innovation.tsx": {
-    "file": "assets/Innovation-cRHjO9qe.js",
+    "file": "assets/Innovation-BLHLfcWz.js",
     "name": "Innovation",
     "src": "resources/js/Pages/Innovation.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
+      "_AppLayout-BtSAc_PZ.js",
       "_innovationPrompts-IMijdoU4.js",
-      "_Button-Obt3WJ3h.js"
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/InnovationPost.tsx": {
-    "file": "assets/InnovationPost-BJVGulLk.js",
+    "file": "assets/InnovationPost-BKYuNI84.js",
     "name": "InnovationPost",
     "src": "resources/js/Pages/InnovationPost.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
+      "_AppLayout-BtSAc_PZ.js",
       "_innovationPrompts-IMijdoU4.js",
       "_labReuse-DpYNawv1.js",
-      "_Button-Obt3WJ3h.js"
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/Lab.tsx": {
-    "file": "assets/Lab-DZYnztPX.js",
+    "file": "assets/Lab-BqEp28MN.js",
     "name": "Lab",
     "src": "resources/js/Pages/Lab.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_ImageLabLibrary-BbnQbOq8.js",
-      "_Button-Obt3WJ3h.js",
+      "_AppLayout-BtSAc_PZ.js",
+      "_ImageLabLibrary-Cp3VH6tJ.js",
+      "_Button-C79uFvyw.js",
       "_labReuse-DpYNawv1.js",
-      "_LabVideoPlayer-BAQGDORh.js",
-      "_api-C16lfBvs.js",
-      "_discardCreations-Crnkekg0.js",
-      "_VideoThumb-WSegrsV8.js"
+      "_LabVideoPlayer-D2Wu-HOg.js",
+      "_api-CCSDykKD.js",
+      "_discardCreations-CX2RBIC0.js",
+      "_VideoThumb-CtCC_nB4.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/Pricing.tsx": {
-    "file": "assets/Pricing-CcHtrfq_.js",
+    "file": "assets/Pricing-CZzU3w_h.js",
     "name": "Pricing",
     "src": "resources/js/Pages/Pricing.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_Button-Obt3WJ3h.js"
+      "_AppLayout-BtSAc_PZ.js",
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/Settings.tsx": {
-    "file": "assets/Settings-re2GBDPm.js",
+    "file": "assets/Settings-Br4uZweC.js",
     "name": "Settings",
     "src": "resources/js/Pages/Settings.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_Button-Obt3WJ3h.js"
+      "_AppLayout-BtSAc_PZ.js",
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/ToolDetail.tsx": {
-    "file": "assets/ToolDetail-BEwC0uYY.js",
+    "file": "assets/ToolDetail-OubY9uek.js",
     "name": "ToolDetail",
     "src": "resources/js/Pages/ToolDetail.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_ImageLabLibrary-BbnQbOq8.js",
-      "_api-C16lfBvs.js",
-      "_Button-Obt3WJ3h.js",
-      "_discardCreations-Crnkekg0.js",
-      "_VideoThumb-WSegrsV8.js",
-      "_LabVideoPlayer-BAQGDORh.js",
+      "_AppLayout-BtSAc_PZ.js",
+      "_ImageLabLibrary-Cp3VH6tJ.js",
+      "_api-CCSDykKD.js",
+      "_Button-C79uFvyw.js",
+      "_discardCreations-CX2RBIC0.js",
+      "_VideoThumb-CtCC_nB4.js",
+      "_LabVideoPlayer-D2Wu-HOg.js",
       "_labReuse-DpYNawv1.js"
     ],
     "css": [
@@ -279,30 +279,30 @@
     ]
   },
   "resources/js/Pages/Tools.tsx": {
-    "file": "assets/Tools-B0qaiTZA.js",
+    "file": "assets/Tools-KBfQvXjM.js",
     "name": "Tools",
     "src": "resources/js/Pages/Tools.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_Button-Obt3WJ3h.js"
+      "_AppLayout-BtSAc_PZ.js",
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/Pages/TrendTemplate.tsx": {
-    "file": "assets/TrendTemplate-Cezi7wwv.js",
+    "file": "assets/TrendTemplate-DKzmuHQv.js",
     "name": "TrendTemplate",
     "src": "resources/js/Pages/TrendTemplate.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_api-C16lfBvs.js",
-      "_LabVideoPlayer-BAQGDORh.js",
-      "_Button-Obt3WJ3h.js",
+      "_AppLayout-BtSAc_PZ.js",
+      "_api-CCSDykKD.js",
+      "_LabVideoPlayer-D2Wu-HOg.js",
+      "_Button-C79uFvyw.js",
       "_labReuse-DpYNawv1.js"
     ],
     "css": [
@@ -310,23 +310,23 @@
     ]
   },
   "resources/js/Pages/Trends.tsx": {
-    "file": "assets/Trends-DJcO_8W9.js",
+    "file": "assets/Trends-B1asUdeZ.js",
     "name": "Trends",
     "src": "resources/js/Pages/Trends.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-DYnr5Jx6.js",
-      "_LabVideoPlayer-BAQGDORh.js",
-      "_VideoThumb-WSegrsV8.js",
-      "_Button-Obt3WJ3h.js"
+      "_AppLayout-BtSAc_PZ.js",
+      "_LabVideoPlayer-D2Wu-HOg.js",
+      "_VideoThumb-CtCC_nB4.js",
+      "_Button-C79uFvyw.js"
     ],
     "css": [
       "assets/app-BqUhhWJ7.css"
     ]
   },
   "resources/js/app.tsx": {
-    "file": "assets/app-HGjzQAai.js",
+    "file": "assets/app-BOHkUfA0.js",
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,

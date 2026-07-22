@@ -113,15 +113,15 @@ class ToolGenerationController extends Controller
                 'settings.background' => ['nullable', 'string', 'max:16'],
                 'settings.preserve_audio' => ['nullable', 'boolean'],
                 // 6️⃣ Subtitle Remover
-                'settings.mask_prompt' => ['nullable', 'string', 'max:2000'],
-                'settings.clean_prompt' => ['nullable', 'string', 'max:2000'],
+                'settings.mask_prompt' => ['nullable', 'string', 'max:5000'],
+                'settings.clean_prompt' => ['nullable', 'string', 'max:5000'],
                 // 7️⃣ Extender / image→video / motion
                 'settings.duration' => ['nullable'],
                 'settings.direction' => ['nullable', 'string', 'max:16'],
                 'settings.camera_movement' => ['nullable', 'string', 'max:32'],
                 'settings.filter' => ['nullable', 'string', 'max:32'],
                 // Shared / prompt-driven
-                'settings.prompt' => ['nullable', 'string', 'max:2000'],
+                'settings.prompt' => ['nullable', 'string', 'max:5000'],
                 'settings.negative_prompt' => ['nullable', 'string', 'max:500'],
                 'settings.resolution' => ['nullable', 'string', 'max:16'],
                 'settings.aspect_ratio' => ['nullable', 'string', 'max:16'],

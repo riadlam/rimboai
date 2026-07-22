@@ -1226,7 +1226,7 @@ export default function VideoLabCreateForm({
                                 value={prompt}
                                 onChange={setPrompt}
                                 mentions={assetMentions}
-                                maxLength={1500}
+                                maxLength={5000}
                                 minRows={4}
                                 maxRows={16}
                                 placeholder={resolvedPlaceholder}
@@ -1583,7 +1583,7 @@ export default function VideoLabCreateForm({
                                     value={prompt}
                                     onChange={setPrompt}
                                     mentions={assetMentions}
-                                    maxLength={1500}
+                                    maxLength={5000}
                                     minRows={10}
                                     maxRows={24}
                                     className="w-full rounded-xl border border-white/10 bg-black/40 p-3.5 text-[15px] leading-6 text-white outline-none focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"
