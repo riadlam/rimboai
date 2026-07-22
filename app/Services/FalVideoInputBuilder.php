@@ -121,6 +121,24 @@ class FalVideoInputBuilder
             'resolution' => true,
             'i2v_aspect_auto' => true,
         ],
+        // Gemini Omni Flash — duration MUST be int (3–10). Audio always on (no generate_audio field).
+        'google/gemini-omni-flash' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '9:16'],
+        ],
+        'google/gemini-omni-flash/image-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '9:16'],
+        ],
+        'google/gemini-omni-flash/reference-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '9:16'],
+        ],
+        // Edit has no duration/aspect on Fal — profile kept for duration clamp used in billing.
+        'google/gemini-omni-flash/edit' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '9:16'],
+        ],
     ];
 
     /**
@@ -273,6 +291,17 @@ class FalVideoInputBuilder
                     $input['prompt'] = $this->withReferencePrefix($prompt, $this->referenceList('@ref', count($references)));
                     $input['image_references'] = $references;
                 }
+            } elseif (str_contains($id, 'gemini-omni-flash/edit')) {
+                // Edit: prompt + video_url only (no duration / aspect / resolution on Fal).
+                if ($videoUrls !== []) {
+                    $input['video_url'] = $videoUrls[0];
+                }
+                unset($input['aspect_ratio'], $input['duration'], $input['resolution']);
+            } elseif (str_contains($id, 'gemini-omni-flash')) {
+                // R2V: image_urls only (published schema has no video_urls / audio_urls; max 10).
+                if ($imageUrls !== []) {
+                    $input['image_urls'] = array_slice($imageUrls, 0, 10);
+                }
             } elseif ($imageUrls !== []) {
                 $input['image_urls'] = array_slice($imageUrls, 0, 9);
             }
@@ -280,10 +309,15 @@ class FalVideoInputBuilder
                 $videoUrls !== []
                 && ! str_contains($id, 'wan/v2.7/reference-to-video')
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
+                && ! str_contains($id, 'gemini-omni-flash')
             ) {
                 $input['video_urls'] = array_slice($videoUrls, 0, 3);
             }
-            if ($audioUrls !== [] && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))) {
+            if (
+                $audioUrls !== []
+                && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
+                && ! str_contains($id, 'gemini-omni-flash')
+            ) {
                 $input['audio_urls'] = array_slice($audioUrls, 0, 3);
             }
         }
@@ -297,7 +331,9 @@ class FalVideoInputBuilder
             'duration_value' => is_string($durationValue) ? $durationValue : (string) $durationValue,
             'aspect_ratio' => $input['aspect_ratio'] ?? $aspect,
             'resolution' => $input['resolution'] ?? $resolution,
-            'with_audio' => (bool) (($input['generate_audio'] ?? false) || ($input['generate_audio_switch'] ?? false)),
+            // Omni Flash always returns synced audio (no generate_audio toggle on Fal).
+            'with_audio' => (bool) (($input['generate_audio'] ?? false) || ($input['generate_audio_switch'] ?? false))
+                || str_contains(strtolower($endpointId), 'gemini-omni-flash'),
         ];
     }
 
@@ -455,6 +491,12 @@ class FalVideoInputBuilder
 
         if (str_contains($id, 'veo') && ($mode === 'reference-to-video' || str_contains($id, 'reference-to-video'))) {
             return 8;
+        }
+
+        // Gemini Omni Flash T2V / I2V / R2V: Fal range is 3–10 seconds (integer).
+        // Edit has no duration field — bill by measured clip length (do not clamp to 10).
+        if (str_contains($id, 'gemini-omni-flash') && ! str_contains($id, '/edit')) {
+            return max(3, min(10, $seconds));
         }
 
         return $seconds;
@@ -617,6 +659,13 @@ class FalVideoInputBuilder
                     : ['16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3'],
                 'resolution' => true,
                 'i2v_aspect_auto' => str_contains($id, 'image-to-video'),
+            ];
+        }
+
+        if (str_contains($id, 'gemini-omni-flash')) {
+            return [
+                'duration_format' => 'int',
+                'aspects' => ['16:9', '9:16'],
             ];
         }
 

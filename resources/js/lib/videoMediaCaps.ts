@@ -57,8 +57,8 @@ export function mediaTotal(counts: MediaCounts): number {
     return counts.images + counts.videos + counts.audios;
 }
 
-/** Absolute ceiling across the catalog (Seedance-class multimodal). */
-export const CATALOG_MEDIA_LIMITS = { image: 9, video: 3, audio: 3 } as const;
+/** Absolute ceiling across the catalog (Omni R2V allows 10 images; Seedance-class multimodal). */
+export const CATALOG_MEDIA_LIMITS = { image: 10, video: 3, audio: 3 } as const;
 
 export type UploadLimits = {
     image: number;
@@ -176,6 +176,16 @@ export function supportsMediaMix(
         if (videos < 1 || images < 1) return false;
     }
 
+    // Gemini Omni Flash edit: video only (Fal schema has no image_urls).
+    if (endpointId.includes('gemini-omni-flash/edit')) {
+        if (videos < 1 || images > 0 || audios > 0) return false;
+    }
+
+    // Gemini Omni Flash: cannot mix video with images (edit vs R2V are separate routes).
+    if (endpointId.includes('gemini-omni-flash') && !endpointId.includes('/edit') && videos > 0 && images > 0) {
+        return false;
+    }
+
     if (videos > 0 && !caps.supports_ref_videos) return false;
     if (audios > 0 && !caps.supports_ref_audio) return false;
     if (images > 1 && !caps.supports_ref_images) return false;
@@ -201,11 +211,18 @@ export function resolveMediaRouteMode(
     const endpoint = String(model && 'endpoint_id' in model ? model.endpoint_id ?? '' : '');
     if (total === 0) {
         if (endpoint.includes('image-to-video')) return null;
-        return 'text-to-video';
+        if (endpoint.includes('gemini-omni-flash/edit')) return null;
+        if (endpoint.includes('gemini-omni-flash/reference-to-video')) return null;
+        return endpoint.includes('reference-to-video') ? 'reference-to-video' : 'text-to-video';
     }
     if (!supportsMediaMix(model, counts, frameMode)) return null;
 
     const caps = getMediaCaps(model);
+
+    // Omni Flash: a single source video (no images) → edit (shown as reference-to-video mode).
+    if (endpoint.includes('gemini-omni-flash') && counts.videos >= 1 && counts.images === 0 && counts.audios === 0) {
+        return 'reference-to-video';
+    }
 
     if (frameMode === 'first_last' && caps.supports_last_frame) {
         if (counts.images >= 2) return 'first-last-frame-to-video';
@@ -321,6 +338,20 @@ export function generateBlockReason(
     const endpoint = 'endpoint_id' in (model ?? {}) ? String((model as BrandModel).endpoint_id ?? '') : '';
     if (endpoint.includes('image-to-video') && counts.images < 1) {
         return 'Add an image to animate.';
+    }
+    if (endpoint.includes('gemini-omni-flash/edit') && counts.videos < 1) {
+        return 'Add a video to edit.';
+    }
+    if (endpoint.includes('gemini-omni-flash/reference-to-video') && counts.images < 1) {
+        return 'Add at least one reference image.';
+    }
+    if (
+        endpoint.includes('gemini-omni-flash') &&
+        !endpoint.includes('/edit') &&
+        counts.videos > 0 &&
+        counts.images > 0
+    ) {
+        return 'Use either reference images or one video to edit — not both.';
     }
 
     if (frameMode === 'first_last') {

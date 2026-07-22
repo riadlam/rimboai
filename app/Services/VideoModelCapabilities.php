@@ -315,6 +315,81 @@ class VideoModelCapabilities
             return $this->caps(false, false, false, true, false, false, 1, 0, 0, null, 'xai/grok-imagine-video/image-to-video', 'image_url', null, null);
         }
 
+        // Gemini Omni Flash — T2V + I2V + multi-image R2V + single-video edit.
+        // Fal R2V schema: image_urls only (no video/audio refs). Edit: video_url + prompt only.
+        if ($id === 'google/gemini-omni-flash') {
+            return $this->caps(
+                images: true,
+                videos: true,
+                audio: false,
+                firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 10,
+                maxVideos: 1,
+                maxAudios: 0,
+                reference: 'google/gemini-omni-flash/reference-to-video',
+                firstFrameEndpoint: 'google/gemini-omni-flash/image-to-video',
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+        if (str_contains($id, 'gemini-omni-flash/image-to-video')) {
+            return $this->caps(
+                images: false,
+                videos: false,
+                audio: false,
+                firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 1,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: null,
+                firstFrameEndpoint: 'google/gemini-omni-flash/image-to-video',
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+        if (str_contains($id, 'gemini-omni-flash/reference-to-video')) {
+            return $this->caps(
+                images: true,
+                videos: false,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 10,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: 'google/gemini-omni-flash/reference-to-video',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+        if (str_contains($id, 'gemini-omni-flash/edit')) {
+            return $this->caps(
+                images: false,
+                videos: true,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 0,
+                maxVideos: 1,
+                maxAudios: 0,
+                reference: 'google/gemini-omni-flash/edit',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+
         return $this->caps(false, false, false, false, false, false, 0, 0, 0, null, null, null, null, null);
     }
 
@@ -363,6 +438,23 @@ class VideoModelCapabilities
             if ($videos < 1 || $images < 1) {
                 return false;
             }
+        }
+
+        // Gemini Omni Flash edit: video only (Fal schema has no image_urls).
+        if (str_contains(strtolower($endpointId), 'gemini-omni-flash/edit')) {
+            if ($videos < 1 || $images > 0 || $audios > 0) {
+                return false;
+            }
+        }
+
+        // Gemini Omni Flash main / R2V: cannot mix video with images (edit vs R2V are separate).
+        if (
+            str_contains(strtolower($endpointId), 'gemini-omni-flash')
+            && ! str_contains(strtolower($endpointId), '/edit')
+            && $videos > 0
+            && $images > 0
+        ) {
+            return false;
         }
 
         if ($videos > 0 && ! $caps['supports_ref_videos']) {
@@ -420,6 +512,14 @@ class VideoModelCapabilities
             if (str_contains($id, 'image-to-video') && ! str_contains($id, 'text-to-video')) {
                 return null;
             }
+            // Omni Flash Edit requires a source video.
+            if (str_contains($id, 'gemini-omni-flash/edit')) {
+                return null;
+            }
+            // R2V catalog requires at least one reference image.
+            if (str_contains($id, 'gemini-omni-flash/reference-to-video')) {
+                return null;
+            }
 
             // Explicit R2V catalog models still submit to themselves (prompt-only is allowed).
             $mode = str_contains($id, 'reference-to-video')
@@ -439,6 +539,22 @@ class VideoModelCapabilities
         }
 
         $caps = $this->for($endpointId);
+        $id = strtolower($endpointId);
+
+        // Omni Flash: a single source video (no images) → conversational edit endpoint.
+        if (
+            str_contains($id, 'gemini-omni-flash')
+            && $videos >= 1
+            && $images === 0
+            && $audios === 0
+        ) {
+            return [
+                'endpoint_id' => 'google/gemini-omni-flash/edit',
+                'mode' => 'reference-to-video',
+                'first_frame_param' => null,
+                'last_frame_param' => null,
+            ];
+        }
 
         if ($frameMode === 'first_last' && $caps['supports_last_frame'] && $caps['first_last_frame_endpoint_id']) {
             if ($images >= 2) {

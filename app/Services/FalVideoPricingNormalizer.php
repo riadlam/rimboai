@@ -78,7 +78,7 @@ class FalVideoPricingNormalizer
         }
 
         // Typical fal video per-second rates land between ~$0.03 and ~$1.00.
-        if (str_contains($id, 'kling') || str_contains($id, 'veo') || str_contains($id, 'sora') || str_contains($id, 'wan') || str_contains($id, 'grok')) {
+        if (str_contains($id, 'kling') || str_contains($id, 'veo') || str_contains($id, 'sora') || str_contains($id, 'wan') || str_contains($id, 'grok') || str_contains($id, 'gemini-omni')) {
             return $price >= 0.03 && $price <= 2.0;
         }
 
@@ -92,6 +92,9 @@ class FalVideoPricingNormalizer
         }
         if (str_contains($id, 'veo')) {
             return 'Higher resolution multiplies cost (1080p≈1.5×, 4k≈2×) in estimator.';
+        }
+        if (str_contains($id, 'gemini-omni')) {
+            return 'Token-priced on Fal; Lab bills ≈$/s @720p. Audio always included (no toggle).';
         }
 
         return 'Per-second billing from fal pricing API.';
