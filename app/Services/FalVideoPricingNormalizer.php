@@ -44,6 +44,19 @@ class FalVideoPricingNormalizer
             ];
         }
 
+        // Gemini Omni Flash: Fal pricing API returns opaque unit=units @ $1 (not $/s).
+        // Gallery docs: T2V ≈ $0.125/s, I2V/R2V/Edit ≈ $0.13/s @ 720p (token-billed).
+        if (str_contains($id, 'gemini-omni')) {
+            $gallery = $this->geminiOmniGalleryPerSecond($id);
+
+            return [
+                'unit' => 'seconds',
+                'unit_price' => $gallery,
+                'formula' => 'fal_cost = duration_seconds * unit_price (gallery ≈$/s @720p; Fal API unit=units is not usable)',
+                'notes' => 'Token-priced on Fal; Lab bills gallery ≈$/s. Audio always included (no toggle). Cron must not adopt unit_price=1.',
+            ];
+        }
+
         if ($rawUnit === 'second' || $rawUnit === 'seconds' || $price !== null && $this->looksLikePerSecond($id, $rawUnit, $price)) {
             return [
                 'unit' => 'seconds',
@@ -78,11 +91,26 @@ class FalVideoPricingNormalizer
         }
 
         // Typical fal video per-second rates land between ~$0.03 and ~$1.00.
-        if (str_contains($id, 'kling') || str_contains($id, 'veo') || str_contains($id, 'sora') || str_contains($id, 'wan') || str_contains($id, 'grok') || str_contains($id, 'gemini-omni')) {
+        // Do NOT include gemini-omni here — Fal returns unit=units @ $1 (opaque).
+        if (str_contains($id, 'kling') || str_contains($id, 'veo') || str_contains($id, 'sora') || str_contains($id, 'wan') || str_contains($id, 'grok')) {
             return $price >= 0.03 && $price <= 2.0;
         }
 
         return false;
+    }
+
+    /**
+     * Fal gallery ≈$/s for Omni (pricing API unit=units @ $1 is unusable).
+     */
+    private function geminiOmniGalleryPerSecond(string $id): float
+    {
+        // Exact T2V catalog endpoint.
+        if ($id === 'google/gemini-omni-flash') {
+            return 0.125;
+        }
+
+        // I2V / R2V / Edit — Fal gallery ≈ $0.13/s @ 720p.
+        return 0.13;
     }
 
     private function secondsNotes(string $id): string
@@ -94,7 +122,7 @@ class FalVideoPricingNormalizer
             return 'Higher resolution multiplies cost (1080p≈1.5×, 4k≈2×) in estimator.';
         }
         if (str_contains($id, 'gemini-omni')) {
-            return 'Token-priced on Fal; Lab bills ≈$/s @720p. Audio always included (no toggle).';
+            return 'Token-priced on Fal; Lab bills gallery ≈$/s @720p. Audio always included (no toggle).';
         }
 
         return 'Per-second billing from fal pricing API.';
