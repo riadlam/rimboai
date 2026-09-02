@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
 import VideoThumb from '@/Components/VideoThumb';
+import { labWarmKey } from '@/lib/trendWarmVideo';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 import { labCompletingRampMs, labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
 
@@ -723,7 +724,7 @@ export default function ImageLabLibrary({
                                                     src={mediaSrc}
                                                     poster={posterSrc}
                                                     seekTo={0.15}
-                                                    warmKey={mediaSrc}
+                                                    warmKey={labWarmKey(img.id, mediaSrc)}
                                                     className="absolute inset-0 size-full object-contain object-center"
                                                 />
                                             ) : (

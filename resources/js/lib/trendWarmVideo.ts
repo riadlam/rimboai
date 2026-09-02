@@ -30,6 +30,11 @@ export function trendWarmKey(templateId: string, src?: string | null): string {
     return `${templateId}::${src || ''}`;
 }
 
+/** Stable warm-cache key for Lab library grid ↔ preview handoff. */
+export function labWarmKey(itemId: string, src?: string | null): string {
+    return `lab::${itemId}::${src || ''}`;
+}
+
 function unwrapFromPlyr(el: HTMLVideoElement): void {
     const wrap = el.closest('.plyr');
     if (wrap && wrap.parentNode && wrap !== el) {

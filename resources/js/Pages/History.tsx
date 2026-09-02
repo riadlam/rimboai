@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
+import { labWarmKey } from '@/lib/trendWarmVideo';
 import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
 import { apiGet, apiPost } from '@/lib/api';
@@ -750,6 +751,7 @@ function HistoryWorkspace() {
                                             <VideoThumb
                                                 src={item.videoUrl}
                                                 poster={item.src !== item.videoUrl ? item.src : undefined}
+                                                warmKey={labWarmKey(item.id, item.videoUrl)}
                                                 className="absolute inset-0 size-full object-contain object-center"
                                             />
                                         ) : (

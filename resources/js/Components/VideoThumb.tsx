@@ -31,6 +31,25 @@ export function getCachedVideoPoster(src: string): string | undefined {
     return framePosterCache.get(src);
 }
 
+/** Poll until the grid thumb captures a frame (reuse without remounting VideoThumb in preview). */
+export function subscribeVideoPoster(src: string, onPoster: (poster: string) => void): () => void {
+    const existing = framePosterCache.get(src);
+    if (existing) {
+        onPoster(existing);
+        return () => undefined;
+    }
+
+    const id = window.setInterval(() => {
+        const poster = framePosterCache.get(src);
+        if (poster) {
+            onPoster(poster);
+            window.clearInterval(id);
+        }
+    }, 50);
+
+    return () => window.clearInterval(id);
+}
+
 function withTimeFragment(url: string, seconds: number): string {
     if (!url || url.includes('#') || url.startsWith('blob:') || url.startsWith('data:')) return url;
     return `${url}#t=${Math.max(0.05, seconds).toFixed(2)}`;
