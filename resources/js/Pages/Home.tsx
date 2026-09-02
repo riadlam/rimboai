@@ -211,6 +211,7 @@ function Hero() {
     const [word, setWord] = useState(0);
     const [active, setActive] = useState(0);
     const [paused, setPaused] = useState(false);
+    const [isDesktop, setIsDesktop] = useState(false);
     const featured = CREATE_TYPES[active];
     // Rotate the remaining cards so the order cycles like a wheel.
     const side = [1, 2, 3].map((o) => CREATE_TYPES[(active + o) % CREATE_TYPES.length]);
@@ -220,7 +221,16 @@ function Hero() {
     const mRotatorRef = useRef<HTMLDivElement>(null);
     const [mBox, setMBox] = useState({ w: 0, h: 0 });
 
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 768px)');
+        const sync = () => setIsDesktop(mq.matches);
+        sync();
+        mq.addEventListener('change', sync);
+        return () => mq.removeEventListener('change', sync);
+    }, []);
+
     useLayoutEffect(() => {
+        if (!isDesktop) return;
         const el = rotatorRef.current;
         if (!el) return;
         const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
@@ -228,9 +238,10 @@ function Hero() {
         const ro = new ResizeObserver(measure);
         ro.observe(el);
         return () => ro.disconnect();
-    }, []);
+    }, [isDesktop]);
 
     useLayoutEffect(() => {
+        if (isDesktop) return;
         const el = mRotatorRef.current;
         if (!el) return;
         const measure = () => setMBox({ w: el.clientWidth, h: el.clientHeight });
@@ -238,7 +249,7 @@ function Hero() {
         const ro = new ResizeObserver(measure);
         ro.observe(el);
         return () => ro.disconnect();
-    }, []);
+    }, [isDesktop]);
 
     useEffect(() => {
         const t = setInterval(() => setWord((w) => (w + 1) % ROTATING.length), 2600);
@@ -340,7 +351,8 @@ function Hero() {
                 </motion.div>
 
                 {/* Mobile: cards stay mounted and morph between big slot and the row below (no reload) */}
-                <div ref={mRotatorRef} className="relative md:hidden" style={{ height: M_TOTAL_H }}>
+                {!isDesktop && (
+                <div ref={mRotatorRef} className="relative" style={{ height: M_TOTAL_H }}>
                     {mBox.w > 0 &&
                         CREATE_TYPES.map((c) => {
                             const isF = c.id === featured.id;
@@ -354,16 +366,18 @@ function Hero() {
                                     animate={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
                                     transition={HERO_SPRING}
                                 >
-                                    <CreateCard item={c} featured={isF} compact={!isF} autoPlay={c.media.type === 'video'} />
+                                    <CreateCard item={c} featured={isF} compact={!isF} autoPlay={isF && c.media.type === 'video'} />
                                 </motion.div>
                             );
                         })}
                 </div>
+                )}
 
                 {/* Desktop: cards stay mounted and morph between big slot and side stack (no reload) */}
+                {isDesktop && (
                 <div
                     ref={rotatorRef}
-                    className="relative hidden min-h-0 flex-1 md:block md:h-0 md:min-h-[220px] lg:min-h-[250px]"
+                    className="relative min-h-0 flex-1 md:h-0 md:min-h-[220px] lg:min-h-[250px]"
                     onMouseEnter={() => setPaused(true)}
                     onMouseLeave={() => setPaused(false)}
                 >
@@ -401,11 +415,12 @@ function Hero() {
                                     animate={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
                                     transition={HERO_SPRING}
                                 >
-                                    <CreateCard item={c} featured={isF} side={!isF} autoPlay={c.media.type === 'video'} />
+                                    <CreateCard item={c} featured={isF} side={!isF} autoPlay={isF && c.media.type === 'video'} />
                                 </motion.div>
                             );
                         })}
                 </div>
+                )}
 
                 {/* Rotation progress dots */}
                 <div className="hidden items-center justify-center gap-2 md:flex">
@@ -596,6 +611,18 @@ function CreateCard({
     const isVideo = item.media.type === 'video';
     const label = t(`createTypes.${item.id}.label`);
     const desc = t(`createTypes.${item.id}.desc`);
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v || !isVideo) return;
+        if (autoPlay) {
+            void v.play().catch(() => undefined);
+        } else {
+            v.pause();
+            v.currentTime = 0;
+        }
+    }, [autoPlay, isVideo]);
 
     return (
         <Link
@@ -629,13 +656,14 @@ function CreateCard({
             >
                 {isVideo ? (
                     <video
+                        ref={videoRef}
                         src={item.media.src}
                         className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
                         muted
                         loop
                         playsInline
                         autoPlay={autoPlay}
-                        preload={autoPlay || item.id === 'video' ? 'auto' : 'metadata'}
+                        preload={autoPlay ? 'auto' : 'none'}
                     />
                 ) : (
                     <img
@@ -847,6 +875,24 @@ function ToolChip({
     const path = '/tools/' + tool.route.replace('tools.', '');
     const label = badge === 'New' ? t('new') : badge || (hot ? t('hot') : null);
     const isNew = badge === 'New' || label === t('new');
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        const el = videoRef.current;
+        if (!el) return;
+        const io = new IntersectionObserver(
+            ([entry]) => {
+                if (entry?.isIntersecting) {
+                    void el.play().catch(() => undefined);
+                } else {
+                    el.pause();
+                }
+            },
+            { rootMargin: '80px', threshold: 0.2 },
+        );
+        io.observe(el);
+        return () => io.disconnect();
+    }, []);
 
     return (
         <motion.div
@@ -871,14 +917,14 @@ function ToolChip({
                     )}
 
                     <video
+                        ref={videoRef}
                         src={tool.video}
                         poster={tool.poster}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                         muted
                         loop
                         playsInline
-                        autoPlay
-                        preload="auto"
+                        preload="metadata"
                     />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80" />

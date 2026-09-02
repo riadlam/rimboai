@@ -104,9 +104,9 @@ const CREATE_LABS = [
         accent: 'from-[#FF6A45] to-[#E24216]',
         glow: 'rgba(255,87,51,0.55)',
         icon: VideoIcon,
-        /** Arc position relative to FAB center (px) */
-        x: -78,
-        y: -86,
+        /** Arc position relative to FAB center (px) — kept tight above the bar */
+        x: -70,
+        y: -52,
     },
     {
         id: 'image',
@@ -115,8 +115,8 @@ const CREATE_LABS = [
         accent: 'from-[#a78bfa] to-[#6d28d9]',
         glow: 'rgba(139,92,246,0.5)',
         icon: ImageIcon,
-        x: -28,
-        y: -118,
+        x: -24,
+        y: -78,
     },
     {
         id: 'voice',
@@ -125,8 +125,8 @@ const CREATE_LABS = [
         accent: 'from-[#22d3ee] to-[#0e7490]',
         glow: 'rgba(6,182,212,0.5)',
         icon: VoiceIcon,
-        x: 28,
-        y: -118,
+        x: 24,
+        y: -78,
     },
     {
         id: 'music',
@@ -135,8 +135,8 @@ const CREATE_LABS = [
         accent: 'from-[#fbbf24] to-[#b45309]',
         glow: 'rgba(245,158,11,0.5)',
         icon: MusicIcon,
-        x: 78,
-        y: -86,
+        x: 70,
+        y: -52,
     },
 ] as const;
 
@@ -231,7 +231,7 @@ export default function MobileBottomNav() {
                 {/* Floating create shortcuts — anchored above FAB */}
                 <AnimatePresence>
                     {createOpen && (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-[calc(3.5rem+max(0.5rem,env(safe-area-inset-bottom))+1.75rem)] flex justify-center">
+                        <div className="pointer-events-none absolute inset-x-0 bottom-[calc(3.5rem+max(0.5rem,env(safe-area-inset-bottom))+0.35rem)] flex justify-center">
                             <div className="relative h-0 w-0">
                                 {CREATE_LABS.map((lab, i) => {
                                     const Icon = lab.icon;
