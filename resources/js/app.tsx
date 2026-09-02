@@ -6,13 +6,11 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import AppErrorBoundary from './Components/AppErrorBoundary';
 import { ThemeProvider } from './Context/ThemeContext';
 import { ModalProvider } from './Context/ModalContext';
-import { dismissAppBoot, scheduleAppBootTimeout, showAppBootError } from './lib/appBoot';
+import { dismissAppBoot, showAppBootError } from './lib/appBoot';
 import { applyLanguage, readSavedLang } from './lib/i18n';
 import { router } from '@inertiajs/react';
 
 const appName = import.meta.env.VITE_APP_NAME || 'AI Studio';
-
-scheduleAppBootTimeout();
 
 applyLanguage(readSavedLang(), { reload: false });
 

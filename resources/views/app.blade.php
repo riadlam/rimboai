@@ -59,16 +59,25 @@
         $legacyPolyfill = $viteManifest['vite/legacy-polyfills-legacy']['file'] ?? null;
         $legacyEntry = $viteManifest['resources/js/app-legacy.tsx']['file'] ?? null;
         $hasLegacyBundle = is_string($legacyPolyfill) && is_string($legacyEntry);
+        $inAppUserAgent = (string) request()->userAgent();
+        $isFacebookWebView = preg_match('/FBAN|FBAV|FBIOS|FB4A|FB_IAB|Instagram|MessengerForiOS/i', $inAppUserAgent) === 1;
+        $forceLegacyBundle = $hasLegacyBundle
+            && $isFacebookWebView
+            && ! is_file(public_path('hot'));
     ?>
 
-    @if ($hasLegacyBundle)
+    @if ($hasLegacyBundle && ! $forceLegacyBundle)
         {{-- Detect module-capable WebViews that cannot parse the modern production bundle. --}}
         <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();window.__vite_is_modern_browser=true</script>
         <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("Loading compatibility bundle");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");if(!e)return;n.src=e.src;n.onload=function(){System.import(document.getElementById("vite-legacy-entry").getAttribute("data-src"))};document.body.appendChild(n)}();</script>
     @endif
 
     @viteReactRefresh
-    @vite(['resources/css/app.css', 'resources/js/app.tsx'])
+    @if ($forceLegacyBundle)
+        @vite('resources/css/app.css')
+    @else
+        @vite(['resources/css/app.css', 'resources/js/app.tsx'])
+    @endif
     @inertiaHead
 </head>
 <body class="min-h-screen bg-surface dark:bg-[var(--dark-surface)] text-text-primary dark:text-[var(--dark-text-primary)] antialiased">
@@ -100,8 +109,22 @@
             >Refresh</button>
         </div>
     </div>
+    <script>
+        window.setTimeout(function () {
+            var boot = document.getElementById('app-boot');
+            if (!boot) return;
+            var loading = boot.querySelector('[data-boot-loading]');
+            var error = boot.querySelector('[data-boot-error]');
+            if (loading) loading.hidden = true;
+            if (error) error.hidden = false;
+        }, 8000);
+    </script>
     @inertia
-    @if ($hasLegacyBundle)
+    @if ($forceLegacyBundle)
+        {{-- Facebook iOS advertises module support but can fail to execute module entries. --}}
+        <script crossorigin src="{{ asset('build/'.$legacyPolyfill) }}"></script>
+        <script>System.import(@json(asset('build/'.$legacyEntry))).catch(function (error) { console.error('Legacy app boot failed:', error); });</script>
+    @elseif ($hasLegacyBundle)
         <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
         <script nomodule crossorigin id="vite-legacy-polyfill" src="{{ asset('build/'.$legacyPolyfill) }}"></script>
         <script nomodule crossorigin id="vite-legacy-entry" data-src="{{ asset('build/'.$legacyEntry) }}">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
