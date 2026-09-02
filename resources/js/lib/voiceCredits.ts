@@ -1,18 +1,18 @@
-import { creditsFromFalUsd, type CreditsConfig } from '@/lib/imageCredits';
+import {
+    applyCreditFloor,
+    creditsFromFalUsd,
+    DEFAULT_CREDITS_CONFIG,
+    resolveCreditsConfig,
+    type CreditsConfig,
+} from '@/lib/imageCredits';
 
-const DEFAULT_CONFIG: CreditsConfig = {
-    markup: 1.25,
-    usd_per_credit: 0.01,
-};
+const DEFAULT_CONFIG: CreditsConfig = DEFAULT_CREDITS_CONFIG;
 
 /** MiniMax voice-clone: flat clone fee + preview TTS chars (fal pricing). */
 const MINIMAX_CLONE_FEE_USD = 1.5;
 const MINIMAX_PREVIEW_PER_1000_CHARS_USD = 0.3;
 
 /** User-facing credit rules (mirror VoiceGenerationCostEstimator). */
-const MIN_VOICE_CREDITS = 10;
-const ELEVENLABS_CREDIT_MULTIPLIER = 5;
-
 export type VoiceModelPricing = {
     unit_price?: number | string | null;
     unit?: string | null;
@@ -114,17 +114,15 @@ export function minVoiceSampleSeconds(endpointId?: string | null): number {
     return isMiniMaxVoiceClone(endpointId) ? 10 : 3;
 }
 
-/** Apply ElevenLabs ×5 then minimum 10 credits (when charge > 0). */
-function applyVoiceCreditRules(credits: number, endpointId?: string | null): number {
+/** Apply ElevenLabs multiplier then voice minimum (when charge > 0). */
+function applyVoiceCreditRules(credits: number, endpointId?: string | null, config?: CreditsConfig): number {
     if (credits <= 0) return 0;
+    const resolved = resolveCreditsConfig(config);
     let next = credits;
     if (isElevenLabsVoice(endpointId)) {
-        next *= ELEVENLABS_CREDIT_MULTIPLIER;
+        next *= resolved.elevenlabs_multiplier ?? 5;
     }
-    if (next < MIN_VOICE_CREDITS) {
-        next = MIN_VOICE_CREDITS;
-    }
-    return next;
+    return applyCreditFloor(next, 'voice', config);
 }
 
 /**
@@ -162,7 +160,7 @@ export function estimateVoiceCredits(
         return {
             falCostUsd,
             billableUnits: 1,
-            credits: applyVoiceCreditRules(baseCredits, endpointId),
+            credits: applyVoiceCreditRules(baseCredits, endpointId, config),
             mode: 'minimax_voice_clone',
             sampleSeconds,
         };
@@ -203,7 +201,7 @@ export function estimateVoiceCredits(
     return {
         falCostUsd,
         billableUnits,
-        credits: applyVoiceCreditRules(baseCredits, endpointId),
+        credits: applyVoiceCreditRules(baseCredits, endpointId, config),
         mode,
         sampleSeconds,
     };

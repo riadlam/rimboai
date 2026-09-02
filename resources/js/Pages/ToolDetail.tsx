@@ -13,7 +13,7 @@ import type { PageProps, Tool, ToolWorkspace } from '@/types';
 type Props = {
     tool: Tool;
     workspace: ToolWorkspace;
-    creditsConfig: CreditsConfig;
+    creditsConfig?: CreditsConfig;
     tokenBalance: number;
 };
 
@@ -131,6 +131,8 @@ function mergeToolCreationStatus(prev: LabImage[], data: ToolCreationStatus): La
 }
 
 export default function ToolDetail({ tool, workspace, creditsConfig, tokenBalance }: Props) {
+    const { props } = usePage<PageProps>();
+    const resolvedCreditsConfig = creditsConfig ?? props.creditsConfig;
     const { t } = useTranslation('tools');
     const { props: pageProps } = usePage<PageProps>();
     const isGuest = pageProps.auth.user === null;
@@ -242,7 +244,7 @@ export default function ToolDetail({ tool, workspace, creditsConfig, tokenBalanc
                         <ToolCreatePanel
                             tool={tool}
                             workspace={workspace}
-                            creditsConfig={creditsConfig}
+                            creditsConfig={resolvedCreditsConfig}
                             tokenBalance={tokenBalance}
                             onCreationStarted={onCreationStarted}
                             onCreationUpdated={onCreationUpdated}

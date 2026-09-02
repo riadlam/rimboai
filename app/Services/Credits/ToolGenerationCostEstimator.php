@@ -5,12 +5,10 @@ namespace App\Services\Credits;
 /**
  * PHP mirror of resources/js/lib/toolCredits.ts for server-side charging.
  *
- * User-facing credits: minimum 45 when charge > 0.
+ * User-facing credits: optional floor from config credits.min_credits.tool (0 = off).
  */
 class ToolGenerationCostEstimator
 {
-    private const MIN_CREDITS = 45;
-
     public function __construct(
         private readonly CreditCalculator $credits,
     ) {}
@@ -316,10 +314,11 @@ class ToolGenerationCostEstimator
     private function pack(float $falCost, float $units, string $unit, float $unitPrice, array $breakdown): array
     {
         $credits = $falCost > 0 ? $this->credits->fromFalUsd($falCost) : 0;
-        if ($credits > 0 && $credits < self::MIN_CREDITS) {
-            $breakdown['credits_before_floor'] = $credits;
-            $credits = self::MIN_CREDITS;
-            $breakdown['min_credits'] = self::MIN_CREDITS;
+        $creditsBeforeFloor = $credits;
+        $credits = $this->credits->applyFloor($credits, 'tool');
+        if ($creditsBeforeFloor > 0 && $credits !== $creditsBeforeFloor) {
+            $breakdown['credits_before_floor'] = $creditsBeforeFloor;
+            $breakdown['min_credits'] = $credits;
         }
 
         return [

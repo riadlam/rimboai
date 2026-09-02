@@ -1,12 +1,6 @@
-import { creditsFromFalUsd, type CreditsConfig } from '@/lib/imageCredits';
+import { applyCreditFloor, creditsFromFalUsd, DEFAULT_CREDITS_CONFIG, type CreditsConfig } from '@/lib/imageCredits';
 
-const DEFAULT_CONFIG: CreditsConfig = {
-    markup: 1.25,
-    usd_per_credit: 0.01,
-};
-
-/** User-facing credit floor (mirror MusicGenerationCostEstimator). */
-const MIN_MUSIC_CREDITS = 30;
+const DEFAULT_CONFIG: CreditsConfig = DEFAULT_CREDITS_CONFIG;
 
 export type MusicModelPricing = {
     unit_price?: number | string | null;
@@ -71,9 +65,7 @@ export function estimateMusicCredits(
         credits += 1;
     }
 
-    if (credits > 0 && credits < MIN_MUSIC_CREDITS) {
-        credits = MIN_MUSIC_CREDITS;
-    }
+    credits = applyCreditFloor(credits, 'music', config);
 
     return {
         falCostUsd,

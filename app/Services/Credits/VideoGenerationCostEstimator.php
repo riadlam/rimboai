@@ -9,12 +9,10 @@ namespace App\Services\Credits;
  * - seconds: duration_seconds × unit_price × multipliers
  * - tokens_per_1000: Seedance-style token billing
  *
- * User-facing credits: minimum 55 when charge > 0.
+ * User-facing credits: optional floor from config credits.min_credits.video (0 = off).
  */
 class VideoGenerationCostEstimator
 {
-    private const MIN_CREDITS = 55;
-
     public function __construct(private readonly CreditCalculator $credits) {}
 
     /**
@@ -64,10 +62,11 @@ class VideoGenerationCostEstimator
             'resolution_multiplier' => $resolutionMultiplier,
         ];
 
-        if ($credits > 0 && $credits < self::MIN_CREDITS) {
-            $breakdown['credits_before_floor'] = $credits;
-            $credits = self::MIN_CREDITS;
-            $breakdown['min_credits'] = self::MIN_CREDITS;
+        $creditsBeforeFloor = $credits;
+        $credits = $this->credits->applyFloor($credits, 'video');
+        if ($creditsBeforeFloor > 0 && $credits !== $creditsBeforeFloor) {
+            $breakdown['credits_before_floor'] = $creditsBeforeFloor;
+            $breakdown['min_credits'] = $credits;
         }
 
         return [
@@ -120,10 +119,11 @@ class VideoGenerationCostEstimator
             'formula' => '(H * W * duration * 24) / 1024 / 1000 * unit_price',
         ];
 
-        if ($credits > 0 && $credits < self::MIN_CREDITS) {
-            $breakdown['credits_before_floor'] = $credits;
-            $credits = self::MIN_CREDITS;
-            $breakdown['min_credits'] = self::MIN_CREDITS;
+        $creditsBeforeFloor = $credits;
+        $credits = $this->credits->applyFloor($credits, 'video');
+        if ($creditsBeforeFloor > 0 && $credits !== $creditsBeforeFloor) {
+            $breakdown['credits_before_floor'] = $creditsBeforeFloor;
+            $breakdown['min_credits'] = $credits;
         }
 
         return [

@@ -3,9 +3,19 @@
  * credits = ceil( (fal_cost_usd * markup) / usd_per_credit )
  */
 
+export type MinCreditsMap = {
+    video: number;
+    tool: number;
+    music: number;
+    voice: number;
+};
+
 export type CreditsConfig = {
     markup: number;
     usd_per_credit: number;
+    starter_tokens?: number;
+    min_credits?: Partial<MinCreditsMap>;
+    elevenlabs_multiplier?: number;
 };
 
 export type ImageCreditModel = {
@@ -29,14 +39,55 @@ export type ImageCreditEstimate = {
     unitPrice: number;
 };
 
-const DEFAULT_CONFIG: CreditsConfig = {
-    markup: 1.25,
-    usd_per_credit: 0.01,
+const DEFAULT_MIN_CREDITS: MinCreditsMap = {
+    video: 0,
+    tool: 0,
+    music: 0,
+    voice: 0,
 };
 
-export function creditsFromFalUsd(falCostUsd: number, config: CreditsConfig = DEFAULT_CONFIG): number {
-    const markup = config.markup > 0 ? config.markup : 1.25;
-    const usdPerCredit = config.usd_per_credit > 0 ? config.usd_per_credit : 0.01;
+export const DEFAULT_CREDITS_CONFIG: CreditsConfig = {
+    markup: 1.25,
+    usd_per_credit: 0.01,
+    starter_tokens: 50,
+    min_credits: DEFAULT_MIN_CREDITS,
+    elevenlabs_multiplier: 5,
+};
+
+export function resolveCreditsConfig(partial?: CreditsConfig): CreditsConfig {
+    return {
+        ...DEFAULT_CREDITS_CONFIG,
+        ...partial,
+        min_credits: {
+            ...DEFAULT_MIN_CREDITS,
+            ...partial?.min_credits,
+        },
+    };
+}
+
+export function minCreditsFor(config: CreditsConfig | undefined, product: keyof MinCreditsMap): number {
+    return resolveCreditsConfig(config).min_credits?.[product] ?? DEFAULT_MIN_CREDITS[product];
+}
+
+export function applyCreditFloor(
+    credits: number,
+    product: keyof MinCreditsMap,
+    config?: CreditsConfig,
+): number {
+    const min = minCreditsFor(config, product);
+    if (min <= 0 || credits <= 0 || credits >= min) {
+        return credits;
+    }
+    return min;
+}
+
+export function creditsFromFalUsd(
+    falCostUsd: number,
+    config: CreditsConfig = DEFAULT_CREDITS_CONFIG,
+): number {
+    const resolved = resolveCreditsConfig(config);
+    const markup = resolved.markup > 0 ? resolved.markup : 1.25;
+    const usdPerCredit = resolved.usd_per_credit > 0 ? resolved.usd_per_credit : 0.01;
     if (falCostUsd <= 0) return 0;
     return Math.ceil((falCostUsd * markup) / usdPerCredit);
 }
@@ -44,7 +95,7 @@ export function creditsFromFalUsd(falCostUsd: number, config: CreditsConfig = DE
 export function estimateImageCredits(
     model: ImageCreditModel | null | undefined,
     options: ImageCreditOptions = {},
-    config: CreditsConfig = DEFAULT_CONFIG,
+    config: CreditsConfig = DEFAULT_CREDITS_CONFIG,
 ): ImageCreditEstimate {
     const endpointId = model?.endpoint_id || '';
     const unit = normalizeUnit(model?.unit);

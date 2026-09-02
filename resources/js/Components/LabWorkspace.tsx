@@ -415,6 +415,8 @@ function LabWorkspaceInner({
     const { t: tLab } = useTranslation('lab');
     const { pushError } = useLabToast();
     const { props: pageProps } = usePage<PageProps>();
+    const resolvedCreditsConfig = creditsConfig ?? pageProps.creditsConfig;
+    const starterTokens = resolvedCreditsConfig?.starter_tokens ?? 50;
     const isGuest = pageProps.auth.user === null;
     const [prompt, setPrompt] = useState('');
     const [tokenBalance, setTokenBalance] = useState(() => Math.max(0, pageProps.auth.user?.tokens ?? 0));
@@ -1339,7 +1341,7 @@ function LabWorkspaceInner({
                 <VoiceLabCreateForm
                     brands={brands}
                     loading={loading || voiceGenerating}
-                    creditsConfig={creditsConfig}
+                    creditsConfig={resolvedCreditsConfig}
                     tokenBalance={tokenBalance}
                     onGenerate={startVoiceGenerate}
                 />
@@ -1350,7 +1352,7 @@ function LabWorkspaceInner({
                 <SoundLabCreateForm
                     brands={brands}
                     loading={loading || musicGenerating}
-                    creditsConfig={creditsConfig}
+                    creditsConfig={resolvedCreditsConfig}
                     tokenBalance={tokenBalance}
                     onGenerate={startSoundGenerate}
                     draft={reuseDraft?.lab === 'music' ? reuseDraft : null}
@@ -1363,7 +1365,7 @@ function LabWorkspaceInner({
                     brands={brands}
                     placeholder={placeholder}
                     loading={videoGenerating}
-                    creditsConfig={creditsConfig}
+                    creditsConfig={resolvedCreditsConfig}
                     tokenBalance={tokenBalance}
                     onGenerate={startVideoGenerate}
                     draft={reuseDraft?.lab === 'video' ? reuseDraft : null}
@@ -1375,7 +1377,7 @@ function LabWorkspaceInner({
                 brands={brands}
                 placeholder={placeholder}
                 loading={imageGenerating}
-                creditsConfig={creditsConfig}
+                creditsConfig={resolvedCreditsConfig}
                 tokenBalance={tokenBalance}
                 onGenerate={startImageGenerate}
                 draft={reuseDraft?.lab === 'image' ? reuseDraft : null}
@@ -1425,7 +1427,7 @@ function LabWorkspaceInner({
                                             </Link>
                                         </motion.div>
                                         <p className="mt-2 text-center text-[11px] text-white/40">
-                                            {tLab('guestTokens')}
+                                            {tLab('guestTokens', { count: starterTokens })}
                                         </p>
                                     </div>
                                 )}
@@ -1434,7 +1436,7 @@ function LabWorkspaceInner({
 
                         <div className="flex min-h-[50vh] min-w-0 w-full flex-col md:min-h-0 md:flex-1 md:overflow-hidden">
                             {isGuest ? (
-                                <GuestLibraryPlaceholder title={title} />
+                                <GuestLibraryPlaceholder title={title} starterTokens={starterTokens} />
                             ) : isMusicLab ? (
                                 <SoundLabLibrary
                                     tracks={tracks}
@@ -1511,7 +1513,7 @@ function fileToBase64(file: File): Promise<string> {
     });
 }
 
-function GuestLibraryPlaceholder({ title }: { title: string }) {
+function GuestLibraryPlaceholder({ title, starterTokens }: { title: string; starterTokens: number }) {
     const { t } = useTranslation('lab');
     const { t: tc } = useTranslation('common');
 
@@ -1540,7 +1542,7 @@ function GuestLibraryPlaceholder({ title }: { title: string }) {
                     {t('guestGalleryTitle', { title })}
                 </h3>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-white/45">
-                    {t('guestGallerySub')}
+                    {t('guestGallerySub', { count: starterTokens })}
                 </p>
 
                 <div className="mt-6 flex flex-col items-center justify-center gap-2.5 sm:flex-row">

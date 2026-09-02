@@ -6,18 +6,14 @@ namespace App\Services\Credits;
  * Estimates fal USD cost for text-to-speech from catalog unit / unit_price.
  *
  * User-facing credits:
- *  - ElevenLabs TTS: ×5 after markup conversion
- *  - All voice models: minimum 10 credits when charge > 0
+ *  - ElevenLabs TTS: ×config(credits.elevenlabs_multiplier) after markup conversion
+ *  - All voice models: optional floor from config credits.min_credits.voice (0 = off)
  */
 class VoiceGenerationCostEstimator
 {
     private const MINIMAX_CLONE_FEE_USD = 1.5;
 
     private const MINIMAX_PREVIEW_PER_1000_CHARS_USD = 0.3;
-
-    private const MIN_CREDITS = 10;
-
-    private const ELEVENLABS_CREDIT_MULTIPLIER = 5;
 
     public function __construct(
         private readonly CreditCalculator $credits,
@@ -164,14 +160,16 @@ class VoiceGenerationCostEstimator
 
         if ($credits > 0) {
             if ($this->isElevenLabs($endpointId)) {
-                $credits *= self::ELEVENLABS_CREDIT_MULTIPLIER;
-                $breakdown['elevenlabs_multiplier'] = self::ELEVENLABS_CREDIT_MULTIPLIER;
+                $multiplier = $this->credits->elevenlabsMultiplier();
+                $credits *= $multiplier;
+                $breakdown['elevenlabs_multiplier'] = $multiplier;
             }
 
-            if ($credits < self::MIN_CREDITS) {
-                $breakdown['credits_before_floor'] = $credits;
-                $credits = self::MIN_CREDITS;
-                $breakdown['min_credits'] = self::MIN_CREDITS;
+            $creditsBeforeFloor = $credits;
+            $credits = $this->credits->applyFloor($credits, 'voice');
+            if ($creditsBeforeFloor > 0 && $credits !== $creditsBeforeFloor) {
+                $breakdown['credits_before_floor'] = $creditsBeforeFloor;
+                $breakdown['min_credits'] = $credits;
             }
         }
 

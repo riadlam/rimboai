@@ -1,3 +1,5 @@
+import type { CreditsConfig } from '@/lib/imageCredits';
+
 export type User = {
     id: number;
     name: string;
@@ -203,4 +205,5 @@ export type PageProps = {
         success?: string | null;
         error?: string | null;
     };
+    creditsConfig?: CreditsConfig;
 };

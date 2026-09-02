@@ -3,7 +3,7 @@
  * credits = ceil( (fal_cost_usd * markup) / usd_per_credit )
  */
 
-import { creditsFromFalUsd, type CreditsConfig } from '@/lib/imageCredits';
+import { applyCreditFloor, creditsFromFalUsd, DEFAULT_CREDITS_CONFIG, type CreditsConfig } from '@/lib/imageCredits';
 
 export type ToolBilling = {
     endpoint_id?: string | null;
@@ -51,20 +51,11 @@ export type ToolCreditEstimate = {
     unit: string;
 };
 
-const DEFAULT_CONFIG: CreditsConfig = {
-    markup: 1.25,
-    usd_per_credit: 0.01,
-};
-
-/** User-facing credit floor (mirror ToolGenerationCostEstimator). */
-const MIN_TOOL_CREDITS = 45;
+const DEFAULT_CONFIG: CreditsConfig = DEFAULT_CREDITS_CONFIG;
 
 function toolCreditsFromFalUsd(falCostUsd: number, config: CreditsConfig = DEFAULT_CONFIG): number {
     const credits = creditsFromFalUsd(falCostUsd, config);
-    if (credits > 0 && credits < MIN_TOOL_CREDITS) {
-        return MIN_TOOL_CREDITS;
-    }
-    return credits;
+    return applyCreditFloor(credits, 'tool', config);
 }
 
 const RES_DIMS: Record<string, [number, number]> = {

@@ -9,8 +9,6 @@ namespace App\Services\Credits;
  */
 class MusicGenerationCostEstimator
 {
-    private const MIN_CREDITS = 30;
-
     public function __construct(
         private CreditCalculator $credits,
     ) {}
@@ -57,8 +55,8 @@ class MusicGenerationCostEstimator
             $credits += 1;
         }
 
-        if ($credits > 0 && $credits < self::MIN_CREDITS) {
-            $credits = self::MIN_CREDITS;
+        if ($credits > 0 && $credits < $this->credits->minCredits('music')) {
+            $credits = $this->credits->applyFloor($credits, 'music');
         }
 
         return [

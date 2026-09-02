@@ -246,10 +246,6 @@ class DashboardController extends Controller
         return Inertia::render('ToolDetail', [
             'tool' => $tool,
             'workspace' => $workspaceBuilder->build($toolSlug),
-            'creditsConfig' => [
-                'markup' => (float) config('credits.markup', 1.25),
-                'usd_per_credit' => (float) config('credits.usd_per_credit', 0.01),
-            ],
             'tokenBalance' => $user ? (int) ($user->tokens ?? 0) : 0,
         ]);
     }
@@ -299,10 +295,6 @@ class DashboardController extends Controller
                     $config['resolved'] === 'text-to-video',
                     fn ($brands) => $brands->concat($this->loadVideoToolBrands($brands))->values()
                 ),
-            'creditsConfig' => [
-                'markup' => (float) config('credits.markup', 1.25),
-                'usd_per_credit' => (float) config('credits.usd_per_credit', 0.01),
-            ],
         ]);
     }
 

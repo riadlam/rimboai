@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Credits\CreditCalculator;
 use App\Models\User;
 use App\Services\CreationTelegramNotifier;
 use Illuminate\Http\RedirectResponse;
@@ -75,7 +76,7 @@ class GoogleAuthController extends Controller
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
                 'password' => null,
-                'tokens' => 50,
+                'tokens' => app(CreditCalculator::class)->starterTokens(),
                 'email_verified_at' => now(),
             ]);
 

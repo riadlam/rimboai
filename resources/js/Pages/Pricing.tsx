@@ -173,6 +173,7 @@ export default function Pricing() {
     const { t: tc } = useTranslation('common');
     const { props } = usePage<PageProps>();
     const user = props.auth.user;
+    const starterTokens = props.creditsConfig?.starter_tokens ?? 50;
     const locale = intlLocale((i18n.language as 'en' | 'fr' | 'ar') || readSavedLang());
     const [currency, setCurrency] = useState<Currency>('DZD');
     const [modelTab, setModelTab] = useState<(typeof MODEL_TABS)[number]['id']>('image');
@@ -375,7 +376,7 @@ export default function Pricing() {
                         <div className="relative flex flex-col items-start justify-between gap-6 p-6 sm:flex-row sm:items-center sm:p-8">
                             <div className="flex items-center gap-5">
                                 <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10">
-                                    <span className="font-[family-name:Outfit,sans-serif] text-2xl font-black text-white">50</span>
+                                    <span className="font-[family-name:Outfit,sans-serif] text-2xl font-black text-white">{starterTokens}</span>
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">{tc('tokens')}</span>
                                 </div>
                                 <div>
