@@ -16,8 +16,17 @@ type PopPos = { top: number; left: number; width: number };
 
 const TIP_ESTIMATE_H = 130;
 
+function resolveLabError(error: string, tLab: (k: string) => string): string {
+    if (error.startsWith('errors.')) {
+        const translated = tLab(error);
+        return translated === error ? error : translated;
+    }
+    return error;
+}
+
 function ErrorBang({ error }: { error: string }) {
     const { t: tLab } = useTranslation('lab');
+    const message = resolveLabError(error, tLab);
     const [open, setOpen] = useState(false);
     const [pos, setPos] = useState<PopPos | null>(null);
     const btnRef = useRef<HTMLButtonElement>(null);
@@ -139,7 +148,7 @@ function ErrorBang({ error }: { error: string }) {
                                     {tLab('errorDetails', { defaultValue: 'Error details' })}
                                 </p>
                                 <p className="max-h-36 overflow-y-auto break-words text-[12px] leading-relaxed text-white/85">
-                                    {error}
+                                    {message}
                                 </p>
                             </motion.div>
                         )}

@@ -11,6 +11,7 @@ use App\Services\ToolsService;
 use App\Services\TrendsFeedService;
 use App\Services\VideoModelCapabilities;
 use App\Services\VoiceUseCaseClassifier;
+use App\Support\LabModelDescription;
 use App\Support\PublicMediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -368,6 +369,8 @@ class DashboardController extends Controller
                 'endpoint_id',
                 'name',
                 'description',
+                'description_fr',
+                'description_ar',
                 'image_url',
                 'image_cover',
                 'tags',
@@ -421,7 +424,7 @@ class DashboardController extends Controller
                         return [
                             'name' => $m->name ?: ($endpointId ?: 'Untitled'),
                             'icon' => $icon,
-                            'description' => $m->description ?? '',
+                            'description' => LabModelDescription::resolve($m),
                             'endpoint_id' => $endpointId,
                             'unit_price' => $m->unit_price ?? null,
                             'unit' => $m->unit ?? null,
@@ -453,7 +456,8 @@ class DashboardController extends Controller
 
     private function loadBrands(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection
     {
-        $cacheKey = "catalog.brands.v4.{$modelsTable}.{$categoriesTable}";
+        $locale = app()->getLocale();
+        $cacheKey = "catalog.brands.v5.{$locale}.{$modelsTable}.{$categoriesTable}";
 
         /** @var list<array<string, mixed>> $cached */
         $cached = Cache::remember(
@@ -486,6 +490,8 @@ class DashboardController extends Controller
             'category_id',
             'name',
             'description',
+            'description_fr',
+            'description_ar',
             'endpoint_id',
             'unit_price',
             'unit',
@@ -657,7 +663,7 @@ class DashboardController extends Controller
                         $payload = [
                             'name' => $m->name ?: ($endpointId ?: 'Untitled'),
                             'icon' => $icon,
-                            'description' => $m->description ?? '',
+                            'description' => LabModelDescription::resolve($m),
                             'endpoint_id' => $endpointId,
                             'unit_price' => $m->unit_price ?? null,
                             'unit' => $m->unit ?? null,
@@ -804,7 +810,7 @@ class DashboardController extends Controller
                                         'id' => (int) $voice->id,
                                         'voice_key' => (string) $voice->voice_key,
                                         'name' => (string) $voice->name,
-                                        'description' => $voice->description,
+                                        'description' => LabModelDescription::resolve($voice),
                                         'language' => $voice->language,
                                         'gender' => $voice->gender,
                                         'category' => $category ?: 'Conversational',
@@ -846,7 +852,7 @@ class DashboardController extends Controller
                                         'example_key' => (string) $example->example_key,
                                         'title' => (string) $example->title,
                                         'style' => (string) ($example->style ?? ''),
-                                        'description' => $example->description,
+                                        'description' => LabModelDescription::resolve($example),
                                         'vocals' => (bool) ($example->vocals ?? false),
                                         'cover_url' => $coverUrl,
                                         'sample_url' => $sampleUrl,

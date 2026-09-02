@@ -11,6 +11,7 @@ import AssetMentionTextarea, {
     rebasePromptAfterAssetRemoval,
     type AssetMention,
 } from '@/Components/AssetMentionTextarea';
+import ToggleTip from '@/Components/ToggleTip';
 import { hasMeaningfulPrompt } from '@/lib/promptText';
 
 type Props = {
@@ -627,7 +628,10 @@ export default function SoundLabCreateForm({
                                         <path d="M20 3v4" />
                                         <path d="M22 5h-4" />
                                     </svg>
-                                    <span className="text-xs text-white/40">{t('music.autoEnhance')}</span>
+                                    <span className="inline-flex items-center gap-1.5 text-xs text-white/40">
+                                        {t('music.autoEnhance')}
+                                        <ToggleTip text={t('music.autoEnhanceTip')} label={t('tipLabel')} />
+                                    </span>
                                     <Toggle checked={autoEnhance} onChange={setAutoEnhance} />
                                 </div>
                                 <span className="text-xs text-white/40">
@@ -820,10 +824,18 @@ export default function SoundLabCreateForm({
                                     </svg>
                                 )}
                                 <div className="min-w-0">
-                                    <label className="text-sm font-medium text-white">
+                                    <label className="inline-flex items-center gap-1.5 text-sm font-medium text-white">
                                         {!canUseVocals
                                             ? t('music.instrumentalOnly')
                                             : t('music.withVocals')}
+                                        <ToggleTip
+                                            text={
+                                                !canUseVocals
+                                                    ? t('music.noVocalsSupport')
+                                                    : t('music.withVocalsTip')
+                                            }
+                                            label={t('tipLabel')}
+                                        />
                                     </label>
                                     <p className="text-xs text-white/45">
                                         {!canUseVocals

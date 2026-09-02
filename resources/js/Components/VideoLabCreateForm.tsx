@@ -5,6 +5,7 @@ import type { Brand } from '@/types';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import { estimateVideoCredits } from '@/lib/videoCredits';
 import LabFormSkeleton from '@/Components/LabFormSkeleton';
+import ToggleTip from '@/Components/ToggleTip';
 import AssetMentionTextarea, {
     rebasePromptAfterAssetRemoval,
     type AssetMention,
@@ -907,8 +908,12 @@ export default function VideoLabCreateForm({
                                     onClick={() => (framesMode ? disableFramesMode() : enableFramesMode())}
                                     className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pe-1.5 ps-2.5 text-[11px] font-medium text-zinc-300 transition hover:border-orange-400/35 hover:bg-orange-500/[0.06] hover:text-orange-100"
                                 >
-                                    <span className="text-zinc-400 group-hover:text-orange-200/90">{t('video.framesToggle')}</span>
+                                    <span className="inline-flex items-center gap-1.5 text-zinc-400 group-hover:text-orange-200/90">
+                                        {t('video.framesToggle')}
+                                        <ToggleTip text={t('video.framesToggleTip')} label={t('tipLabel')} />
+                                    </span>
                                     <span
+                                        dir="ltr"
                                         className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
                                             framesMode ? 'bg-[#FF5733]' : 'bg-white/15'
                                         }`}
@@ -1362,8 +1367,11 @@ export default function VideoLabCreateForm({
                                         {/* Audio — only for models with generate_audio */}
                                         {supportsAudio && (
                                             <div className="flex items-center justify-between gap-3">
-                                                <div>
-                                                    <p className="text-[13px] font-medium text-zinc-200">{t('video.audio')}</p>
+                                                <div className="min-w-0">
+                                                    <p className="inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-200">
+                                                        {t('video.audio')}
+                                                        <ToggleTip text={t('video.audioTip')} label={t('tipLabel')} />
+                                                    </p>
                                                     <p className="text-[10px] text-white/30">{audioOn ? t('video.audioGenerate') : t('video.audioSilent')}</p>
                                                 </div>
                                                 <PremiumSegmented

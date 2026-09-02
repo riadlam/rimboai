@@ -6,6 +6,7 @@ import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
 import { estimateToolCredits, snapBillableDuration } from '@/lib/toolCredits';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import type { PageProps, Tool, ToolControlSpec, ToolUploadSpec, ToolWorkspace } from '@/types';
+import ToggleTip from '@/Components/ToggleTip';
 type FileSlot = {
     file: File | null;
     preview: string | null;
@@ -1051,7 +1052,12 @@ function ControlField({
     return (
         <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl px-1 py-2.5 transition hover:bg-white/[0.02]">
             <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-white/85">{label}</p>
+                <p className="inline-flex items-center gap-1.5 text-[13px] font-medium text-white/85">
+                    {label}
+                    {control.desc_key ? (
+                        <ToggleTip text={t(`detail.${control.desc_key}`)} label={t('detail.tipLabel', { defaultValue: 'Help' })} />
+                    ) : null}
+                </p>
                 {control.desc_key && (
                     <p className="text-[11px] text-white/35">{t(`detail.${control.desc_key}`)}</p>
                 )}

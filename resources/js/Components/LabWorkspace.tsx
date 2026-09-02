@@ -165,7 +165,7 @@ function mergeImageVideoCreationState(
             const cards = batch.map((slot, idx) => {
                 const url = urls[idx];
                 if (!url) {
-                    return { ...slot, status: 'failed' as const, completing: false, progress: null, error: 'Output missing.' };
+                    return { ...slot, status: 'failed' as const, completing: false, progress: null, error: 'errors.outputMissing' };
                 }
                 return {
                     ...slot,
@@ -186,7 +186,7 @@ function mergeImageVideoCreationState(
         if (!existing) return prev;
         const rest = prev.filter((i) => i.creationId !== creationId);
         if (!videoUrl) {
-            return [{ ...existing, status: 'failed' as const, error: 'Generation finished without a video.' }, ...rest];
+            return [{ ...existing, status: 'failed' as const, error: 'errors.generationNoVideo' }, ...rest];
         }
         return [
             {
@@ -208,7 +208,7 @@ function mergeImageVideoCreationState(
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((i) =>
             i.creationId === creationId
-                ? { ...i, status: 'failed' as const, completing: false, progress: null, progressPercent: null, error: creation.error ?? 'Generation failed.' }
+                ? { ...i, status: 'failed' as const, completing: false, progress: null, progressPercent: null, error: creation.error ?? 'errors.generationFailed' }
                 : i,
         );
     }
@@ -238,7 +238,7 @@ function mergeMusicCreationState(prev: LabTrack[], creationId: number, creation:
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((track) =>
             track.creationId === creationId
-                ? { ...track, status: 'failed', completing: false, error: creation.error || 'Generation failed.', progress: creation.progress_message ?? 'Failed', progressPercent: null }
+                ? { ...track, status: 'failed', completing: false, error: creation.error || 'errors.generationFailed', progress: creation.progress_message ?? 'Failed', progressPercent: null }
                 : track,
         );
     }
@@ -266,7 +266,7 @@ function mergeVoiceCreationState(prev: LabVoice[], creationId: number, creation:
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((v) =>
             v.creationId === creationId
-                ? { ...v, status: 'failed', error: creation.error || 'Generation failed.', progress: creation.progress_message ?? 'Failed' }
+                ? { ...v, status: 'failed', error: creation.error || 'errors.generationFailed', progress: creation.progress_message ?? 'Failed' }
                 : v,
         );
     }
@@ -409,10 +409,11 @@ function LabWorkspaceInner({
     type = 'text-to-video',
     title,
     brands = [],
-    placeholder = 'Enter your prompt…',
+    placeholder,
     creditsConfig,
 }: Props) {
     const { t: tLab } = useTranslation('lab');
+    const resolvedPlaceholder = placeholder || tLab('promptPlaceholder');
     const { pushError } = useLabToast();
     const { props: pageProps } = usePage<PageProps>();
     const resolvedCreditsConfig = creditsConfig ?? pageProps.creditsConfig;
@@ -507,7 +508,7 @@ function LabWorkspaceInner({
         async (img: LabImage, frameFile?: File) => {
             const videoUrl = img.videoUrl || img.src;
             if (!videoUrl && !frameFile) {
-                pushError('No video to capture a frame from.');
+                pushError(tLab('errors.noVideoForFrame'));
                 throw new Error('No video');
             }
             try {
@@ -519,7 +520,7 @@ function LabWorkspaceInner({
                 const frameUrl = URL.createObjectURL(file);
                 setReuseDraft(buildUseLastFrameDraft(toReuseSource(img), frameUrl));
             } catch (e) {
-                pushError(e instanceof Error ? e.message : 'Could not capture the last frame.');
+                pushError(e instanceof Error ? e.message : tLab('errors.couldNotCaptureFrame'));
                 throw e;
             }
         },
@@ -563,16 +564,17 @@ function LabWorkspaceInner({
     }, []);
 
     const failBatch = useCallback((batchId: string, error?: string | null) => {
-        const message = error ?? 'Generation failed.';
+        const raw = error ?? 'errors.generationFailed';
+        const message = raw.startsWith('errors.') ? tLab(raw) : raw;
         pushError(message);
         setImages((prev) =>
             prev.map((i) =>
                 i.batchId === batchId
-                    ? { ...i, status: 'failed' as const, progress: null, error: message }
+                    ? { ...i, status: 'failed' as const, progress: null, error: raw.startsWith('errors.') ? raw : message }
                     : i,
             ),
         );
-    }, [pushError]);
+    }, [pushError, tLab]);
 
     // Realtime completion via Pusher (fal webhook → CreationUpdated).
     useEffect(() => {
@@ -598,7 +600,7 @@ function LabWorkspaceInner({
             }
 
             if (creation.status === 'failed' || creation.status === 'cancelled') {
-                pushError(creation.error || 'Generation failed.');
+                pushError(creation.error || tLab('errors.generationFailed'));
             }
 
             if (kind === 'image' || kind === 'video') {
@@ -836,7 +838,7 @@ function LabWorkspaceInner({
                 }
             } catch (e) {
                 syncTokenBalanceFromError(e);
-                failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
+                failBatch(batchId, e instanceof Error ? e.message : tLab('errors.couldNotStart'));
             }
         },
         [failBatch, syncTokenBalance, syncTokenBalanceFromError, tLab],
@@ -982,7 +984,7 @@ function LabWorkspaceInner({
                 }
             } catch (e) {
                 syncTokenBalanceFromError(e);
-                failBatch(batchId, e instanceof Error ? e.message : 'Could not start generation.');
+                failBatch(batchId, e instanceof Error ? e.message : tLab('errors.couldNotStart'));
             }
         },
         [failBatch, syncTokenBalance, syncTokenBalanceFromError, tLab],
@@ -1050,7 +1052,7 @@ function LabWorkspaceInner({
                     // Shared hosting often breaks PHP multipart audio uploads
                     // (UPLOAD_ERR_CANT_WRITE / ModSecurity). Send base64 JSON instead.
                     if (options.audioFile.size > 20 * 1024 * 1024) {
-                        throw new Error('Audio file is too large. Please use an MP3 under 20MB.');
+                        throw new Error(tLab('errors.audioTooLarge'));
                     }
 
                     const audioBase64 = await fileToBase64(options.audioFile);
@@ -1110,11 +1112,11 @@ function LabWorkspaceInner({
                 );
 
                 if (data.status === 'failed') {
-                    pushError(data.error || 'Generation failed.');
+                    pushError(data.error || tLab('errors.generationFailed'));
                     setTracks((prev) =>
                         prev.map((track) =>
                             track.id === localId
-                                ? { ...track, status: 'failed', error: data.error || 'Generation failed.', progress: tLab('failed') }
+                                ? { ...track, status: 'failed', error: data.error || 'errors.generationFailed', progress: tLab('failed') }
                                 : track,
                         ),
                     );
@@ -1124,14 +1126,14 @@ function LabWorkspaceInner({
 
             } catch (e) {
                 syncTokenBalanceFromError(e);
-                pushError(e instanceof Error ? e.message : 'Could not start generation.');
+                pushError(e instanceof Error ? e.message : tLab('errors.couldNotStart'));
                 setTracks((prev) =>
                     prev.map((track) =>
                         track.id === localId
                             ? {
                                   ...track,
                                   status: 'failed',
-                                  error: e instanceof Error ? e.message : 'Could not start generation.',
+                                  error: e instanceof Error ? e.message : tLab('errors.couldNotStart'),
                                   progress: tLab('failed'),
                               }
                             : track,
@@ -1157,7 +1159,7 @@ function LabWorkspaceInner({
                 id: localId,
                 title,
                 text: trimmed,
-                voice: options.voiceName || options.voice || 'Cloned voice',
+                voice: options.voiceName || options.voice || tLab('errors.clonedVoice'),
                 favorite: false,
                 createdAt: startedAt,
                 model: options.model,
@@ -1172,7 +1174,7 @@ function LabWorkspaceInner({
                 let data: CreationResponse;
                 if (options.audioFile) {
                     if (options.audioFile.size > 20 * 1024 * 1024) {
-                        throw new Error('Audio file is too large. Please use an MP3 under 20MB.');
+                        throw new Error(tLab('errors.audioTooLarge'));
                     }
 
                     const audioBase64 = await fileToBase64(options.audioFile);
@@ -1184,7 +1186,7 @@ function LabWorkspaceInner({
                         text: trimmed,
                         endpoint_id: options.endpointId,
                         voice: options.voice || 'cloned-sample',
-                        voice_name: options.voiceName || 'Cloned voice',
+                        voice_name: options.voiceName || tLab('errors.clonedVoice'),
                         stability: options.stability,
                         clarity: options.clarity,
                         style: options.styleExaggeration,
@@ -1227,11 +1229,11 @@ function LabWorkspaceInner({
                 );
 
                 if (data.status === 'failed') {
-                    pushError(data.error || 'Generation failed.');
+                    pushError(data.error || tLab('errors.generationFailed'));
                     setVoices((prev) =>
                         prev.map((v) =>
                             v.id === localId
-                                ? { ...v, status: 'failed', error: data.error || 'Generation failed.', progress: tLab('failed') }
+                                ? { ...v, status: 'failed', error: data.error || 'errors.generationFailed', progress: tLab('failed') }
                                 : v,
                         ),
                     );
@@ -1240,14 +1242,14 @@ function LabWorkspaceInner({
 
             } catch (e) {
                 syncTokenBalanceFromError(e);
-                pushError(e instanceof Error ? e.message : 'Could not start generation.');
+                pushError(e instanceof Error ? e.message : tLab('errors.couldNotStart'));
                 setVoices((prev) =>
                     prev.map((v) =>
                         v.id === localId
                             ? {
                                   ...v,
                                   status: 'failed',
-                                  error: e instanceof Error ? e.message : 'Could not start generation.',
+                                  error: e instanceof Error ? e.message : tLab('errors.couldNotStart'),
                                   progress: tLab('failed'),
                               }
                             : v,
@@ -1363,7 +1365,7 @@ function LabWorkspaceInner({
             return (
                 <VideoLabCreateForm
                     brands={brands}
-                    placeholder={placeholder}
+                    placeholder={resolvedPlaceholder}
                     loading={videoGenerating}
                     creditsConfig={resolvedCreditsConfig}
                     tokenBalance={tokenBalance}
@@ -1375,7 +1377,7 @@ function LabWorkspaceInner({
         return (
             <ImageLabCreateForm
                 brands={brands}
-                placeholder={placeholder}
+                placeholder={resolvedPlaceholder}
                 loading={imageGenerating}
                 creditsConfig={resolvedCreditsConfig}
                 tokenBalance={tokenBalance}
@@ -1477,7 +1479,7 @@ function LabWorkspaceInner({
                             <textarea
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
-                                placeholder={placeholder}
+                                placeholder={resolvedPlaceholder}
                                 className="mb-4 h-40 w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-brand-500"
                             />
                             <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/50">
@@ -1508,7 +1510,7 @@ function fileToBase64(file: File): Promise<string> {
             const comma = result.indexOf(',');
             resolve(comma >= 0 ? result.slice(comma + 1) : result);
         };
-        reader.onerror = () => reject(new Error('Could not read the audio file.'));
+        reader.onerror = () => reject(new Error(tLab('errors.couldNotReadAudio')));
         reader.readAsDataURL(file);
     });
 }

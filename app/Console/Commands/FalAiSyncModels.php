@@ -59,6 +59,7 @@ class FalAiSyncModels extends Command
                     [
                         'name' => $model['metadata']['group']['key'] ?? null,
                         'description' => $model['metadata']['description'] ?? null,
+                        // description_fr / description_ar are curated locally — never overwrite here.
                         'status' => $model['metadata']['status'] ?? null,
                         'updated_at' => now(),
                     ]

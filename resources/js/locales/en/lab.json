@@ -4,6 +4,8 @@
   "model": "Model",
   "selectModel": "Select Model",
   "selectModelSub": "Choose an AI model for your generation",
+  "modelFallback": "AI generation model",
+  "tipLabel": "What is this?",
   "prompt": "Prompt",
   "promptPlaceholder": "Describe what you want to create…",
   "settings": "Settings",
@@ -71,6 +73,7 @@
     "addRefs": "Add visual references",
     "addRefsHint": "Guide look & consistency · up to 8 · then type @ in the prompt",
     "autoPolish": "Auto Polish",
+    "autoPolishTip": "Light cleanup of noise and softness after generation. Leave on for cleaner social posts; turn off if you want the raw model look.",
     "characters": "Characters",
     "style": "Style",
     "resFast": "Fast",
@@ -81,11 +84,12 @@
     "needSources": "Add source images to continue",
     "needPrompt": "Add a prompt to generate"
   },
-    "video": {
+  "video": {
     "uploadMedia": "Upload media",
     "promptSub": "Scene, motion, camera, and style",
     "placeholder": "Describe the scene, motion, and style of your video...",
     "audio": "Audio",
+    "audioTip": "On = the model can generate speech/SFX with the clip. Off = silent video (cheaper on some models).",
     "audioOn": "On",
     "audioOff": "Off",
     "audioGenerate": "Generate soundtrack",
@@ -96,6 +100,7 @@
     "blockAudioAlone": "Add an image or video — audio can't be used alone.",
     "blockMix": "No model supports this media mix. Remove some references.",
     "framesToggle": "Frames",
+    "framesToggleTip": "Animate from a start image to an end image. Turn on when you need a controlled first/last frame transition.",
     "framesToggleHint": "First & last",
     "firstFrame": "First frame",
     "lastFrame": "Last frame",
@@ -204,7 +209,9 @@
     "uploadCoverHint": "Upload a reference song (about 6s–6m). Describe the new cover style — optional lyrics rewrite the vocals.",
     "lyrics": "Lyrics",
     "lyricsPlaceholder": "Write your lyrics…",
-    "needStyle": "Add a style to generate"
+    "needStyle": "Add a style to generate",
+    "withVocalsTip": "On = singing vocals on the track. Off = instrumental only. Some models only support instrumental.",
+    "autoEnhanceTip": "Slight mix polish after generation (+1 credit). Helps for social uploads; turn off to keep the raw render."
   },
   "uploader": {
     "uploadVideo": "Upload Video",
@@ -213,5 +220,16 @@
   "searchByPrompt": "Search by prompt…",
   "searchGenerations": "Search generations…",
   "searchTracks": "Search tracks…",
-  "searchVoiceovers": "Search voiceovers…"
+  "searchVoiceovers": "Search voiceovers…",
+  "errors": {
+    "outputMissing": "Output missing.",
+    "generationNoVideo": "Generation finished without a video.",
+    "generationFailed": "Generation failed.",
+    "noVideoForFrame": "No video to capture a frame from.",
+    "couldNotCaptureFrame": "Could not capture the last frame.",
+    "couldNotStart": "Could not start generation.",
+    "audioTooLarge": "Audio file is too large. Please use an MP3 under 20MB.",
+    "couldNotReadAudio": "Could not read the audio file.",
+    "clonedVoice": "Cloned voice"
+  }
 }
