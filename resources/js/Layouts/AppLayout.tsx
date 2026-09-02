@@ -1,4 +1,3 @@
-import { usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,9 +6,9 @@ import AppHeader from '@/Components/AppHeader';
 import Sidebar from '@/Components/Sidebar';
 import ModalHost from '@/Components/ModalHost';
 import WelcomeCreditsModal from '@/Components/WelcomeCreditsModal';
-import MobileBottomNav, { shouldShowMobileBottomNav } from '@/Components/MobileBottomNav';
+import MobileBottomNav from '@/Components/MobileBottomNav';
 import { PageFade } from '@/Components/Motion';
-import type { PageProps } from '@/types';
+import { useMobileViewport } from '@/lib/viewport';
 
 type Props = {
     children: ReactNode;
@@ -21,8 +20,8 @@ export default function AppLayout({ children, flush = false }: Props) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const { i18n } = useTranslation();
     const contentDir = i18n.language === 'ar' ? 'rtl' : 'ltr';
-    const { props } = usePage<PageProps>();
-    const showBottomNav = shouldShowMobileBottomNav(props.auth.user);
+    const isMobile = useMobileViewport();
+    const showBottomNav = isMobile;
 
     return (
         <div className="flex h-dvh max-h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden">
@@ -53,7 +52,7 @@ export default function AppLayout({ children, flush = false }: Props) {
                             flush
                                 ? 'overflow-y-auto scrollbar-thin md:overflow-y-hidden'
                                 : 'overflow-y-auto scrollbar-thin'
-                        } ${showBottomNav ? 'pb-[5.5rem] md:pb-0' : ''}`}
+                        } ${showBottomNav ? 'pb-[5.5rem]' : ''}`}
                     >
                         <div
                             className={

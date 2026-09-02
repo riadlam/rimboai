@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { entranceInitial } from '@/lib/motionWebView';
+import { isMobileViewport, useMobileViewport } from '@/lib/viewport';
 import type { PageProps } from '@/types';
 
 function pathOf(url: string): string {
@@ -166,15 +168,16 @@ function NavTab({ href, label, active, onNavigate, children }: TabProps) {
     );
 }
 
-/** Logged-in phone bottom nav — includes Lab routes. md+ hidden via CSS. */
-export function shouldShowMobileBottomNav(user: unknown): boolean {
-    return Boolean(user);
+/** Phone bottom nav — shown for all users on mobile (guests included). */
+export function shouldShowMobileBottomNav(): boolean {
+    return isMobileViewport();
 }
 
 export default function MobileBottomNav() {
     const { t } = useTranslation('nav');
     const { url, props } = usePage<PageProps>();
     const user = props.auth.user;
+    const isMobile = useMobileViewport();
     const [createOpen, setCreateOpen] = useState(false);
 
     useEffect(() => {
@@ -190,7 +193,7 @@ export default function MobileBottomNav() {
         return () => window.removeEventListener('keydown', onKey);
     }, [createOpen]);
 
-    if (!shouldShowMobileBottomNav(user) || typeof document === 'undefined') {
+    if (!isMobile || typeof document === 'undefined') {
         return null;
     }
 
@@ -198,6 +201,7 @@ export default function MobileBottomNav() {
     const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
     const params = new URLSearchParams(query);
     const labType = params.get('type') ?? '';
+    const historyHref = user ? '/history' : '/?login=1';
 
     const homeActive = path === '/';
     const trendsActive = path.startsWith('/trends') || path.startsWith('/marketplace');
@@ -217,17 +221,17 @@ export default function MobileBottomNav() {
                     <motion.button
                         type="button"
                         aria-label={t('create')}
-                        initial={{ opacity: 0 }}
+                        initial={entranceInitial({ opacity: 0 })}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="fixed inset-0 z-[45] bg-black/55 backdrop-blur-[2px] md:hidden"
+                        className="fixed inset-0 z-[45] bg-black/55 backdrop-blur-[2px]"
                         onClick={() => setCreateOpen(false)}
                     />
                 )}
             </AnimatePresence>
 
-            <nav aria-label="Primary" className="pointer-events-none fixed inset-x-0 bottom-0 z-50 md:hidden">
+            <nav aria-label="Primary" className="pointer-events-none fixed inset-x-0 bottom-0 z-50">
                 {/* Floating create shortcuts — anchored above FAB */}
                 <AnimatePresence>
                     {createOpen && (
@@ -246,7 +250,7 @@ export default function MobileBottomNav() {
                                             key={lab.id}
                                             className="pointer-events-auto absolute"
                                             style={{ left: 0, top: 0 }}
-                                            initial={{ opacity: 0, scale: 0.35, x: 0, y: 0 }}
+                                            initial={entranceInitial({ opacity: 0, scale: 0.35, x: 0, y: 0 })}
                                             animate={{ opacity: 1, scale: 1, x: lab.x, y: lab.y }}
                                             exit={{ opacity: 0, scale: 0.35, x: 0, y: 0 }}
                                             transition={{
@@ -339,7 +343,7 @@ export default function MobileBottomNav() {
                         </NavTab>
 
                         <NavTab
-                            href="/history"
+                            href={historyHref}
                             label={t('history')}
                             active={historyActive}
                             onNavigate={() => setCreateOpen(false)}
