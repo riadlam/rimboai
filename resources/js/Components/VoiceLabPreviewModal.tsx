@@ -488,14 +488,14 @@ function NavArrow({
             aria-label={label}
             onClick={onClick}
             className={`absolute top-[38%] z-20 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/50 text-zinc-200 backdrop-blur-md transition hover:bg-black/70 hover:text-white md:top-1/2 ${
-                direction === 'prev' ? 'left-3' : 'right-3'
+                direction === 'prev' ? 'start-3' : 'end-3'
             }`}
         >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 {direction === 'prev' ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
-                ) : (
                     <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6 6-6" />
+                ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
                 )}
             </svg>
         </button>

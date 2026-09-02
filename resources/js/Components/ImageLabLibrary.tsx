@@ -723,6 +723,7 @@ export default function ImageLabLibrary({
                                                     src={mediaSrc}
                                                     poster={posterSrc}
                                                     seekTo={0.15}
+                                                    warmKey={mediaSrc}
                                                     className="absolute inset-0 size-full object-contain object-center"
                                                 />
                                             ) : (

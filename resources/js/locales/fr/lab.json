@@ -106,7 +106,11 @@
     "vocals": "Voix",
     "play": "Lecture",
     "previous": "Précédent",
-    "next": "Suivant"
+    "next": "Suivant",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "viewFullImage": "Voir l'image en plein écran",
+    "expandVideo": "Agrandir la vidéo"
   },
   "model": "Modèle",
   "selectModel": "Sélectionner un modèle",
@@ -310,7 +314,16 @@
     "coverBadge": "Cover musique",
     "uploadCoverHint": "Téléversez une piste, puis choisissez Remix (nouveau style) ou Lyrics edit (garde le beat, réécrit le chant).",
     "autoEnhanceTip": "Légère polish du mix après génération (+1 crédit). Utile pour le social ; désactivez pour le rendu brut.",
-    "withVocalsTip": "On = chant sur la piste. Off = instrumental seul. Certains modèles sont instrumentaux uniquement."
+    "withVocalsTip": "On = chant sur la piste. Off = instrumental seul. Certains modèles sont instrumentaux uniquement.",
+    "remixHint": "Idéal pour instrumental + nouvelles voix",
+    "lyricsEditHint": "Réécrire le chant sur une piste chantée",
+    "vocalToneFemale": "Plus doux / plus lumineux",
+    "vocalToneMale": "Plus grave / plus chaleureux",
+    "styleTagsPlaceholder": "Les tags de style courts fonctionnent le mieux, ex. raï, pop, émotionnel, ambient, voix féminine",
+    "forModel": "Pour {{model}}",
+    "viewAll": "Tout voir",
+    "supportedByModel": "Pris en charge par {{model}}",
+    "stylesTunedFor": "Styles adaptés à {{model}}"
   },
   "uploader": {
     "uploadVideo": "Téléverser une vidéo",

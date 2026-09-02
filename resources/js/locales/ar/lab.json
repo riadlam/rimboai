@@ -106,7 +106,11 @@
     "vocals": "غناء",
     "play": "تشغيل",
     "previous": "السابق",
-    "next": "التالي"
+    "next": "التالي",
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير",
+    "viewFullImage": "عرض الصورة بالكامل",
+    "expandVideo": "توسيع الفيديو"
   },
   "model": "النموذج",
   "selectModel": "اختر نموذجاً",
@@ -316,7 +320,16 @@
     "lyricsPlaceholder": "اكتب كلماتك…",
     "needStyle": "أضف أسلوباً للتوليد",
     "autoEnhanceTip": "صقل بسيط للمكساج بعد التوليد (+1 رصيد). مفيد للسوشيال؛ عطّله للإبقاء على الناتج الخام.",
-    "withVocalsTip": "تشغيل = غناء على المقطع. إيقاف = موسيقى فقط. بعض النماذج تدعم الآلات فقط."
+    "withVocalsTip": "تشغيل = غناء على المقطع. إيقاف = موسيقى فقط. بعض النماذج تدعم الآلات فقط.",
+    "remixHint": "الأفضل للآلات + غناء جديد",
+    "lyricsEditHint": "إعادة كتابة الغناء على مقطع مغنّى",
+    "vocalToneFemale": "أنعم / أكثر إشراقاً",
+    "vocalToneMale": "أعمق / أكثر دفئاً",
+    "styleTagsPlaceholder": "وسوم الأسلوب القصيرة تعمل بشكل أفضل، مثلاً راي، بوب، عاطفي، ambient، غناء أنثوي",
+    "forModel": "لـ {{model}}",
+    "viewAll": "عرض الكل",
+    "supportedByModel": "مدعوم من {{model}}",
+    "stylesTunedFor": "أنماط مخصّصة لـ {{model}}"
   },
   "uploader": {
     "uploadVideo": "رفع فيديو",

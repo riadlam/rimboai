@@ -106,7 +106,11 @@
     "vocals": "Vocals",
     "play": "Play",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "viewFullImage": "View full image",
+    "expandVideo": "Expand video"
   },
   "model": "Model",
   "selectModel": "Select Model",
@@ -318,7 +322,16 @@
     "lyricsPlaceholder": "Write your lyrics…",
     "needStyle": "Add a style to generate",
     "withVocalsTip": "On = singing vocals on the track. Off = instrumental only. Some models only support instrumental.",
-    "autoEnhanceTip": "Slight mix polish after generation (+1 credit). Helps for social uploads; turn off to keep the raw render."
+    "autoEnhanceTip": "Slight mix polish after generation (+1 credit). Helps for social uploads; turn off to keep the raw render.",
+    "remixHint": "Best for instrumental + new vocals",
+    "lyricsEditHint": "Rewrite vocals on a sung track",
+    "vocalToneFemale": "Softer / brighter",
+    "vocalToneMale": "Deeper / warmer",
+    "styleTagsPlaceholder": "Short style tags work best, e.g. rai, pop, emotional, ambient, female vocals",
+    "forModel": "For {{model}}",
+    "viewAll": "View all",
+    "supportedByModel": "Supported by {{model}}",
+    "stylesTunedFor": "Styles tuned for {{model}}"
   },
   "uploader": {
     "uploadVideo": "Upload Video",

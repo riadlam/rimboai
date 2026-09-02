@@ -543,8 +543,8 @@ export default function SoundLabCreateForm({
                                     />
                                     {(
                                         [
-                                            { id: 'remix' as const, label: t('music.remix'), hint: 'Best for instrumental + new vocals' },
-                                            { id: 'lyrics' as const, label: t('music.lyricsEdit'), hint: 'Rewrite vocals on a sung track' },
+                                            { id: 'remix' as const, label: t('music.remix'), hint: t('music.remixHint') },
+                                            { id: 'lyrics' as const, label: t('music.lyricsEdit'), hint: t('music.lyricsEditHint') },
                                         ]
                                     ).map((mode) => {
                                         const active = editMode === mode.id;
@@ -583,8 +583,8 @@ export default function SoundLabCreateForm({
                                 <div className="grid grid-cols-2 gap-2">
                                     {(
                                         [
-                                            { id: 'female' as const, label: t('music.female'), hint: 'Softer / brighter' },
-                                            { id: 'male' as const, label: t('music.male'), hint: 'Deeper / warmer' },
+                                            { id: 'female' as const, label: t('music.female'), hint: t('music.vocalToneFemale') },
+                                            { id: 'male' as const, label: t('music.male'), hint: t('music.vocalToneMale') },
                                         ] as const
                                     ).map((opt) => {
                                         const active = vocalGender === opt.id;
@@ -649,7 +649,7 @@ export default function SoundLabCreateForm({
                             maxRows={12}
                             placeholder={
                                 needsSourceAudio
-                                    ? 'Short style tags work best, e.g. rai, pop, emotional, ambient, female vocals'
+                                    ? t('music.styleTagsPlaceholder')
                                     : t('music.stylePlaceholder')
                             }
                             className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 scrollbar-thin sm:text-sm sm:leading-relaxed"
@@ -684,8 +684,8 @@ export default function SoundLabCreateForm({
                                 <div className="min-w-0">
                                     <span className="text-sm font-medium text-white">{t('music.examples')}</span>
                                     <p className="truncate text-[11px] text-white/40">
-                                        For {selectedModelRecord?.name || selectedModel}
-                                        {!canUseVocals ? ' · instrumental' : ''}
+                                        {t('music.forModel', { model: selectedModelRecord?.name || selectedModel })}
+                                        {!canUseVocals ? ` · ${t('music.instrumental')}` : ''}
                                     </p>
                                 </div>
                                 {modelSamples.length > 0 && (
@@ -694,7 +694,7 @@ export default function SoundLabCreateForm({
                                         onClick={() => setSamplesOpen(true)}
                                         className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-0.5 rounded-md px-2 text-xs font-medium text-white/50 transition hover:bg-white/[0.05] hover:text-white"
                                     >
-                                        View all
+                                        {t('music.viewAll')}
                                         <svg className="h-3 w-3 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                             <path d="m9 18 6-6-6-6" />
                                         </svg>
@@ -751,7 +751,7 @@ export default function SoundLabCreateForm({
                                             <div className="min-w-0">
                                                 <p className="text-sm font-medium text-white">{t('music.trackDuration')}</p>
                                                 <p className="truncate text-[11px] text-white/40">
-                                                    Supported by {selectedModelRecord?.name || selectedModel}
+                                                    {t('music.supportedByModel', { model: selectedModelRecord?.name || selectedModel })}
                                                 </p>
                                             </div>
                                         </div>
@@ -867,8 +867,8 @@ export default function SoundLabCreateForm({
                                         <div className="grid grid-cols-2 gap-2">
                                             {(
                                                 [
-                                                    { id: 'female' as const, label: t('music.female'), hint: 'Softer / brighter' },
-                                                    { id: 'male' as const, label: t('music.male'), hint: 'Deeper / warmer' },
+                                                    { id: 'female' as const, label: t('music.female'), hint: t('music.vocalToneFemale') },
+                                                    { id: 'male' as const, label: t('music.male'), hint: t('music.vocalToneMale') },
                                                 ] as const
                                             ).map((opt) => {
                                                 const active = vocalGender === opt.id;
@@ -1149,7 +1149,7 @@ export default function SoundLabCreateForm({
                     <ModalShell onClose={() => setSamplesOpen(false)} wide>
                         <h2 className="text-lg font-semibold tracking-tight text-white">{t('music.examples')}</h2>
                         <p className="mt-1 text-[13px] text-white/45">
-                            Styles tuned for {selectedModelRecord?.name || selectedModel}
+                            {t('music.stylesTunedFor', { model: selectedModelRecord?.name || selectedModel })}
                         </p>
                         <div className="mt-4 grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 scrollbar-thin">
                             {modelSamples.map((sample) => (

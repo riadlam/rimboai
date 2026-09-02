@@ -90,6 +90,7 @@ export default function ImageLabPreviewModal({
     const [capturingFrame, setCapturingFrame] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [videoLightboxOpen, setVideoLightboxOpen] = useState(false);
+    const [videoPlaying, setVideoPlaying] = useState(false);
 
     const isVideo =
         image.method === 'text-to-video' ||
@@ -158,6 +159,7 @@ export default function ImageLabPreviewModal({
     useEffect(() => {
         setLightboxOpen(false);
         setVideoLightboxOpen(false);
+        setVideoPlaying(false);
         setZoom(1);
     }, [image.id]);
 
@@ -225,7 +227,7 @@ export default function ImageLabPreviewModal({
 
                     <div
                         className={`relative overflow-hidden rounded-[5px] bg-[#14141c] transition-transform duration-200 ${
-                            !isVideo ? 'cursor-zoom-in' : 'cursor-pointer'
+                            isVideo && videoPlaying ? '' : !isVideo ? 'cursor-zoom-in' : 'cursor-pointer'
                         }`}
                         style={{
                             aspectRatio: ratio,
@@ -235,35 +237,64 @@ export default function ImageLabPreviewModal({
                             maxHeight: '100%',
                             transform: isVideo ? undefined : `scale(${zoom})`,
                         }}
-                        onClick={isVideo ? () => setVideoLightboxOpen(true) : () => setLightboxOpen(true)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                if (isVideo) setVideoLightboxOpen(true);
-                                else setLightboxOpen(true);
-                            }
-                        }}
-                        aria-label={isVideo ? t('library.play') : 'View full image'}
+                        onClick={
+                            isVideo
+                                ? videoPlaying
+                                    ? undefined
+                                    : () => setVideoPlaying(true)
+                                : () => setLightboxOpen(true)
+                        }
+                        role={isVideo && videoPlaying ? undefined : 'button'}
+                        tabIndex={isVideo && videoPlaying ? undefined : 0}
+                        onKeyDown={
+                            isVideo && videoPlaying
+                                ? undefined
+                                : (e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          if (isVideo) setVideoPlaying(true);
+                                          else setLightboxOpen(true);
+                                      }
+                                  }
+                        }
+                        aria-label={isVideo ? t('library.play') : t('library.viewFullImage')}
                     >
                         {isVideo ? (
-                            <>
-                                <VideoThumb
+                            videoPlaying ? (
+                                <LabVideoPlayer
                                     src={mediaUrl}
                                     poster={posterUrl}
-                                    seekTo={0.15}
-                                    playOnHover={false}
-                                    className="absolute inset-0 size-full object-contain object-center"
+                                    warmKey={mediaUrl}
+                                    autoPlay
+                                    objectFit="contain"
+                                    className="absolute inset-0 size-full"
                                 />
-                                <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                    <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm">
-                                        <svg className="ms-0.5 h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M8 5v14l11-7z" />
-                                        </svg>
+                            ) : (
+                                <>
+                                    {posterUrl ? (
+                                        <img
+                                            src={posterUrl}
+                                            alt=""
+                                            className="pointer-events-none absolute inset-0 size-full object-contain object-center"
+                                        />
+                                    ) : (
+                                        <VideoThumb
+                                            src={mediaUrl}
+                                            seekTo={0.15}
+                                            playOnHover={false}
+                                            warmKey={mediaUrl}
+                                            className="absolute inset-0 size-full object-contain object-center"
+                                        />
+                                    )}
+                                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                        <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm">
+                                            <svg className="ms-0.5 h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M8 5v14l11-7z" />
+                                            </svg>
+                                        </span>
                                     </span>
-                                </span>
-                            </>
+                                </>
+                            )
                         ) : (
                             <img
                                 key={image.id}
@@ -277,10 +308,23 @@ export default function ImageLabPreviewModal({
 
                     <div className="absolute bottom-3 start-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap items-center gap-2 md:bottom-5 md:start-5 md:max-w-[calc(100%-2.5rem)]">
                         <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#121217]/85 p-1 shadow-lg backdrop-blur-md">
+                            {isVideo && (
+                                <>
+                                    <PreviewIconBtn
+                                        title={t('library.expandVideo')}
+                                        onClick={() => setVideoLightboxOpen(true)}
+                                    >
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0-5 5M4 16v4m0 0h4m-4 0 5-5m11 5-5m5 5v-4m0 4h-4" />
+                                        </svg>
+                                    </PreviewIconBtn>
+                                    <span className="mx-1 hidden h-4 w-px bg-white/10 sm:block" />
+                                </>
+                            )}
                             {!isVideo && (
                                 <>
                                     <PreviewIconBtn
-                                        title="Zoom in"
+                                        title={t('library.zoomIn')}
                                         onClick={() => setZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
                                     >
                                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -291,7 +335,7 @@ export default function ImageLabPreviewModal({
                                         </svg>
                                     </PreviewIconBtn>
                                     <PreviewIconBtn
-                                        title="Zoom out"
+                                        title={t('library.zoomOut')}
                                         onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
                                     >
                                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -303,7 +347,7 @@ export default function ImageLabPreviewModal({
                                     <span className="mx-1 hidden h-4 w-px bg-white/10 sm:block" />
                                 </>
                             )}
-                            <PreviewIconBtn title={downloading ? 'Downloading…' : 'Download'} onClick={() => void handleDownload()}>
+                            <PreviewIconBtn title={downloading ? t('library.downloading') : t('download')} onClick={() => void handleDownload()}>
                                 <IconDownload className="h-4 w-4" />
                             </PreviewIconBtn>
                         </div>
@@ -319,6 +363,7 @@ export default function ImageLabPreviewModal({
                                     setCopied(false);
                                     setLightboxOpen(false);
                                     setVideoLightboxOpen(false);
+                                    setVideoPlaying(false);
                                     onPrev();
                                 }}
                             />
@@ -330,6 +375,7 @@ export default function ImageLabPreviewModal({
                                     setCopied(false);
                                     setLightboxOpen(false);
                                     setVideoLightboxOpen(false);
+                                    setVideoPlaying(false);
                                     onNext();
                                 }}
                             />
@@ -616,7 +662,7 @@ export default function ImageLabPreviewModal({
                 )}
             </AnimatePresence>
 
-            {/* Full-screen video cinema — tap video to open; explicit close control */}
+            {/* Full-screen video cinema — opened via expand button; explicit close control */}
             <AnimatePresence>
                 {videoLightboxOpen && isVideo && (
                     <motion.div
@@ -740,14 +786,14 @@ function NavArrow({
             aria-label={label}
             onClick={onClick}
             className={`absolute top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/50 text-zinc-200 backdrop-blur-md transition hover:bg-black/70 hover:text-white ${
-                direction === 'prev' ? 'left-3' : 'right-3'
+                direction === 'prev' ? 'start-3' : 'end-3'
             }`}
         >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 {direction === 'prev' ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
-                ) : (
                     <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6 6-6" />
+                ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
                 )}
             </svg>
         </button>

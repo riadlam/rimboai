@@ -43,7 +43,7 @@ const createTabGlow =
 
 export default function ImageLabCreateForm({
     brands = [],
-    placeholder = 'e.g. A cat is sitting on a table. We support all languages.',
+    placeholder,
     onGenerate,
     loading = false,
     creditsConfig,
@@ -51,6 +51,7 @@ export default function ImageLabCreateForm({
     draft = null,
 }: Props) {
     const { t } = useTranslation('lab');
+    const resolvedPlaceholder = placeholder ?? t('image.placeholderCreate');
     const [mode, setMode] = useState<'create' | 'variations'>('create');
     const [prompt, setPrompt] = useState('');
     const [expanded, setExpanded] = useState(false);
@@ -620,7 +621,7 @@ export default function ImageLabCreateForm({
                                     placeholder={
                                         isVariations
                                             ? t('image.placeholderVariation')
-                                            : placeholder
+                                            : resolvedPlaceholder
                                     }
                                     rows={4}
                                     minRows={4}
@@ -883,7 +884,7 @@ export default function ImageLabCreateForm({
                                 maxLength={5000}
                                 rows={10}
                                 className="w-full resize-none rounded-xl border border-white/10 bg-black/40 p-3 text-sm leading-relaxed text-white outline-none focus:border-orange-400/40"
-                                placeholder={placeholder}
+                                placeholder={resolvedPlaceholder}
                             />
                         </motion.div>
                     </motion.div>
