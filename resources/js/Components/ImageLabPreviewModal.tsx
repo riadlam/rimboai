@@ -2,9 +2,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
-import { getCachedVideoPoster, subscribeVideoPoster } from '@/Components/VideoThumb';
+import {
+    getCachedVideoPoster,
+    isLikelyImageUrl,
+    subscribeVideoPoster,
+    withVideoTimeFragment,
+} from '@/Components/VideoThumb';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
+import { labWarmKey } from '@/lib/trendWarmVideo';
 
 export type ImageLabPreviewItem = {
     id: string;
@@ -99,12 +105,19 @@ export default function ImageLabPreviewModal({
         Boolean(image.videoUrl);
 
     const mediaUrl = isVideo ? image.videoUrl || image.src : image.src;
+    const warmCacheKey = isVideo && mediaUrl ? labWarmKey(image.id, mediaUrl) : undefined;
     const serverPoster =
-        isVideo && image.src && image.src !== mediaUrl ? image.src : undefined;
+        isVideo && image.src
+            ? image.src !== mediaUrl || isLikelyImageUrl(image.src)
+                ? image.src
+                : undefined
+            : undefined;
     const [gridPoster, setGridPoster] = useState<string | undefined>(() =>
-        mediaUrl ? getCachedVideoPoster(mediaUrl) : undefined,
+        getCachedVideoPoster(mediaUrl, warmCacheKey),
     );
-    const posterUrl = serverPoster || gridPoster;
+    const [posterBroken, setPosterBroken] = useState(false);
+    const posterUrl = (!posterBroken && (serverPoster || gridPoster)) || undefined;
+    const stillVideoSrc = isVideo && mediaUrl ? withVideoTimeFragment(mediaUrl, 0.15) : undefined;
     const modelDisplay = image.modelName?.trim() ? formatModelName(image.modelName.trim()) : '—';
     const downloadName = isVideo ? `video-${image.id}.mp4` : `image-${image.id}.jpg`;
 
@@ -162,13 +175,14 @@ export default function ImageLabPreviewModal({
         setVideoLightboxOpen(false);
         setVideoPlaying(false);
         setZoom(1);
-        setGridPoster(mediaUrl ? getCachedVideoPoster(mediaUrl) : undefined);
-    }, [image.id, mediaUrl]);
+        setPosterBroken(false);
+        setGridPoster(getCachedVideoPoster(mediaUrl, warmCacheKey));
+    }, [image.id, mediaUrl, warmCacheKey]);
 
     useEffect(() => {
-        if (!isVideo || !mediaUrl || serverPoster) return;
-        return subscribeVideoPoster(mediaUrl, setGridPoster);
-    }, [isVideo, mediaUrl, serverPoster, image.id]);
+        if (!isVideo || !mediaUrl || (serverPoster && !posterBroken)) return;
+        return subscribeVideoPoster([mediaUrl, warmCacheKey], setGridPoster);
+    }, [isVideo, mediaUrl, serverPoster, posterBroken, warmCacheKey, image.id]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -282,6 +296,19 @@ export default function ImageLabPreviewModal({
                                             src={posterUrl}
                                             alt=""
                                             className="pointer-events-none absolute inset-0 size-full object-contain object-center"
+                                            onError={() => setPosterBroken(true)}
+                                        />
+                                    ) : stillVideoSrc ? (
+                                        <video
+                                            key={stillVideoSrc}
+                                            src={stillVideoSrc}
+                                            muted
+                                            playsInline
+                                            preload="auto"
+                                            className="pointer-events-none absolute inset-0 size-full object-contain object-center"
+                                            onLoadedData={(e) => {
+                                                e.currentTarget.pause();
+                                            }}
                                         />
                                     ) : (
                                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950" />

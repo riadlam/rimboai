@@ -27,20 +27,45 @@ type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'
 const framePosterCache = new Map<string, string>();
 
 /** Reuse a captured still when opening the preview modal (avoids black screen before play). */
-export function getCachedVideoPoster(src: string): string | undefined {
-    return framePosterCache.get(src);
+export function getCachedVideoPoster(...keys: Array<string | null | undefined>): string | undefined {
+    for (const key of keys) {
+        if (!key) continue;
+        const hit = framePosterCache.get(key);
+        if (hit) return hit;
+    }
+    return undefined;
+}
+
+export function rememberVideoPoster(src: string, poster: string, extraKeys: string[] = []): void {
+    if (!src || !poster) return;
+    framePosterCache.set(src, poster);
+    for (const key of extraKeys) {
+        if (key) framePosterCache.set(key, poster);
+    }
+}
+
+/** True when URL is almost certainly a still image (not a video file). */
+export function isLikelyImageUrl(url: string | null | undefined): boolean {
+    if (!url) return false;
+    if (url.startsWith('data:image')) return true;
+    if (url.startsWith('blob:')) return false;
+    return /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(url);
 }
 
 /** Poll until the grid thumb captures a frame (reuse without remounting VideoThumb in preview). */
-export function subscribeVideoPoster(src: string, onPoster: (poster: string) => void): () => void {
-    const existing = framePosterCache.get(src);
+export function subscribeVideoPoster(
+    keys: Array<string | null | undefined> | string,
+    onPoster: (poster: string) => void,
+): () => void {
+    const list = (Array.isArray(keys) ? keys : [keys]).filter(Boolean) as string[];
+    const existing = getCachedVideoPoster(...list);
     if (existing) {
         onPoster(existing);
         return () => undefined;
     }
 
     const id = window.setInterval(() => {
-        const poster = framePosterCache.get(src);
+        const poster = getCachedVideoPoster(...list);
         if (poster) {
             onPoster(poster);
             window.clearInterval(id);
@@ -50,7 +75,7 @@ export function subscribeVideoPoster(src: string, onPoster: (poster: string) => 
     return () => window.clearInterval(id);
 }
 
-function withTimeFragment(url: string, seconds: number): string {
+export function withVideoTimeFragment(url: string, seconds = 0.15): string {
     if (!url || url.includes('#') || url.startsWith('blob:') || url.startsWith('data:')) return url;
     return `${url}#t=${Math.max(0.05, seconds).toFixed(2)}`;
 }
@@ -107,9 +132,9 @@ export default function VideoThumb({
     const [playing, setPlaying] = useState(false);
     const [inView, setInView] = useState(false);
     const [lifted, setLifted] = useState(false);
-    const [capturedPoster, setCapturedPoster] = useState<string | null>(() =>
-        src && !poster ? framePosterCache.get(src) ?? null : null,
-    );
+    const initialCaptured =
+        src && !poster ? getCachedVideoPoster(src) ?? null : null;
+    const [capturedPoster, setCapturedPoster] = useState<string | null>(() => initialCaptured);
 
     const previewMode =
         !playOnHover && (autoLoop || (typeof autoPreviewSeconds === 'number' && autoPreviewSeconds > 0));
@@ -118,8 +143,13 @@ export default function VideoThumb({
             ? autoPreviewSeconds
             : undefined;
     const effectivePoster = poster || capturedPoster || undefined;
-    const stillOnly = Boolean(effectivePoster) && !playOnHover && !previewMode;
-    const framedSrc = useMemo(() => (src ? withTimeFragment(src, seekTo) : undefined), [src, seekTo]);
+    // Only treat as still-image card when poster is not the video URL itself (CDN thumbs, data URLs).
+    const stillOnly =
+        Boolean(effectivePoster) &&
+        !playOnHover &&
+        !previewMode &&
+        (effectivePoster!.startsWith('data:') || effectivePoster !== src);
+    const framedSrc = useMemo(() => (src ? withVideoTimeFragment(src, seekTo) : undefined), [src, seekTo]);
     const fit = mediaFitClass(className);
 
     useEffect(() => {
@@ -128,12 +158,12 @@ export default function VideoThumb({
         setPlaying(false);
         setLifted(false);
         if (src && poster) {
-            framePosterCache.set(src, poster);
+            rememberVideoPoster(src, poster, warmKey ? [warmKey] : []);
             setCapturedPoster(null);
         } else {
-            setCapturedPoster(src ? framePosterCache.get(src) ?? null : null);
+            setCapturedPoster(src ? getCachedVideoPoster(src, warmKey) ?? null : null);
         }
-    }, [src, seekTo, poster]);
+    }, [src, seekTo, poster, warmKey]);
 
     useEffect(() => {
         if (!warmKey || !src) return;
@@ -145,7 +175,7 @@ export default function VideoThumb({
                 if (src) {
                     const dataUrl = captureFrameDataUrl(el);
                     if (dataUrl) {
-                        framePosterCache.set(src, dataUrl);
+                        rememberVideoPoster(src, dataUrl, [warmKey]);
                         setCapturedPoster(dataUrl);
                     }
                 }
@@ -212,12 +242,12 @@ export default function VideoThumb({
             if (!poster && src && !framePosterCache.has(src) && video.readyState >= 2) {
                 const dataUrl = captureFrameDataUrl(video);
                 if (dataUrl) {
-                    framePosterCache.set(src, dataUrl);
+                    rememberVideoPoster(src, dataUrl, warmKey ? [warmKey] : []);
                     setCapturedPoster(dataUrl);
                 }
             }
         },
-        [poster, previewMode, src],
+        [poster, previewMode, src, warmKey],
     );
 
     const freezeAt = useCallback(

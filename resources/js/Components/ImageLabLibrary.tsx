@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
-import VideoThumb from '@/Components/VideoThumb';
+import VideoThumb, { getCachedVideoPoster, isLikelyImageUrl } from '@/Components/VideoThumb';
 import { labWarmKey } from '@/lib/trendWarmVideo';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 import { labCompletingRampMs, labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
@@ -640,7 +640,13 @@ export default function ImageLabLibrary({
                                     Boolean(img.videoUrl);
                                 const mediaSrc = isVideo ? img.videoUrl || img.src : img.src;
                                 const posterSrc =
-                                    isVideo && img.videoUrl && img.src !== img.videoUrl ? img.src : undefined;
+                                    isVideo && img.src
+                                        ? img.videoUrl && img.src !== img.videoUrl
+                                            ? img.src
+                                            : isLikelyImageUrl(img.src)
+                                              ? img.src
+                                              : getCachedVideoPoster(mediaSrc, labWarmKey(img.id, mediaSrc))
+                                        : undefined;
 
                                 if (isBuilding) {
                                     return (
