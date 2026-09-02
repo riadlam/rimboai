@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
-import VideoThumb from '@/Components/VideoThumb';
+import VideoThumb, { getCachedVideoPoster } from '@/Components/VideoThumb';
 import { trendWarmKey } from '@/lib/trendWarmVideo';
+import { useHideMobileBottomNav } from '@/lib/mobileBottomNav';
 import type { PageProps } from '@/types';
 
 export type TrendTemplate = {
@@ -472,6 +473,7 @@ export function TemplateDetailModal({
     using: boolean;
 }) {
     const { t } = useTranslation('trends');
+    useHideMobileBottomNav();
     const [activeSample, setActiveSample] = useState(0);
     const [isMobile, setIsMobile] = useState(() =>
         typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : true,
@@ -501,9 +503,7 @@ export function TemplateDetailModal({
                 <div className={`size-full ${isMobile ? '' : 'bg-black'}`}>
                     <LabVideoPlayer
                         src={videoSrc}
-                        poster={tmpl.thumbnail_url || undefined}
-                        // Phone: reuse buffered card video. Desktop: full Plyr + real aspect (contain).
-                        warmKey={isMobile ? warmKey : undefined}
+                        poster={tmpl.thumbnail_url || getCachedVideoPoster(warmKey, videoSrc) || undefined}
                         loop
                         autoPlay
                         objectFit="contain"

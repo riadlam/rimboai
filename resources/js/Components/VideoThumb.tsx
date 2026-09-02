@@ -177,6 +177,9 @@ export default function VideoThumb({
                     if (dataUrl) {
                         rememberVideoPoster(src, dataUrl, [warmKey]);
                         setCapturedPoster(dataUrl);
+                    } else if (poster) {
+                        rememberVideoPoster(src, poster, [warmKey]);
+                        setCapturedPoster(poster);
                     }
                 }
                 setLifted(true);
@@ -241,14 +244,21 @@ export default function VideoThumb({
                     return;
                 }
 
-                setPlaying(true);
+                setPlaying(false);
+                try {
+                    el.currentTime = 0;
+                } catch {
+                    /* ignore */
+                }
                 requestAnimationFrame(() => {
                     el.muted = true;
-                    void el.play().catch(() => undefined);
+                    void el.play()
+                        .then(() => setPlaying(true))
+                        .catch(() => setPlaying(false));
                 });
             },
         });
-    }, [warmKey, src, previewMode, playOnHover, fit, seekTo, autoLoop]);
+    }, [warmKey, src, previewMode, playOnHover, fit, seekTo, autoLoop, poster]);
 
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;
@@ -380,7 +390,7 @@ export default function VideoThumb({
         );
     }
 
-    const showPoster = Boolean(effectivePoster) && ((!playing && !previewMode) || lifted);
+    const showPoster = Boolean(effectivePoster) && (!playing || lifted);
     const showShimmer = !effectivePoster && !frameReady && !playing && !lifted;
 
     return (

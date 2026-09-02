@@ -161,14 +161,24 @@ export default function LabVideoPlayer({
         return () => {
             player.off('timeupdate', onTimeUpdate);
             player.off('play', onPlay);
-            player.destroy();
-            playerRef.current = null;
 
             const borrowed = adoptedRef.current;
             adoptedRef.current = null;
+
+            try {
+                player.destroy();
+            } catch {
+                /* Plyr teardown can throw if the element was already moved */
+            }
+            playerRef.current = null;
+
             if (borrowed) {
-                // unwrapFromPlyr runs inside restore — safe after destroy()
-                restoreTrendWarmVideo(borrowed);
+                try {
+                    borrowed.pause();
+                    restoreTrendWarmVideo(borrowed);
+                } catch {
+                    /* ignore */
+                }
             }
             if (fallback) {
                 fallback.style.display = '';

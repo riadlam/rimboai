@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { entranceInitial } from '@/lib/motionWebView';
+import { useMobileBottomNavHidden } from '@/lib/mobileBottomNav';
 import { isMobileViewport, useMobileViewport } from '@/lib/viewport';
 import type { PageProps } from '@/types';
 
@@ -178,6 +179,7 @@ export default function MobileBottomNav() {
     const { url, props } = usePage<PageProps>();
     const user = props.auth.user;
     const isMobile = useMobileViewport();
+    const bottomNavHidden = useMobileBottomNavHidden();
     const [createOpen, setCreateOpen] = useState(false);
 
     useEffect(() => {
@@ -193,7 +195,7 @@ export default function MobileBottomNav() {
         return () => window.removeEventListener('keydown', onKey);
     }, [createOpen]);
 
-    if (!isMobile || typeof document === 'undefined') {
+    if (!isMobile || bottomNavHidden || typeof document === 'undefined') {
         return null;
     }
 

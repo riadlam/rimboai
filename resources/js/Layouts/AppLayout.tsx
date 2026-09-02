@@ -8,6 +8,7 @@ import ModalHost from '@/Components/ModalHost';
 import WelcomeCreditsModal from '@/Components/WelcomeCreditsModal';
 import MobileBottomNav from '@/Components/MobileBottomNav';
 import { PageFade } from '@/Components/Motion';
+import { useMobileBottomNavHidden } from '@/lib/mobileBottomNav';
 import { useMobileViewport } from '@/lib/viewport';
 
 type Props = {
@@ -21,7 +22,8 @@ export default function AppLayout({ children, flush = false }: Props) {
     const { i18n } = useTranslation();
     const contentDir = i18n.language === 'ar' ? 'rtl' : 'ltr';
     const isMobile = useMobileViewport();
-    const showBottomNav = isMobile;
+    const bottomNavHidden = useMobileBottomNavHidden();
+    const showBottomNav = isMobile && !bottomNavHidden;
 
     return (
         <div className="flex h-dvh max-h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden">
