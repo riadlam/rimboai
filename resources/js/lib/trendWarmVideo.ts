@@ -50,8 +50,9 @@ function scrubPlayerChrome(el: HTMLVideoElement): void {
     el.removeAttribute('data-plyr');
     el.removeAttribute('data-poster');
     // Drop leftover Plyr / inline styles that can leave a black frame.
+    // Keep positioning; callers set object-fit (contain vs cover).
     el.style.cssText = '';
-    el.className = 'absolute inset-0 size-full object-cover opacity-100';
+    el.className = 'absolute inset-0 size-full opacity-100';
 }
 
 export function bindTrendWarmVideo(
@@ -76,7 +77,8 @@ export function claimTrendWarmVideo(key: string): HTMLVideoElement | null {
     if (!entry) return null;
 
     const { el, host, handlers, src } = entry;
-    if (el.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    // Accept a painted frame even if the browser hasn't promoted readyState yet.
+    if (el.readyState < HTMLMediaElement.HAVE_CURRENT_DATA && el.videoWidth < 2) {
         return null;
     }
 

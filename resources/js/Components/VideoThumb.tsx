@@ -184,6 +184,7 @@ export default function VideoThumb({
             },
             onRestore: () => {
                 setLifted(false);
+                el.className = `absolute inset-0 size-full ${fit} opacity-100`;
                 // Lab still cards (playOnHover off, no preview) must not resume playback.
                 if (!playOnHover && !previewMode) {
                     setPlaying(false);
@@ -197,7 +198,7 @@ export default function VideoThumb({
                 });
             },
         });
-    }, [warmKey, src, previewMode, playOnHover]);
+    }, [warmKey, src, previewMode, playOnHover, fit]);
 
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;

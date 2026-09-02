@@ -1,16 +1,16 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
-import {
+import VideoThumb, {
     getCachedVideoPoster,
     isLikelyImageUrl,
+    rememberVideoPoster,
     subscribeVideoPoster,
-    withVideoTimeFragment,
 } from '@/Components/VideoThumb';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
-import { labWarmKey } from '@/lib/trendWarmVideo';
+import { claimTrendWarmVideo, labWarmKey, restoreTrendWarmVideo } from '@/lib/trendWarmVideo';
 
 export type ImageLabPreviewItem = {
     id: string;
@@ -117,7 +117,6 @@ export default function ImageLabPreviewModal({
     );
     const [posterBroken, setPosterBroken] = useState(false);
     const posterUrl = (!posterBroken && (serverPoster || gridPoster)) || undefined;
-    const stillVideoSrc = isVideo && mediaUrl ? withVideoTimeFragment(mediaUrl, 0.15) : undefined;
     const modelDisplay = image.modelName?.trim() ? formatModelName(image.modelName.trim()) : '—';
     const downloadName = isVideo ? `video-${image.id}.mp4` : `image-${image.id}.jpg`;
 
@@ -291,28 +290,13 @@ export default function ImageLabPreviewModal({
                                 />
                             ) : (
                                 <>
-                                    {posterUrl ? (
-                                        <img
-                                            src={posterUrl}
-                                            alt=""
-                                            className="pointer-events-none absolute inset-0 size-full object-contain object-center"
-                                            onError={() => setPosterBroken(true)}
-                                        />
-                                    ) : stillVideoSrc ? (
-                                        <video
-                                            key={stillVideoSrc}
-                                            src={stillVideoSrc}
-                                            muted
-                                            playsInline
-                                            preload="auto"
-                                            className="pointer-events-none absolute inset-0 size-full object-contain object-center"
-                                            onLoadedData={(e) => {
-                                                e.currentTarget.pause();
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950" />
-                                    )}
+                                    <LabPreviewVideoStill
+                                        src={mediaUrl}
+                                        poster={posterUrl}
+                                        warmKey={warmCacheKey}
+                                        onPoster={setGridPoster}
+                                        onPosterError={() => setPosterBroken(true)}
+                                    />
                                     <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
                                         <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm">
                                             <svg className="ms-0.5 h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -747,6 +731,152 @@ export default function ImageLabPreviewModal({
                 )}
             </AnimatePresence>
         </motion.div>
+    );
+}
+
+/**
+ * Idle video still for Lab details: prefer the already-decoded grid <video>
+ * (warm claim), else the same VideoThumb seek path the creation card uses.
+ */
+function LabPreviewVideoStill({
+    src,
+    poster,
+    warmKey,
+    onPoster,
+    onPosterError,
+}: {
+    src: string;
+    poster?: string;
+    warmKey?: string;
+    onPoster?: (poster: string) => void;
+    onPosterError?: () => void;
+}) {
+    const hostRef = useRef<HTMLDivElement>(null);
+    const onPosterRef = useRef(onPoster);
+    onPosterRef.current = onPoster;
+    const [warmActive, setWarmActive] = useState(false);
+
+    useEffect(() => {
+        const host = hostRef.current;
+        if (!host || !warmKey || !src) {
+            setWarmActive(false);
+            return;
+        }
+
+        let claimed: HTMLVideoElement | null = null;
+        let retryTimer: number | undefined;
+        let cancelled = false;
+
+        const adopt = () => {
+            if (cancelled || claimed) return;
+            const el = claimTrendWarmVideo(warmKey);
+            if (!el) return;
+
+            claimed = el;
+            el.className = 'absolute inset-0 size-full object-contain object-center';
+            el.controls = false;
+            el.removeAttribute('controls');
+            el.muted = true;
+            el.defaultMuted = true;
+            el.playsInline = true;
+            el.loop = false;
+            el.autoplay = false;
+            if (poster) el.poster = poster;
+            el.pause();
+
+            try {
+                if (!Number.isFinite(el.currentTime) || el.currentTime < 0.05) {
+                    const duration = el.duration;
+                    const target =
+                        Number.isFinite(duration) && duration > 0
+                            ? Math.min(0.15, Math.max(0.05, duration - 0.05))
+                            : 0.15;
+                    el.currentTime = target;
+                }
+            } catch {
+                /* ignore */
+            }
+
+            host.appendChild(el);
+            setWarmActive(true);
+
+            try {
+                const w = el.videoWidth;
+                const h = el.videoHeight;
+                if (w > 1 && h > 1) {
+                    const canvas = document.createElement('canvas');
+                    const maxEdge = 640;
+                    const scale = Math.min(1, maxEdge / Math.max(w, h));
+                    canvas.width = Math.max(2, Math.round(w * scale));
+                    canvas.height = Math.max(2, Math.round(h * scale));
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(el, 0, 0, canvas.width, canvas.height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                        rememberVideoPoster(src, dataUrl, [warmKey]);
+                        onPosterRef.current?.(dataUrl);
+                    }
+                }
+            } catch {
+                /* cross-origin — warm <video> still paints */
+            }
+        };
+
+        adopt();
+        // Grid VideoThumb may finish seeking a tick later — retry briefly.
+        let stopRetry: number | undefined;
+        if (!claimed) {
+            retryTimer = window.setInterval(() => {
+                adopt();
+                if (claimed && retryTimer) {
+                    window.clearInterval(retryTimer);
+                    retryTimer = undefined;
+                }
+            }, 100);
+            stopRetry = window.setTimeout(() => {
+                if (retryTimer) {
+                    window.clearInterval(retryTimer);
+                    retryTimer = undefined;
+                }
+            }, 1500);
+        }
+
+        return () => {
+            cancelled = true;
+            if (retryTimer) window.clearInterval(retryTimer);
+            if (stopRetry) window.clearTimeout(stopRetry);
+            if (claimed) {
+                restoreTrendWarmVideo(claimed);
+                claimed = null;
+            }
+            setWarmActive(false);
+        };
+    }, [src, warmKey]);
+
+    return (
+        <div className="absolute inset-0">
+            {poster ? (
+                <img
+                    src={poster}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 size-full object-contain object-center"
+                    onError={onPosterError}
+                />
+            ) : null}
+
+            <div ref={hostRef} className="absolute inset-0" />
+
+            {/* Same seek/freeze path as the creation card. No warmKey — don't steal grid registry. */}
+            {!warmActive ? (
+                <VideoThumb
+                    src={src}
+                    poster={poster}
+                    seekTo={0.15}
+                    playOnHover={false}
+                    className="absolute inset-0 size-full object-contain object-center"
+                />
+            ) : null}
+        </div>
     );
 }
 
