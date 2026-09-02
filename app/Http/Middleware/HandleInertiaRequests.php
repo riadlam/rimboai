@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\TokenPackage;
 use App\Services\Credits\CreditCalculator;
+use App\Services\SeoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
@@ -64,8 +65,11 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'welcome' => fn () => $request->session()->get('welcome'),
             ],
             'creditsConfig' => fn () => app(CreditCalculator::class)->frontendConfig(),
+            'seo' => fn () => \Illuminate\Support\Facades\View::shared('seo')
+                ?? app(SeoService::class)->forRoute(),
         ];
     }
 }

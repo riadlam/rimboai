@@ -14,6 +14,7 @@ import enHistory from '../locales/en/history.json';
 import enTrends from '../locales/en/trends.json';
 import enInnovation from '../locales/en/innovation.json';
 import enErrors from '../locales/en/errors.json';
+import enWelcome from '../locales/en/welcome.json';
 
 import frCommon from '../locales/fr/common.json';
 import frNav from '../locales/fr/nav.json';
@@ -28,6 +29,7 @@ import frHistory from '../locales/fr/history.json';
 import frTrends from '../locales/fr/trends.json';
 import frInnovation from '../locales/fr/innovation.json';
 import frErrors from '../locales/fr/errors.json';
+import frWelcome from '../locales/fr/welcome.json';
 
 import arCommon from '../locales/ar/common.json';
 import arNav from '../locales/ar/nav.json';
@@ -42,6 +44,7 @@ import arHistory from '../locales/ar/history.json';
 import arTrends from '../locales/ar/trends.json';
 import arInnovation from '../locales/ar/innovation.json';
 import arErrors from '../locales/ar/errors.json';
+import arWelcome from '../locales/ar/welcome.json';
 
 export type AppLang = 'en' | 'fr' | 'ar';
 
@@ -68,6 +71,7 @@ const NAMESPACES = [
     'trends',
     'innovation',
     'errors',
+    'welcome',
 ] as const;
 
 function isAppLang(value: string | null | undefined): value is AppLang {
@@ -122,6 +126,7 @@ const resources = {
         trends: enTrends,
         innovation: enInnovation,
         errors: enErrors,
+        welcome: enWelcome,
     },
     fr: {
         common: frCommon,
@@ -137,6 +142,7 @@ const resources = {
         trends: frTrends,
         innovation: frInnovation,
         errors: frErrors,
+        welcome: frWelcome,
     },
     ar: {
         common: arCommon,
@@ -152,6 +158,7 @@ const resources = {
         trends: arTrends,
         innovation: arInnovation,
         errors: arErrors,
+        welcome: arWelcome,
     },
 };
 

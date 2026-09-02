@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\RobotsController;
+use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GoogleAuthController;
@@ -34,6 +36,8 @@ Route::middleware('guest')->group(function () {
 
 // Public browsing pages. Authentication is required only for user-owned data
 // and actions that create or mutate content.
+Route::get('/robots.txt', RobotsController::class);
+Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/lab', [DashboardController::class, 'lab'])->name('lab');
 Route::get('/trends', [DashboardController::class, 'trends'])->name('trends');

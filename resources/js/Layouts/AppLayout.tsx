@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import PageSeo from '@/Components/PageSeo';
 import AppHeader from '@/Components/AppHeader';
 import Sidebar from '@/Components/Sidebar';
 import ModalHost from '@/Components/ModalHost';
+import WelcomeCreditsModal from '@/Components/WelcomeCreditsModal';
 import { PageFade } from '@/Components/Motion';
 
 type Props = {
@@ -19,6 +21,7 @@ export default function AppLayout({ children, flush = false }: Props) {
 
     return (
         <div className="flex h-dvh max-h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden">
+            <PageSeo />
             <AppHeader onMenuClick={() => setSidebarOpen((v) => !v)} />
             {/* Spacer for fixed header height */}
             <div aria-hidden className="h-14 shrink-0 md:h-16" />
@@ -63,6 +66,7 @@ export default function AppLayout({ children, flush = false }: Props) {
             </div>
 
             <ModalHost />
+            <WelcomeCreditsModal />
         </div>
     );
 }

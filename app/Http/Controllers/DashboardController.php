@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Innovation;
 use App\Models\InnovationCategory;
 use App\Services\FalImageInputBuilder;
+use App\Services\SeoService;
 use App\Services\Tools\ToolWorkspaceBuilder;
 use App\Services\ToolsService;
 use App\Services\TrendsFeedService;
@@ -20,6 +21,8 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    public function __construct(private readonly SeoService $seo) {}
+
     public function index(TrendsFeedService $trends): Response
     {
         return Inertia::render('Home', [
@@ -55,6 +58,19 @@ class DashboardController extends Controller
             abort(404);
         }
 
+        $card = $workspace['template'] ?? [];
+        $displayTitle = (string) ($card['name'] ?? $card['title'] ?? 'Trend Template');
+        $previewImage = $card['cover'] ?? null;
+        $description = (string) ($card['description'] ?? $card['prompt'] ?? "Remix the {$displayTitle} AI template on RIMBOAI.");
+
+        $this->seo->share([
+            'title' => $displayTitle,
+            'description' => $description,
+            'image' => is_string($previewImage) && $previewImage !== '' ? $previewImage : config('seo.image'),
+            'type' => 'article',
+            'url' => url("/trends/{$key}"),
+        ]);
+
         $user = $request->user();
 
         return Inertia::render('TrendTemplate', [
@@ -81,6 +97,17 @@ class DashboardController extends Controller
                 ->where('slug', $id)
                 ->first();
             $post = $row?->toFrontend();
+        }
+
+        if ($post) {
+            $gallery = is_array($post['images'] ?? null) ? $post['images'] : [];
+            $this->seo->share([
+                'title' => (string) ($post['title'] ?? 'Innovation'),
+                'description' => (string) ($post['prompt'] ?? config('seo.description')),
+                'image' => $post['image'] ?? ($gallery[0] ?? null) ?? config('seo.image'),
+                'type' => 'article',
+                'url' => url("/post/{$id}"),
+            ]);
         }
 
         return Inertia::render('InnovationPost', [
@@ -240,6 +267,14 @@ class DashboardController extends Controller
         $tools = collect(ToolsService::all())->keyBy('route');
         $tool = $tools[$routeName] ?? abort(404);
         $toolSlug = str_replace('tools.', '', (string) $routeName);
+
+        $this->seo->share([
+            'title' => (string) $tool['name'],
+            'description' => "Use {$tool['name']} on RIMBOAI — AI video processing in your browser.",
+            'image' => $tool['poster'] ?? config('seo.image'),
+            'type' => 'product',
+            'url' => url("/tools/{$toolSlug}"),
+        ]);
 
         $user = $request->user();
 

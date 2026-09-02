@@ -1,0 +1,16 @@
+{
+  "title": "Welcome to RIMBOAI{{name}}",
+  "titleName": ", {{name}}",
+  "eyebrow": "Your studio is ready",
+  "gift": "tokens credited — no card needed",
+  "body": "One balance for video, image, voice, and music. No card required — spend them in the Lab and ship something today.",
+  "cta": "Start creating",
+  "exploreTools": "Explore tools",
+  "close": "Close welcome",
+  "types": {
+    "video": "Video",
+    "image": "Image",
+    "voice": "Voice",
+    "music": "Music"
+  }
+}

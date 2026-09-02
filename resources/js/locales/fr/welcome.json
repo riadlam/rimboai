@@ -1,0 +1,16 @@
+{
+  "title": "Bienvenue sur RIMBOAI{{name}}",
+  "titleName": ", {{name}}",
+  "eyebrow": "Votre studio est prêt",
+  "gift": "jetons crédités — sans carte",
+  "body": "Un seul solde pour la vidéo, l’image, la voix et la musique. Sans carte — dépensez-les dans le Lab et créez dès aujourd’hui.",
+  "cta": "Commencer à créer",
+  "exploreTools": "Découvrir les outils",
+  "close": "Fermer",
+  "types": {
+    "video": "Vidéo",
+    "image": "Image",
+    "voice": "Voix",
+    "music": "Musique"
+  }
+}

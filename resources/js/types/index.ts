@@ -204,6 +204,19 @@ export type PageProps = {
     flash?: {
         success?: string | null;
         error?: string | null;
+        welcome?: { tokens: number } | null;
     };
     creditsConfig?: CreditsConfig;
+    seo?: {
+        title: string;
+        description: string;
+        image: string;
+        url: string;
+        type?: string;
+        robots?: string;
+        site_name?: string;
+        twitter_card?: string;
+        twitter_handle?: string | null;
+        locale?: string;
+    };
 };

@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             \App\Http\Middleware\SetLocale::class,
+            \App\Http\Middleware\ShareDefaultSeo::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
     })

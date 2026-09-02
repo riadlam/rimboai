@@ -63,7 +63,9 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect(route('home'));
+        $starter = app(CreditCalculator::class)->starterTokens();
+
+        return redirect(route('home'))->with('welcome', ['tokens' => $starter]);
     }
 
     public function logout(Request $request)

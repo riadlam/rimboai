@@ -16,7 +16,7 @@
     <!-- End Google Tag Manager -->
     @endif
 
-    <title inertia>{{ config('app.name', 'AI Studio') }}</title>
+    @include('partials.seo-meta')
 
     <link rel="icon" href="/storage/ai_icons/logo_icon_only.png" type="image/png">
     <link rel="shortcut icon" href="/storage/ai_icons/logo_icon_only.png" type="image/png">
@@ -57,5 +57,12 @@
     <!-- End Google Tag Manager (noscript) -->
     @endif
     @inertia
+    <noscript>
+        <div style="max-width:48rem;margin:2rem auto;padding:0 1rem;font-family:system-ui,sans-serif">
+            <h1>{{ config('seo.site_name', config('app.name')) }}</h1>
+            <p>{{ config('seo.description') }}</p>
+            <p><a href="{{ url('/lab') }}">Open AI Lab</a> · <a href="{{ url('/tools') }}">Video Tools</a> · <a href="{{ url('/pricing') }}">Pricing</a></p>
+        </div>
+    </noscript>
 </body>
 </html>

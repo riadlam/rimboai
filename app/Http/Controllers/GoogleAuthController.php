@@ -55,6 +55,8 @@ class GoogleAuthController extends Controller
             ->orWhere('email', $email)
             ->first();
 
+        $isNewUser = false;
+
         if ($user) {
             $updates = [];
 
@@ -70,6 +72,7 @@ class GoogleAuthController extends Controller
                 $user->forceFill($updates)->save();
             }
         } else {
+            $isNewUser = true;
             $user = User::create([
                 'name' => $googleUser->getName() ?: Str::before($email, '@'),
                 'email' => $email,
@@ -90,7 +93,14 @@ class GoogleAuthController extends Controller
         Auth::login($user, true);
         request()->session()->regenerate();
 
-        return redirect()->intended(route('home'));
+        $redirect = redirect()->intended(route('home'));
+
+        if ($isNewUser) {
+            $starter = app(CreditCalculator::class)->starterTokens();
+            $redirect->with('welcome', ['tokens' => $starter]);
+        }
+
+        return $redirect;
     }
 
     private function configured(): bool
