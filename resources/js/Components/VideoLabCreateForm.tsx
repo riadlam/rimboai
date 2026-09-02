@@ -901,30 +901,11 @@ export default function VideoLabCreateForm({
                     <div className="relative">
                         {catalogHasFramesModels && (
                             <div className="mb-2 flex items-center justify-end">
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={framesMode}
-                                    onClick={() => (framesMode ? disableFramesMode() : enableFramesMode())}
-                                    className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pe-1.5 ps-2.5 text-[11px] font-medium text-zinc-300 transition hover:border-orange-400/35 hover:bg-orange-500/[0.06] hover:text-orange-100"
-                                >
-                                    <span className="inline-flex items-center gap-1.5 text-zinc-400 group-hover:text-orange-200/90">
-                                        {t('video.framesToggle')}
-                                        <ToggleTip text={t('video.framesToggleTip')} label={t('tipLabel')} />
-                                    </span>
-                                    <span
-                                        dir="ltr"
-                                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
-                                            framesMode ? 'bg-[#FF5733]' : 'bg-white/15'
-                                        }`}
-                                    >
-                                        <span
-                                            className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition ${
-                                                framesMode ? 'translate-x-[18px]' : 'translate-x-[3px]'
-                                            }`}
-                                        />
-                                    </span>
-                                </button>
+                                <FramesModeToggle
+                                    framesMode={framesMode}
+                                    onEnable={enableFramesMode}
+                                    onDisable={disableFramesMode}
+                                />
                             </div>
                         )}
 
@@ -1646,6 +1627,15 @@ export default function VideoLabCreateForm({
                                           ? `Safe models for your media (${modelsForPicker.length}) — others hidden`
                                           : t('selectModelSub')}
                                 </p>
+                                {catalogHasFramesModels && (
+                                    <div className="mt-3 flex items-center justify-end">
+                                        <FramesModeToggle
+                                            framesMode={framesMode}
+                                            onEnable={enableFramesMode}
+                                            onDisable={disableFramesMode}
+                                        />
+                                    </div>
+                                )}
                             </div>
                             <div className="relative max-h-[60vh] space-y-1.5 overflow-y-auto py-1 scrollbar-thin">
                                 {modelsForPicker.length === 0 && (framesMode || mediaTotal(mediaCounts) > 0) ? (
@@ -1753,6 +1743,45 @@ export default function VideoLabCreateForm({
                 )}
             </AnimatePresence>
         </div>
+    );
+}
+
+function FramesModeToggle({
+    framesMode,
+    onEnable,
+    onDisable,
+}: {
+    framesMode: boolean;
+    onEnable: () => void;
+    onDisable: () => void;
+}) {
+    const { t } = useTranslation('lab');
+
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={framesMode}
+            onClick={() => (framesMode ? onDisable() : onEnable())}
+            className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pe-1.5 ps-2.5 text-[11px] font-medium text-zinc-300 transition hover:border-orange-400/35 hover:bg-orange-500/[0.06] hover:text-orange-100"
+        >
+            <span className="inline-flex items-center gap-1.5 text-zinc-400 group-hover:text-orange-200/90">
+                {t('video.framesToggle')}
+                <ToggleTip text={t('video.framesToggleTip')} label={t('tipLabel')} />
+            </span>
+            <span
+                dir="ltr"
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
+                    framesMode ? 'bg-[#FF5733]' : 'bg-white/15'
+                }`}
+            >
+                <span
+                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition ${
+                        framesMode ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                    }`}
+                />
+            </span>
+        </button>
     );
 }
 
