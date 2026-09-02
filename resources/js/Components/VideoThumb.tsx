@@ -184,13 +184,63 @@ export default function VideoThumb({
             },
             onRestore: () => {
                 setLifted(false);
+                el.controls = false;
+                el.removeAttribute('controls');
+                el.muted = true;
+                el.defaultMuted = true;
+                el.autoplay = false;
+                el.loop = autoLoop;
                 el.className = `absolute inset-0 size-full ${fit} opacity-100`;
-                // Lab still cards (playOnHover off, no preview) must not resume playback.
+
+                // Lab still cards: re-freeze the thumb frame (playback often leaves t=0 → black).
                 if (!playOnHover && !previewMode) {
                     setPlaying(false);
                     el.pause();
+
+                    const duration = el.duration;
+                    const target =
+                        Number.isFinite(duration) && duration > 0
+                            ? Math.min(Math.max(0.05, seekTo), Math.max(0.05, duration - 0.05))
+                            : Math.max(0.05, seekTo);
+
+                    const finish = () => {
+                        framedRef.current = true;
+                        setFrameReady(true);
+                        if (src) {
+                            const dataUrl = captureFrameDataUrl(el);
+                            if (dataUrl) {
+                                rememberVideoPoster(src, dataUrl, [warmKey]);
+                                setCapturedPoster(dataUrl);
+                            }
+                        }
+                    };
+
+                    const onSeeked = () => {
+                        el.removeEventListener('seeked', onSeeked);
+                        finish();
+                    };
+                    el.addEventListener('seeked', onSeeked);
+                    try {
+                        if (Math.abs(el.currentTime - target) < 0.08 && el.readyState >= 2) {
+                            el.removeEventListener('seeked', onSeeked);
+                            finish();
+                        } else {
+                            el.currentTime = target;
+                            // Some browsers skip seeked when the frame is already decoded.
+                            window.setTimeout(() => {
+                                if (el.readyState >= 2 && Math.abs(el.currentTime - target) < 0.2) {
+                                    el.removeEventListener('seeked', onSeeked);
+                                    finish();
+                                }
+                            }, 120);
+                        }
+                    } catch {
+                        el.removeEventListener('seeked', onSeeked);
+                        finish();
+                    }
                     return;
                 }
+
                 setPlaying(true);
                 requestAnimationFrame(() => {
                     el.muted = true;
@@ -198,7 +248,7 @@ export default function VideoThumb({
                 });
             },
         });
-    }, [warmKey, src, previewMode, playOnHover, fit]);
+    }, [warmKey, src, previewMode, playOnHover, fit, seekTo, autoLoop]);
 
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;

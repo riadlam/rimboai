@@ -117,9 +117,9 @@ export function restoreTrendWarmVideo(el: HTMLVideoElement): void {
     scrubPlayerChrome(el);
     el.muted = true;
     el.defaultMuted = true;
-    el.loop = true;
     el.playsInline = true;
     el.autoplay = false;
+    // Don't force loop here — Lab still cards stay paused; Trends onRestore enables playback.
 
     if (!el.src && !el.currentSrc && meta.src) {
         el.src = meta.src;
