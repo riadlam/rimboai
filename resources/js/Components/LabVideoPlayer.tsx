@@ -17,14 +17,26 @@ type Props = {
     objectFit?: 'cover' | 'contain';
     /**
      * When set, prefer adopting an already-buffered card <video> registered
-     * under this key (instant open — no network reload).
+     * under this key (instant open — no network reload). Always wrapped in Plyr.
      */
     warmKey?: string;
 };
 
+const PLYR_CONTROLS = [
+    'play-large',
+    'play',
+    'progress',
+    'current-time',
+    'duration',
+    'mute',
+    'volume',
+    'settings',
+    'fullscreen',
+] as const;
+
 /**
  * Branded Plyr player for Lab / Trends asset previews.
- * Warm-card handoff uses native <video> (no Plyr) so destroy/restore stays clean.
+ * Warm-card handoff still uses Plyr — destroy before restore so the card stays clean.
  */
 export default function LabVideoPlayer({
     src,
@@ -74,19 +86,19 @@ export default function LabVideoPlayer({
             adopted = claimTrendWarmVideo(warmKey);
         }
 
-        // ---- Warm handoff: native video only (Plyr breaks reparent/restore) ----
+        const fallback = fallbackVideoRef.current;
+        let el: HTMLVideoElement | null = null;
+
         if (adopted) {
-            const fallback = fallbackVideoRef.current;
-            if (fallback) {
-                fallback.style.display = 'none';
-            }
+            if (fallback) fallback.style.display = 'none';
 
             adopted.className = `h-full w-full ${fitClass}`;
             adopted.style.cssText = '';
-            if (poster) adopted.poster = poster;
-            adopted.controls = true;
+            adopted.controls = false;
+            adopted.removeAttribute('controls');
             adopted.playsInline = true;
             adopted.loop = loop;
+            if (poster) adopted.poster = poster;
             if (adopted.srcObject) adopted.srcObject = null;
             try {
                 adopted.currentTime = 0;
@@ -96,47 +108,17 @@ export default function LabVideoPlayer({
 
             mount.appendChild(adopted);
             adoptedRef.current = adopted;
-
-            kickPlayback(
-                () => adopted!.play(),
-                (muted) => {
-                    adopted!.muted = muted;
-                    adopted!.defaultMuted = muted;
-                },
-            );
-
-            return () => {
-                const borrowed = adoptedRef.current;
-                adoptedRef.current = null;
-                if (borrowed) {
-                    restoreTrendWarmVideo(borrowed);
-                }
-                if (fallback) {
-                    fallback.style.display = '';
-                }
-            };
+            el = adopted;
+        } else {
+            adoptedRef.current = null;
+            if (!fallback) return;
+            fallback.style.display = '';
+            fallback.className = `h-full w-full ${fitClass}`;
+            el = fallback;
         }
 
-        // ---- Cold path: normal Plyr ----
-        adoptedRef.current = null;
-        const el = fallbackVideoRef.current;
-        if (!el) return;
-
-        el.style.display = '';
-        el.className = `h-full w-full ${fitClass}`;
-
         playerRef.current = new Plyr(el, {
-            controls: [
-                'play-large',
-                'play',
-                'progress',
-                'current-time',
-                'duration',
-                'mute',
-                'volume',
-                'settings',
-                'fullscreen',
-            ],
+            controls: [...PLYR_CONTROLS],
             settings: ['speed'],
             speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
             hideControls: true,
@@ -181,6 +163,16 @@ export default function LabVideoPlayer({
             player.off('play', onPlay);
             player.destroy();
             playerRef.current = null;
+
+            const borrowed = adoptedRef.current;
+            adoptedRef.current = null;
+            if (borrowed) {
+                // unwrapFromPlyr runs inside restore — safe after destroy()
+                restoreTrendWarmVideo(borrowed);
+            }
+            if (fallback) {
+                fallback.style.display = '';
+            }
         };
     }, [src, autoPlay, userPlay, loop, teaserSeconds, shouldAutoplay, fitClass, warmKey, poster]);
 
