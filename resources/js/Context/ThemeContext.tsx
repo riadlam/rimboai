@@ -7,6 +7,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
+import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 
 type ThemeContextValue = {
     isDark: boolean;
@@ -18,17 +19,17 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 function applyTheme(isDark: boolean) {
     if (isDark) {
         document.documentElement.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
+        safeSetItem('theme', 'dark');
     } else {
         document.documentElement.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
+        safeSetItem('theme', 'light');
     }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const [isDark, setIsDark] = useState(() => {
         if (typeof window === 'undefined') return true;
-        const stored = localStorage.getItem('theme');
+        const stored = safeGetItem('theme');
         return stored ? stored === 'dark' : true;
     });
 

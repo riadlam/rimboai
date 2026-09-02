@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
+import { entranceInitial } from '@/lib/motionWebView';
 
 export default function AuthLayout({
     children,
@@ -31,7 +32,7 @@ export default function AuthLayout({
 
             <motion.div
                 className="relative w-full max-w-md"
-                initial={{ opacity: 0, y: 16 }}
+                initial={entranceInitial({ opacity: 0, y: 16 })}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >

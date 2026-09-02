@@ -1,12 +1,14 @@
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import type { ReactNode } from 'react';
+import { shouldSkipEntranceMotion } from '@/lib/motionWebView';
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
+const skipEntrance = shouldSkipEntranceMotion();
 
 export function PageFade({ children, className }: { children: ReactNode; className?: string }) {
     return (
         <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={skipEntrance ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: easeOut }}
             className={`min-w-0 w-full ${className ?? ''}`}
@@ -34,9 +36,9 @@ export function FadeSlide({
 
     return (
         <motion.div
-            initial={{ opacity: 0, ...offset }}
+            initial={skipEntrance ? false : { opacity: 0, ...offset }}
             animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, ...offset }}
+            exit={skipEntrance ? undefined : { opacity: 0, ...offset }}
             transition={{ duration: 0.2, ease: easeOut }}
             className={className}
         >
@@ -57,7 +59,7 @@ export function StaggerChildren({
     return (
         <motion.div
             className={className}
-            initial="hidden"
+            initial={skipEntrance ? 'show' : 'hidden'}
             animate="show"
             variants={{
                 hidden: {},
@@ -69,14 +71,19 @@ export function StaggerChildren({
     );
 }
 
-export const staggerItem = {
-    hidden: { opacity: 0, y: 16 },
-    show: {
-        opacity: 1,
-        y: 0,
-        transition: { duration: 0.35, ease: easeOut },
-    },
-};
+export const staggerItem = skipEntrance
+    ? {
+          hidden: { opacity: 1, y: 0 },
+          show: { opacity: 1, y: 0 },
+      }
+    : {
+          hidden: { opacity: 0, y: 16 },
+          show: {
+              opacity: 1,
+              y: 0,
+              transition: { duration: 0.35, ease: easeOut },
+          },
+      };
 
 export function HoverLift({ children, className }: { children: ReactNode; className?: string }) {
     return (

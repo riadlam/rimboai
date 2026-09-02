@@ -9,6 +9,7 @@ import type { Brand, PageProps, Tool } from '@/types';
 import { TemplateDetailModal, type TrendTemplate } from '@/Pages/Trends';
 import type { InnovationPost } from '@/data/innovationPrompts';
 import { trendWarmKey } from '@/lib/trendWarmVideo';
+import { entranceInitial } from '@/lib/motionWebView';
 
 type HomeInnovationSection = {
     slug: string;
@@ -116,7 +117,7 @@ function InlineLogin() {
             </div>
 
             <motion.section
-                initial={{ opacity: 0, y: 18, scale: 0.985 }}
+                initial={entranceInitial({ opacity: 0, y: 18, scale: 0.985 })}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                 className="scrollbar-thin relative max-h-full w-full max-w-[420px] overflow-y-auto rounded-[26px] border border-white/10 bg-[#101014]/95 p-6 shadow-[0_30px_100px_-32px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-7"
@@ -317,7 +318,7 @@ function Hero() {
             <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-start gap-3 pb-0 pt-5 sm:justify-center sm:gap-4 sm:py-4 lg:gap-5">
                 {/* Headline */}
                 <motion.div
-                    initial={{ opacity: 0, y: 28, filter: 'blur(12px)' }}
+                    initial={entranceInitial({ opacity: 0, y: 28, filter: 'blur(12px)' })}
                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                     transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
                     className="shrink-0 text-center"
@@ -341,7 +342,7 @@ function Hero() {
                         <span className="text-white">{t('headlineEnd')}</span>
                     </h1>
                     <motion.p
-                        initial={{ opacity: 0 }}
+                        initial={entranceInitial({ opacity: 0 })}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.35 }}
                         className="mx-auto mt-2 max-w-xl text-[13px] text-white/45 sm:text-sm"
@@ -452,7 +453,7 @@ function Hero() {
                 <motion.button
                     type="button"
                     onClick={() => router.visit('/lab?type=text-to-video')}
-                    initial={{ opacity: 0, y: 18 }}
+                    initial={entranceInitial({ opacity: 0, y: 18 })}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4, duration: 0.45 }}
                     whileHover={{ scale: 1.008 }}
@@ -483,7 +484,7 @@ function Hero() {
                             key={c.id}
                             type="button"
                             onClick={() => router.visit(c.href)}
-                            initial={{ opacity: 0, y: 14 }}
+                            initial={entranceInitial({ opacity: 0, y: 14 })}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.48 + i * 0.05, duration: 0.4 }}
                             whileTap={{ scale: 0.97 }}
@@ -753,7 +754,7 @@ function ToolRail({ tools }: { tools: Tool[] }) {
 
     return (
         <motion.section
-            initial={{ opacity: 0, y: 28 }}
+            initial={entranceInitial({ opacity: 0, y: 28 })}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
@@ -771,7 +772,7 @@ function ToolRail({ tools }: { tools: Tool[] }) {
                 <div className="flex w-full shrink-0 flex-col lg:w-[260px] xl:w-[280px]">
                     <div>
                         <motion.span
-                            initial={{ opacity: 0, y: 8 }}
+                            initial={entranceInitial({ opacity: 0, y: 8 })}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50"
@@ -896,7 +897,7 @@ function ToolChip({
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={entranceInitial({ opacity: 0, y: 16 })}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: Math.min(index * 0.05, 0.35), duration: 0.4 }}
@@ -987,7 +988,7 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
 
     return (
         <motion.section
-            initial={{ opacity: 0, y: 20 }}
+            initial={entranceInitial({ opacity: 0, y: 20 })}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.5 }}
@@ -1060,7 +1061,7 @@ function InnovationRail({ section }: { section: HomeInnovationSection }) {
 
     return (
         <motion.section
-            initial={{ opacity: 0, y: 20 }}
+            initial={entranceInitial({ opacity: 0, y: 20 })}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.5 }}

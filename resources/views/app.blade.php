@@ -28,20 +28,26 @@
 
     <script>
         (function () {
-            var theme = localStorage.getItem('theme');
-            if (theme === 'light') {
-                document.documentElement.classList.remove('dark');
-            } else {
-                document.documentElement.classList.add('dark');
-            }
+            try {
+                var theme = localStorage.getItem('theme');
+                if (theme === 'light') {
+                    document.documentElement.classList.remove('dark');
+                } else {
+                    document.documentElement.classList.add('dark');
+                }
 
-            var lang = localStorage.getItem('app_lang');
-            if (lang !== 'en' && lang !== 'fr' && lang !== 'ar') {
-                lang = 'en';
+                var lang = localStorage.getItem('app_lang');
+                if (lang !== 'en' && lang !== 'fr' && lang !== 'ar') {
+                    lang = 'en';
+                }
+                document.documentElement.lang = lang;
+                document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+                document.cookie = 'app_lang=' + lang + ';path=/;max-age=31536000;SameSite=Lax';
+            } catch (e) {
+                document.documentElement.classList.add('dark');
+                document.documentElement.lang = 'en';
+                document.documentElement.dir = 'ltr';
             }
-            document.documentElement.lang = lang;
-            document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-            document.cookie = 'app_lang=' + lang + ';path=/;max-age=31536000;SameSite=Lax';
         })();
     </script>
 
@@ -56,6 +62,18 @@
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     @endif
+    <div
+        id="app-boot"
+        role="status"
+        aria-live="polite"
+        style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;background:#0d0d12;color:#e4e4e7;font-family:system-ui,-apple-system,sans-serif"
+    >
+        <img src="/storage/ai_icons/logo_icon_only.png" alt="" width="56" height="56" style="width:3.5rem;height:3.5rem;border-radius:1rem" />
+        <p style="margin:0;font-size:0.875rem;color:#a1a1aa">Loading…</p>
+        <p data-boot-hint hidden style="margin:0;max-width:16rem;padding:0 1rem;font-size:0.75rem;line-height:1.5;text-align:center;color:#71717a">
+            Taking too long? Tap ⋯ in the menu and choose &ldquo;Open in browser&rdquo;.
+        </p>
+    </div>
     @inertia
     <noscript>
         <div style="max-width:48rem;margin:2rem auto;padding:0 1rem;font-family:system-ui,sans-serif">

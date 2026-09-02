@@ -1,4 +1,5 @@
 import i18n from 'i18next';
+import { safeGetItem, safeSetCookie, safeSetItem } from './safeStorage';
 import { initReactI18next } from 'react-i18next';
 import { router } from '@inertiajs/react';
 
@@ -81,14 +82,13 @@ function isAppLang(value: string | null | undefined): value is AppLang {
 
 export function readSavedLang(): AppLang {
     if (typeof window === 'undefined') return 'en';
-    const saved = window.localStorage.getItem(APP_LANG_STORAGE_KEY);
+    const saved = safeGetItem(APP_LANG_STORAGE_KEY);
     return isAppLang(saved) ? saved : 'en';
 }
 
 export function syncLangCookie(lang: AppLang): void {
     if (typeof document === 'undefined') return;
-    const maxAge = 60 * 60 * 24 * 365;
-    document.cookie = `${APP_LANG_COOKIE}=${lang};path=/;max-age=${maxAge};SameSite=Lax`;
+    safeSetCookie(APP_LANG_COOKIE, lang);
 }
 
 /** Reload server props that depend on locale (e.g. model descriptions in brands). */
@@ -103,7 +103,7 @@ export function reloadLocaleDependentProps(): void {
 /** Apply document lang/dir, persist, sync cookie, update i18next, and refresh locale-bound props. */
 export function applyLanguage(lang: AppLang, options?: { reload?: boolean }): void {
     if (typeof window !== 'undefined') {
-        window.localStorage.setItem(APP_LANG_STORAGE_KEY, lang);
+        safeSetItem(APP_LANG_STORAGE_KEY, lang);
     }
     if (typeof document !== 'undefined') {
         document.documentElement.lang = lang;
