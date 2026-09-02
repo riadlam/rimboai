@@ -21,8 +21,8 @@ export default function AppLayout({ children, flush = false }: Props) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const { i18n } = useTranslation();
     const contentDir = i18n.language === 'ar' ? 'rtl' : 'ltr';
-    const { url, props } = usePage<PageProps>();
-    const showBottomNav = shouldShowMobileBottomNav(props.auth.user, url);
+    const { props } = usePage<PageProps>();
+    const showBottomNav = shouldShowMobileBottomNav(props.auth.user);
 
     return (
         <div className="flex h-dvh max-h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden">
@@ -53,7 +53,7 @@ export default function AppLayout({ children, flush = false }: Props) {
                             flush
                                 ? 'overflow-y-auto scrollbar-thin md:overflow-y-hidden'
                                 : 'overflow-y-auto scrollbar-thin'
-                        } ${showBottomNav ? 'pb-20 md:pb-0' : ''}`}
+                        } ${showBottomNav ? 'pb-[5.5rem] md:pb-0' : ''}`}
                     >
                         <div
                             className={
