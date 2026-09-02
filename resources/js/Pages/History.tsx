@@ -751,6 +751,7 @@ function HistoryWorkspace() {
                                             <VideoThumb
                                                 src={item.videoUrl}
                                                 poster={item.src !== item.videoUrl ? item.src : undefined}
+                                                playOnHover={false}
                                                 warmKey={labWarmKey(item.id, item.videoUrl)}
                                                 className="absolute inset-0 size-full object-contain object-center"
                                             />

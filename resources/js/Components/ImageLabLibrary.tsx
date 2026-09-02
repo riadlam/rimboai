@@ -724,6 +724,7 @@ export default function ImageLabLibrary({
                                                     src={mediaSrc}
                                                     poster={posterSrc}
                                                     seekTo={0.15}
+                                                    playOnHover={false}
                                                     warmKey={labWarmKey(img.id, mediaSrc)}
                                                     className="absolute inset-0 size-full object-contain object-center"
                                                 />

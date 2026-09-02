@@ -5,7 +5,6 @@ import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { getCachedVideoPoster, subscribeVideoPoster } from '@/Components/VideoThumb';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
-import { labWarmKey } from '@/lib/trendWarmVideo';
 
 export type ImageLabPreviewItem = {
     id: string;
@@ -90,6 +89,7 @@ export default function ImageLabPreviewModal({
     const [reusing, setReusing] = useState(false);
     const [capturingFrame, setCapturingFrame] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [videoLightboxOpen, setVideoLightboxOpen] = useState(false);
     const [videoPlaying, setVideoPlaying] = useState(false);
 
     const isVideo =
@@ -99,7 +99,6 @@ export default function ImageLabPreviewModal({
         Boolean(image.videoUrl);
 
     const mediaUrl = isVideo ? image.videoUrl || image.src : image.src;
-    const warmKey = isVideo && mediaUrl ? labWarmKey(image.id, mediaUrl) : undefined;
     const serverPoster =
         isVideo && image.src && image.src !== mediaUrl ? image.src : undefined;
     const [gridPoster, setGridPoster] = useState<string | undefined>(() =>
@@ -160,6 +159,7 @@ export default function ImageLabPreviewModal({
 
     useEffect(() => {
         setLightboxOpen(false);
+        setVideoLightboxOpen(false);
         setVideoPlaying(false);
         setZoom(1);
         setGridPoster(mediaUrl ? getCachedVideoPoster(mediaUrl) : undefined);
@@ -173,6 +173,10 @@ export default function ImageLabPreviewModal({
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
+                if (videoLightboxOpen) {
+                    setVideoLightboxOpen(false);
+                    return;
+                }
                 if (lightboxOpen) {
                     setLightboxOpen(false);
                     return;
@@ -180,13 +184,13 @@ export default function ImageLabPreviewModal({
                 onClose();
                 return;
             }
-            if (lightboxOpen) return;
+            if (lightboxOpen || videoLightboxOpen) return;
             if (e.key === 'ArrowLeft') onPrev?.();
             if (e.key === 'ArrowRight') onNext?.();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [lightboxOpen, onClose, onPrev, onNext]);
+    }, [lightboxOpen, videoLightboxOpen, onClose, onPrev, onNext]);
 
     const ratio =
         image.aspect && /^\d+:\d+$/.test(image.aspect)
@@ -211,18 +215,14 @@ export default function ImageLabPreviewModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div
-                    className={`relative flex shrink-0 items-center justify-center overflow-hidden bg-black p-3 md:h-full md:flex-1 md:p-5 ${
-                        isVideo && videoPlaying
-                            ? 'max-md:fixed max-md:inset-0 max-md:z-[65] max-md:h-[100dvh] max-md:pb-[max(0px,env(safe-area-inset-bottom))]'
-                            : 'h-[40vh]'
-                    }`}
+                    className="relative flex h-[40vh] shrink-0 items-center justify-center overflow-hidden bg-black p-3 md:h-full md:flex-1 md:p-5"
                     style={{ containerType: 'size' }}
                 >
                     {/* Mobile close — always visible at top-right when details open */}
                     <button
                         type="button"
-                        title="Close"
-                        aria-label="Close"
+                        title={t('close')}
+                        aria-label={t('close')}
                         onClick={onClose}
                         className="absolute end-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75 md:hidden"
                     >
@@ -271,7 +271,6 @@ export default function ImageLabPreviewModal({
                                 <LabVideoPlayer
                                     src={mediaUrl}
                                     poster={posterUrl}
-                                    warmKey={warmKey}
                                     autoPlay
                                     objectFit="contain"
                                     className="absolute inset-0 size-full"
@@ -307,9 +306,25 @@ export default function ImageLabPreviewModal({
                         )}
                     </div>
 
-                    {(!isVideo || !videoPlaying) && (
                     <div className="absolute bottom-3 start-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap items-center gap-2 md:bottom-5 md:start-5 md:max-w-[calc(100%-2.5rem)]">
                         <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#121217]/85 p-1 shadow-lg backdrop-blur-md">
+                            {isVideo && (
+                                <>
+                                    <PreviewIconBtn
+                                        title={t('library.expandVideo')}
+                                        onClick={() => setVideoLightboxOpen(true)}
+                                    >
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0-5 5M4 16v4m0 0h4m-4 0 5-5m11 5-5m5 5v-4m0 4h-4"
+                                            />
+                                        </svg>
+                                    </PreviewIconBtn>
+                                    <span className="mx-1 hidden h-4 w-px bg-white/10 sm:block" />
+                                </>
+                            )}
                             {!isVideo && (
                                 <>
                                     <PreviewIconBtn
@@ -341,9 +356,8 @@ export default function ImageLabPreviewModal({
                             </PreviewIconBtn>
                         </div>
                     </div>
-                    )}
 
-                    {total > 1 && onPrev && onNext && !(isVideo && videoPlaying) && (
+                    {total > 1 && onPrev && onNext && (
                         <>
                             <NavArrow
                                 direction="prev"
@@ -352,6 +366,7 @@ export default function ImageLabPreviewModal({
                                     setZoom(1);
                                     setCopied(false);
                                     setLightboxOpen(false);
+                                    setVideoLightboxOpen(false);
                                     setVideoPlaying(false);
                                     onPrev();
                                 }}
@@ -363,6 +378,7 @@ export default function ImageLabPreviewModal({
                                     setZoom(1);
                                     setCopied(false);
                                     setLightboxOpen(false);
+                                    setVideoLightboxOpen(false);
                                     setVideoPlaying(false);
                                     onNext();
                                 }}
@@ -645,6 +661,60 @@ export default function ImageLabPreviewModal({
                                 draggable={false}
                                 onClick={(e) => e.stopPropagation()}
                             />
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* In-app cinema overlay — Expand only; covers bottom nav */}
+            <AnimatePresence>
+                {videoLightboxOpen && isVideo && (
+                    <motion.div
+                        key="video-lightbox"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        className="fixed inset-0 z-[70] flex flex-col bg-black/95 backdrop-blur-md"
+                        onClick={() => setVideoLightboxOpen(false)}
+                    >
+                        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pb-8 pt-[max(0.75rem,env(safe-area-inset-top))] bg-gradient-to-b from-black/80 to-transparent">
+                            <span className="pointer-events-none text-[13px] font-medium text-white/50">
+                                {index + 1} / {total}
+                            </span>
+                            <motion.button
+                                type="button"
+                                title={t('close')}
+                                aria-label={t('close')}
+                                initial={{ opacity: 0, scale: 0.85, y: -6 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVideoLightboxOpen(false);
+                                }}
+                                className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-lg backdrop-blur-md transition hover:bg-black/80"
+                            >
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path d="M18 6 6 18" />
+                                    <path d="m6 6 12 12" />
+                                </svg>
+                            </motion.button>
+                        </div>
+
+                        <div
+                            className="flex min-h-0 flex-1 items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="h-full w-full max-h-[85vh] max-w-5xl">
+                                <LabVideoPlayer
+                                    src={mediaUrl}
+                                    poster={posterUrl}
+                                    autoPlay
+                                    objectFit="contain"
+                                />
+                            </div>
                         </div>
                     </motion.div>
                 )}

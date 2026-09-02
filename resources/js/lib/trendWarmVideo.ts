@@ -117,7 +117,7 @@ export function restoreTrendWarmVideo(el: HTMLVideoElement): void {
     el.defaultMuted = true;
     el.loop = true;
     el.playsInline = true;
-    el.autoplay = true;
+    el.autoplay = false;
 
     if (!el.src && !el.currentSrc && meta.src) {
         el.src = meta.src;
@@ -125,13 +125,6 @@ export function restoreTrendWarmVideo(el: HTMLVideoElement): void {
 
     meta.host.appendChild(el);
     registry.set(meta.key, { el, host: meta.host, handlers: meta.handlers, src: meta.src });
+    // Card host decides whether to resume (Trends teasers play; Lab stills stay paused).
     meta.handlers.onRestore?.();
-
-    // Kick playback on next frame so layout/visibility updates first (avoids black flash).
-    requestAnimationFrame(() => {
-        void el.play().catch(() => {
-            // If autoplay race fails, try once more after a short tick.
-            setTimeout(() => void el.play().catch(() => undefined), 50);
-        });
-    });
 }

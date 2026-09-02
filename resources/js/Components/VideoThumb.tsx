@@ -127,7 +127,12 @@ export default function VideoThumb({
         setFrameReady(false);
         setPlaying(false);
         setLifted(false);
-        setCapturedPoster(src && !poster ? framePosterCache.get(src) ?? null : null);
+        if (src && poster) {
+            framePosterCache.set(src, poster);
+            setCapturedPoster(null);
+        } else {
+            setCapturedPoster(src ? framePosterCache.get(src) ?? null : null);
+        }
     }, [src, seekTo, poster]);
 
     useEffect(() => {
@@ -149,15 +154,20 @@ export default function VideoThumb({
             },
             onRestore: () => {
                 setLifted(false);
+                // Lab still cards (playOnHover off, no preview) must not resume playback.
+                if (!playOnHover && !previewMode) {
+                    setPlaying(false);
+                    el.pause();
+                    return;
+                }
                 setPlaying(true);
-                // Ensure card teaser resumes even if IntersectionObserver is stale.
                 requestAnimationFrame(() => {
                     el.muted = true;
                     void el.play().catch(() => undefined);
                 });
             },
         });
-    }, [warmKey, src, previewMode]);
+    }, [warmKey, src, previewMode, playOnHover]);
 
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;
