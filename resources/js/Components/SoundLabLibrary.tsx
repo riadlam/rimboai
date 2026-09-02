@@ -176,8 +176,8 @@ export default function SoundLabLibrary({
                     <div className="inline-flex items-center rounded-xl border border-white/[0.06] bg-[#101016] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                         {(
                             [
-                                { id: 'generation' as const, label: 'Tracks', Icon: IconMusic },
-                                { id: 'playlists' as const, label: 'Playlists', Icon: IconAlbums },
+                                { id: 'generation' as const, label: t('library.tracks'), Icon: IconMusic },
+                                { id: 'playlists' as const, label: t('library.playlists'), Icon: IconAlbums },
                             ]
                         ).map((item) => {
                             const active = tab === item.id;
@@ -222,7 +222,7 @@ export default function SoundLabLibrary({
                                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 text-[12px] font-medium text-red-300 hover:bg-red-500/20"
                             >
                                 <IconTrash className="h-3.5 w-3.5" />
-                                Delete ({selected.length})
+                                {t('library.deleteCount', { count: selected.length })}
                             </button>
                         </div>
                     )}
@@ -252,7 +252,7 @@ export default function SoundLabLibrary({
                                 }`}
                             >
                                 <IconFilter className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">Filters</span>
+                                <span className="hidden sm:inline">{t('library.filters')}</span>
                                 {libraryFilterCount > 0 && (
                                     <span className="rounded bg-[#FF5733]/25 px-1.5 text-[10px] font-semibold text-[#ffb39f]">
                                         {libraryFilterCount}
@@ -361,7 +361,7 @@ export default function SoundLabLibrary({
                                     ? 'border-orange-400/40 bg-orange-500/10 text-orange-200'
                                     : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-200'
                             }`}
-                            title="Favorites"
+                            title={t('library.favorites')}
                         >
                             <svg className="h-3.5 w-3.5" fill={favoritesOnly ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
                                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
@@ -377,7 +377,7 @@ export default function SoundLabLibrary({
                                     : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-200'
                             }`}
                         >
-                            {selectMode ? 'Done' : 'Select'}
+                            {selectMode ? t('library.done') : t('library.select')}
                         </button>
                     </div>
                 </div>
@@ -423,8 +423,8 @@ export default function SoundLabLibrary({
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
                             <IconAlbums className="h-6 w-6 text-zinc-500" />
                         </div>
-                        <p className="text-sm font-medium text-zinc-300">Playlists coming soon</p>
-                        <p className="max-w-xs text-xs text-zinc-500">Group your generated tracks into curated sets.</p>
+                        <p className="text-sm font-medium text-zinc-300">{t('library.playlistsComingSoon')}</p>
+                        <p className="max-w-xs text-xs text-zinc-500">{t('library.playlistsEmptyHint')}</p>
                     </div>
                 ) : !hasTracks && !generating && !hasBuilding ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -434,8 +434,8 @@ export default function SoundLabLibrary({
                                 <IconMusic className="h-7 w-7 text-orange-300" />
                             </div>
                         </div>
-                        <p className="text-sm font-medium text-zinc-200">No tracks yet</p>
-                        <p className="max-w-sm text-xs text-zinc-500">Pick a sample or describe a style on the left, then Create.</p>
+                        <p className="text-sm font-medium text-zinc-200">{t('library.noTracksYet')}</p>
+                        <p className="max-w-sm text-xs text-zinc-500">{t('library.noTracksHint')}</p>
                     </div>
                 ) : (
                     <div className="space-y-2 p-3 md:p-4">
@@ -557,7 +557,7 @@ export default function SoundLabLibrary({
                                             <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">{track.style}</p>
                                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                                 <span className="rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-400">
-                                                    {track.instrumental ? 'Instrumental' : 'Vocals'}
+                                                    {track.instrumental ? t('library.instrumental') : t('library.vocals')}
                                                 </span>
                                                 {track.duration && (
                                                     <span className="text-[10px] text-zinc-600">{track.duration}</span>
@@ -571,7 +571,7 @@ export default function SoundLabLibrary({
                                         {!selectMode && (
                                             <div className="flex shrink-0 flex-col items-center gap-1 opacity-0 transition group-hover:opacity-100 max-sm:opacity-100">
                                                 <IconBtn
-                                                    title="Play"
+                                                    title={t('library.play')}
                                                     onClick={() => togglePlay(track.id)}
                                                     active={isPlaying}
                                                 >
@@ -587,7 +587,7 @@ export default function SoundLabLibrary({
                                                     )}
                                                 </IconBtn>
                                                 <IconBtn
-                                                    title="Favorite"
+                                                    title={t('favorite')}
                                                     onClick={() => onToggleFavorite?.(track.id)}
                                                     active={track.favorite}
                                                 >
@@ -601,7 +601,7 @@ export default function SoundLabLibrary({
                                                         <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                                                     </svg>
                                                 </IconBtn>
-                                                <IconBtn title="Delete" onClick={() => onDelete?.([track.id])}>
+                                                <IconBtn title={t('delete')} onClick={() => onDelete?.([track.id])}>
                                                     <IconTrash className="h-3.5 w-3.5" />
                                                 </IconBtn>
                                             </div>
@@ -693,6 +693,7 @@ function MusicBuildingCard({
     instrumental: boolean;
     onRevealComplete?: () => void;
 }) {
+    const { t } = useTranslation('lab');
     const { pct, setPct, pctRef } = useMusicCardProgress(startedAt, status, queuePosition, completing, progressPercent);
     const [fadeOut, setFadeOut] = useState(false);
     const revealStarted = useRef(false);
@@ -702,6 +703,7 @@ function MusicBuildingCard({
         progress,
         completing,
         kind: 'music',
+        t,
     });
 
     useEffect(() => {
@@ -762,15 +764,15 @@ function MusicBuildingCard({
 
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <p className="truncate text-[13px] font-semibold text-zinc-100">{title || 'New track'}</p>
+                        <p className="truncate text-[13px] font-semibold text-zinc-100">{title || t('library.newTrack')}</p>
                         <span className="shrink-0 rounded-md border border-orange-400/20 bg-[#FF5733]/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-200/90">
                             {phase}
                         </span>
                     </div>
                     <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">{stylePrompt}</p>
                     <p className="mt-1 text-[11px] text-white/30">
-                        {instrumental ? 'Instrumental' : 'Vocals'}
-                        {status === 'in_progress' ? ' · Usually a few minutes' : ''}
+                        {instrumental ? t('library.instrumental') : t('library.vocals')}
+                        {status === 'in_progress' ? ` · ${t('library.usuallyFewMinutes')}` : ''}
                     </p>
                 </div>
             </div>

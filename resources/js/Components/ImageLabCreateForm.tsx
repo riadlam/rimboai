@@ -412,7 +412,7 @@ export default function ImageLabCreateForm({
                     >
                         <div className="flex items-center gap-3">
                             <ModelAvatar name={selectedModelMeta.name} icon={'icon' in selectedModelMeta ? selectedModelMeta.icon : null} brandIcon={selectedModelMeta.brandIcon} />
-                            <div className="text-left">
+                            <div className="text-start">
                                 <p className="text-[11px] text-white/40">{t('model')}</p>
                                 <p className="text-sm font-semibold text-white">{formatModelName(selectedModel)}</p>
                             </div>
@@ -424,7 +424,7 @@ export default function ImageLabCreateForm({
                                     {creditCost}
                                 </span>
                             )}
-                            <svg className="h-4 w-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <svg className="h-4 w-4 text-white/40 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path d="m9 18 6-6-6-6" />
                             </svg>
                         </div>
@@ -551,7 +551,7 @@ export default function ImageLabCreateForm({
                                             <button
                                                 type="button"
                                                 onClick={() => fileRef.current?.click()}
-                                                className="group flex w-full items-center gap-3 rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-2.5 text-left transition hover:border-orange-400/40 hover:bg-orange-500/[0.04]"
+                                                className="group flex w-full items-center gap-3 rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-2.5 text-start transition hover:border-orange-400/40 hover:bg-orange-500/[0.04]"
                                             >
                                                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/10 ring-1 ring-orange-400/20 transition group-hover:scale-105">
                                                     <svg className="h-4 w-4 text-orange-300/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

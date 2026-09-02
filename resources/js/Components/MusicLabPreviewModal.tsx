@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import LabAudioPlayer, { MUSIC_EQ_BAR_COUNT } from '@/Components/LabAudioPlayer';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 import { musicPalette } from '@/lib/musicPalette';
@@ -44,6 +45,7 @@ export default function MusicLabPreviewModal({
     onDelete,
     onPlayingChange,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [detailsOpen, setDetailsOpen] = useState(true);
     const [playing, setPlaying] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -124,8 +126,8 @@ export default function MusicLabPreviewModal({
                     {/* Mobile close — always visible at top-right when details open */}
                     <button
                         type="button"
-                        title="Close"
-                        aria-label="Close"
+                        title={t('close')}
+                        aria-label={t('close')}
                         onClick={onClose}
                         className="absolute end-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75 md:hidden"
                     >
@@ -239,11 +241,11 @@ export default function MusicLabPreviewModal({
 
                     <div className="absolute bottom-[5.5rem] start-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap items-center gap-2 md:bottom-[6.25rem] md:start-5">
                         <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#121217]/85 p-1 shadow-lg backdrop-blur-md">
-                            <PreviewIconBtn title={downloading ? 'Downloading…' : 'Download'} onClick={() => void handleDownload()}>
+                            <PreviewIconBtn title={downloading ? t('library.downloading') : t('download')} onClick={() => void handleDownload()}>
                                 <IconDownload className="h-4 w-4" />
                             </PreviewIconBtn>
                             <PreviewIconBtn
-                                title={track.favorite ? 'Unfavorite' : 'Favorite'}
+                                title={track.favorite ? t('unfavorite') : t('favorite')}
                                 onClick={() => onToggleFavorite?.(track.id)}
                             >
                                 <svg
@@ -270,10 +272,10 @@ export default function MusicLabPreviewModal({
                 {/* Details panel */}
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/10 bg-[#111116] font-sans md:w-80 md:flex-none md:border-s md:border-t-0">
                     <div className="hidden shrink-0 items-center justify-between border-b border-white/10 px-4 py-3.5 md:flex">
-                        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">Details</span>
+                        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">{t('library.details')}</span>
                         <div className="flex items-center gap-1">
                             <IconBtn
-                                title="Favorite"
+                                title={t('favorite')}
                                 active={track.favorite}
                                 onClick={() => onToggleFavorite?.(track.id)}
                                 className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5"
@@ -288,7 +290,7 @@ export default function MusicLabPreviewModal({
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                                 </svg>
                             </IconBtn>
-                            <IconBtn title="Close" onClick={onClose} className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5">
+                            <IconBtn title={t('close')} onClick={onClose} className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5">
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                     <path d="M18 6 6 18" />
                                     <path d="m6 6 12 12" />
@@ -310,14 +312,14 @@ export default function MusicLabPreviewModal({
                     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin">
                         <div className="space-y-2.5 p-4">
                             <div>
-                                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Now playing</p>
+                                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">{t('library.nowPlaying')}</p>
                                 <h3 className="mt-1 text-base font-semibold tracking-tight text-white">{track.title}</h3>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
                                 <DetailBtn onClick={() => void handleDownload()} disabled={!track.audioUrl || downloading}>
                                     <IconDownload className="h-3.5 w-3.5 opacity-70" />
-                                    {downloading ? 'Downloading…' : 'Download'}
+                                    {downloading ? t('library.downloading') : t('download')}
                                 </DetailBtn>
                                 <DetailBtn gradient>
                                     <svg className="h-3.5 w-3.5 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -325,7 +327,7 @@ export default function MusicLabPreviewModal({
                                         <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
                                         <path d="M2 12h20" />
                                     </svg>
-                                    Publish
+                                    {t('library.publish')}
                                 </DetailBtn>
                             </div>
                         </div>
@@ -342,10 +344,10 @@ export default function MusicLabPreviewModal({
                                         <path d="M12 16v-4" />
                                         <path d="M12 8h.01" />
                                     </svg>
-                                    <span className="text-[13px] font-medium tracking-tight text-zinc-200">Generation Details</span>
+                                    <span className="text-[13px] font-medium tracking-tight text-zinc-200">{t('library.generationDetails')}</span>
                                 </div>
                                 <svg
-                                    className={`h-4 w-4 text-zinc-500 transition ${detailsOpen ? 'rotate-0' : 'rotate-180'}`}
+                                    className={`h-4 w-4 text-zinc-500 transition ${detailsOpen ? 'rotate-180' : 'rotate-0'}`}
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     stroke="currentColor"
@@ -358,7 +360,7 @@ export default function MusicLabPreviewModal({
                             {detailsOpen && (
                                 <div className="space-y-3 px-4 pb-4">
                                     <div className="flex items-center justify-between gap-3 text-[13px]">
-                                        <span className="shrink-0 text-zinc-500">Model</span>
+                                        <span className="shrink-0 text-zinc-500">{t('library.detail.model')}</span>
                                         <span className="truncate text-end font-medium text-[#FF5733]" title={track.model || '—'}>
                                             {track.model || '—'}
                                         </span>
@@ -377,10 +379,10 @@ export default function MusicLabPreviewModal({
                                     )}
                                     <div className="space-y-1.5">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[13px] text-zinc-500">Style</span>
+                                            <span className="text-[13px] text-zinc-500">{t('library.detail.style')}</span>
                                             <button
                                                 type="button"
-                                                title={copied === 'style' ? 'Copied' : 'Copy style'}
+                                                title={copied === 'style' ? t('library.copied') : t('library.copyStyle')}
                                                 onClick={() => void copyText(track.style, 'style')}
                                                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
                                             >
@@ -404,11 +406,11 @@ export default function MusicLabPreviewModal({
                                     {!track.instrumental && (
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
-                                                <span className="text-[13px] text-zinc-500">Lyrics</span>
+                                                <span className="text-[13px] text-zinc-500">{t('library.detail.lyrics')}</span>
                                                 {track.lyrics?.trim() ? (
                                                     <button
                                                         type="button"
-                                                        title={copied === 'lyrics' ? 'Copied' : 'Copy lyrics'}
+                                                        title={copied === 'lyrics' ? t('library.copied') : t('library.copyLyrics')}
                                                         onClick={() => void copyText(track.lyrics!.trim(), 'lyrics')}
                                                         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
                                                     >
@@ -456,7 +458,7 @@ export default function MusicLabPreviewModal({
                             className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg font-sans text-[13px] font-medium tracking-tight text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
                         >
                             <IconTrash className="h-4 w-4" />
-                            Delete
+                            {t('delete')}
                         </button>
                     </div>
                 </div>

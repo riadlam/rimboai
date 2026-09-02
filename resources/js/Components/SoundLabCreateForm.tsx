@@ -695,7 +695,7 @@ export default function SoundLabCreateForm({
                                         className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-0.5 rounded-md px-2 text-xs font-medium text-white/50 transition hover:bg-white/[0.05] hover:text-white"
                                     >
                                         View all
-                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <svg className="h-3 w-3 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                             <path d="m9 18 6-6-6-6" />
                                         </svg>
                                     </button>
@@ -939,7 +939,7 @@ export default function SoundLabCreateForm({
                                 </span>
                             </span>
                             <svg
-                                className={`h-4 w-4 text-white/40 transition ${lyricsOpen ? 'rotate-90' : ''}`}
+                                className={`h-4 w-4 text-white/40 transition rtl:rotate-180 ${lyricsOpen ? 'rotate-90' : ''}`}
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"

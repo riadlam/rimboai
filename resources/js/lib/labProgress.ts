@@ -33,30 +33,34 @@ export function labProgressPercent(opts: {
     return Math.min(12, 4 + Math.round(elapsed * 2));
 }
 
+export type LabPhaseTranslator = (key: string, opts?: Record<string, unknown>) => string;
+
 export function labPhaseLabel(opts: {
     status?: string | null;
     queuePosition?: number | null;
     progress?: string | null;
     completing?: boolean;
     kind: 'image' | 'video' | 'music';
+    t?: LabPhaseTranslator;
 }): string {
-    if (opts.completing) return 'Done';
+    const t = opts.t ?? ((key: string) => key);
+    if (opts.completing) return t('library.progress.done');
     if (opts.status === 'queued') {
         if (typeof opts.queuePosition === 'number' && opts.queuePosition > 0) {
-            return `Queue #${opts.queuePosition}`;
+            return t('library.progress.queue', { pos: opts.queuePosition });
         }
         if (typeof opts.queuePosition === 'number' && opts.queuePosition === 0) {
-            return 'Next up';
+            return t('library.progress.nextUp');
         }
-        return 'In queue';
+        return t('library.progress.inQueue');
     }
-    if (opts.status === 'pending') return 'Starting';
+    if (opts.status === 'pending') return t('library.progress.starting');
     if (opts.progress && opts.progress.trim() !== '') {
         return opts.progress.trim();
     }
-    if (opts.kind === 'music') return 'Composing…';
-    if (opts.kind === 'video') return 'Generating video…';
-    return 'Generating…';
+    if (opts.kind === 'music') return t('library.progress.composing');
+    if (opts.kind === 'video') return t('library.progress.generatingVideo');
+    return t('library.progress.generating');
 }
 
 /** How long to ramp displayed % → 100 when the job finishes (farther = a bit longer, still snappy). */

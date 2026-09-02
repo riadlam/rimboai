@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -95,8 +96,27 @@ class SeedLabModelDescriptions extends Command
         }
 
         $this->info("Updated {$updated} rows.");
+        $this->bustCatalogCaches();
+        $this->info('Catalog brand caches cleared.');
 
         return self::SUCCESS;
+    }
+
+    private function bustCatalogCaches(): void
+    {
+        $locales = ['en', 'fr', 'ar'];
+        foreach ([
+            'text_to_image_models' => 'text_to_image_categories',
+            'text_to_video_models' => 'text_to_video_categories',
+            'text_to_voice_models' => 'text_to_voice_categories',
+            'text_to_music_models' => 'text_to_music_categories',
+        ] as $models => $categories) {
+            foreach ($locales as $locale) {
+                Cache::forget("catalog.brands.v5.{$locale}.{$models}.{$categories}");
+            }
+            Cache::forget("catalog.brands.v4.{$models}.{$categories}");
+            Cache::forget("catalog.brands.v3.{$models}.{$categories}");
+        }
     }
 
     /** @return array<string, string> */

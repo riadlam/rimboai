@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export type LabToastTone = 'error' | 'info' | 'success';
 
@@ -29,6 +30,7 @@ export function useLabToast(): LabToastContextValue {
 }
 
 export function LabToastProvider({ children }: { children: ReactNode }) {
+    const { t } = useTranslation('lab');
     const [items, setItems] = useState<LabToastItem[]>([]);
 
     const dismiss = useCallback((id: string) => {
@@ -42,11 +44,11 @@ export function LabToastProvider({ children }: { children: ReactNode }) {
     }, [dismiss]);
 
     const pushError = useCallback(
-        (message: string, title = 'Generation failed') => {
-            const text = (message || '').trim() || 'Something went wrong.';
-            push({ title, message: text, tone: 'error' });
+        (message: string, title?: string) => {
+            const text = (message || '').trim() || t('library.somethingWentWrong');
+            push({ title: title ?? t('generationFailedGeneric'), message: text, tone: 'error' });
         },
-        [push],
+        [push, t],
     );
 
     const value = useMemo(() => ({ push, pushError }), [push, pushError]);

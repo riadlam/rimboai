@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
@@ -40,18 +41,18 @@ type Props = {
     hidePrompt?: boolean;
 };
 
-function methodLabel(method?: ImageLabPreviewItem['method']): string {
+function methodLabelKey(method?: ImageLabPreviewItem['method']): string {
     switch (method) {
         case 'image-to-image':
-            return 'Image to Image';
+            return 'library.method.image-to-image';
         case 'text-to-video':
-            return 'Text to Video';
+            return 'library.method.text-to-video';
         case 'image-to-video':
-            return 'Image to Video';
+            return 'library.method.image-to-video';
         case 'reference-to-video':
-            return 'Reference to Video';
+            return 'library.method.reference-to-video';
         default:
-            return 'Text to Image';
+            return 'library.method.text-to-image';
     }
 }
 
@@ -79,6 +80,7 @@ export default function ImageLabPreviewModal({
     onUseLastFrame,
     hidePrompt = false,
 }: Props) {
+    const { t } = useTranslation('lab');
     const [zoom, setZoom] = useState(1);
     const [detailsOpen, setDetailsOpen] = useState(true);
     const [copied, setCopied] = useState(false);
@@ -301,10 +303,10 @@ export default function ImageLabPreviewModal({
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/10 bg-[#111116] font-sans md:w-80 md:flex-none md:border-s md:border-t-0">
                     <div className="hidden shrink-0 items-center justify-between border-b border-white/10 px-4 py-3.5 md:flex">
-                        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">Details</span>
+                        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">{t('library.details')}</span>
                         <div className="flex items-center gap-1">
                             <IconBtn
-                                title="Favorite"
+                                title={t('favorite')}
                                 active={image.favorite}
                                 onClick={() => onToggleFavorite?.(image.id)}
                                 className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5"
@@ -319,7 +321,7 @@ export default function ImageLabPreviewModal({
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                                 </svg>
                             </IconBtn>
-                            <IconBtn title="Close" onClick={onClose} className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5">
+                            <IconBtn title={t('close')} onClick={onClose} className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5">
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                     <path d="M18 6 6 18" />
                                     <path d="m6 6 12 12" />
@@ -329,7 +331,7 @@ export default function ImageLabPreviewModal({
                     </div>
 
                     <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3 md:hidden">
-                        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">Details</span>
+                        <span className="text-[13px] font-semibold tracking-tight text-zinc-100">{t('library.details')}</span>
                         <IconBtn title="Close" onClick={onClose} className="h-8 w-8 border-transparent bg-transparent hover:bg-white/5">
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M18 6 6 18" />
@@ -347,7 +349,7 @@ export default function ImageLabPreviewModal({
                                         <path d="M9 13h6" />
                                         <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
                                     </svg>
-                                    Move To Albums
+                                    {t('library.moveToAlbums')}
                                 </DetailBtn>
                                 <button
                                     type="button"
@@ -356,7 +358,7 @@ export default function ImageLabPreviewModal({
                                     className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 font-sans text-[13px] font-medium tracking-tight text-zinc-200 transition hover:border-white/15 hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     <IconDownload className="h-3.5 w-3.5 opacity-70" />
-                                    {downloading ? 'Downloading…' : 'Download'}
+                                    {downloading ? t('library.downloading') : t('download')}
                                 </button>
                             </div>
 
@@ -375,7 +377,7 @@ export default function ImageLabPreviewModal({
                                         <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
                                         <path d="M2 12h20" />
                                     </svg>
-                                    {image.isPublic ? 'Public' : 'Publish'}
+                                    {image.isPublic ? t('library.public') : t('library.publish')}
                                 </button>
                                 <DetailBtn gradient>
                                     <svg className="h-3.5 w-3.5 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -385,7 +387,7 @@ export default function ImageLabPreviewModal({
                                         <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
                                         <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
                                     </svg>
-                                    Share
+                                    {t('library.share')}
                                 </DetailBtn>
                             </div>
                         </div>
@@ -402,10 +404,10 @@ export default function ImageLabPreviewModal({
                                         <path d="M12 16v-4" />
                                         <path d="M12 8h.01" />
                                     </svg>
-                                    <span className="text-[13px] font-medium tracking-tight text-zinc-200">Generation Details</span>
+                                    <span className="text-[13px] font-medium tracking-tight text-zinc-200">{t('library.generationDetails')}</span>
                                 </div>
                                 <svg
-                                    className={`h-4 w-4 text-zinc-500 transition ${detailsOpen ? 'rotate-0' : 'rotate-180'}`}
+                                    className={`h-4 w-4 text-zinc-500 transition ${detailsOpen ? 'rotate-180' : 'rotate-0'}`}
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     stroke="currentColor"
@@ -427,7 +429,7 @@ export default function ImageLabPreviewModal({
                                                         <circle cx="17" cy="17" r="3" />
                                                         <circle cx="7" cy="7" r="3" />
                                                     </svg>
-                                                    Reuse Settings
+                                                    {t('library.reuseSettings')}
                                                 </DetailBtn>
                                             )}
                                             {onUseResult && (
@@ -436,7 +438,7 @@ export default function ImageLabPreviewModal({
                                                         <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
                                                         <rect x="2" y="6" width="14" height="12" rx="2" />
                                                     </svg>
-                                                    {isVideo ? 'Use Video' : 'Use Image'}
+                                                    {isVideo ? t('library.useVideo') : t('library.useImage')}
                                                 </DetailBtn>
                                             )}
                                         </div>
@@ -451,29 +453,29 @@ export default function ImageLabPreviewModal({
                                                 <path d="M3 15h18" />
                                                 <path d="m9 9 3 3 3-3" />
                                             </svg>
-                                            {capturingFrame ? 'Capturing last frame…' : 'Continue from last frame'}
+                                            {capturingFrame ? t('library.capturingLastFrame') : t('library.continueFromLastFrame')}
                                         </DetailBtn>
                                     )}
 
                                     <div className="flex items-center justify-between gap-3 text-[13px]">
-                                        <span className="shrink-0 text-zinc-500">Model</span>
+                                        <span className="shrink-0 text-zinc-500">{t('library.detail.model')}</span>
                                         <span className="truncate text-end font-medium text-[#FF5733]" title={modelDisplay}>
                                             {modelDisplay}
                                         </span>
                                     </div>
 
                                     <div className="flex items-center justify-between gap-3 text-[13px]">
-                                        <span className="shrink-0 text-zinc-500">Method</span>
-                                        <span className="truncate text-end font-medium text-zinc-200">{methodLabel(image.method)}</span>
+                                        <span className="shrink-0 text-zinc-500">{t('library.detail.method')}</span>
+                                        <span className="truncate text-end font-medium text-zinc-200">{t(methodLabelKey(image.method))}</span>
                                     </div>
 
                                     {!hidePrompt && (
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
-                                                <span className="text-[13px] text-zinc-500">Prompt</span>
+                                                <span className="text-[13px] text-zinc-500">{t('library.detail.prompt')}</span>
                                                 <button
                                                     type="button"
-                                                    title={copied ? 'Copied' : 'Copy prompt'}
+                                                    title={copied ? t('library.copied') : t('library.copyPrompt')}
                                                     onClick={() => copyPrompt(image.prompt)}
                                                     className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
                                                 >
@@ -516,7 +518,7 @@ export default function ImageLabPreviewModal({
                             className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg font-sans text-[13px] font-medium tracking-tight text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
                         >
                             <IconTrash className="h-4 w-4" />
-                            Delete
+                            {t('delete')}
                         </button>
                     </div>
                 </div>
@@ -540,8 +542,8 @@ export default function ImageLabPreviewModal({
                             </span>
                             <motion.button
                                 type="button"
-                                title="Close"
-                                aria-label="Close full image"
+                                title={t('close')}
+                                aria-label={t('close')}
                                 initial={{ opacity: 0, scale: 0.85, y: -6 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.9 }}

@@ -25,6 +25,7 @@ import { getEcho } from '@/lib/echo';
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 
 type Props = {
     type?: string;
@@ -238,7 +239,7 @@ function mergeMusicCreationState(prev: LabTrack[], creationId: number, creation:
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((track) =>
             track.creationId === creationId
-                ? { ...track, status: 'failed', completing: false, error: creation.error || 'errors.generationFailed', progress: creation.progress_message ?? 'Failed', progressPercent: null }
+                ? { ...track, status: 'failed', completing: false, error: creation.error || 'errors.generationFailed', progress: creation.progress_message ?? i18n.t('failed', { ns: 'lab' }), progressPercent: null }
                 : track,
         );
     }
@@ -266,7 +267,7 @@ function mergeVoiceCreationState(prev: LabVoice[], creationId: number, creation:
     if (creation.status === 'failed' || creation.status === 'cancelled') {
         return prev.map((v) =>
             v.creationId === creationId
-                ? { ...v, status: 'failed', error: creation.error || 'errors.generationFailed', progress: creation.progress_message ?? 'Failed' }
+                ? { ...v, status: 'failed', error: creation.error || 'errors.generationFailed', progress: creation.progress_message ?? i18n.t('failed', { ns: 'lab' }) }
                 : v,
         );
     }
@@ -1389,7 +1390,7 @@ function LabWorkspaceInner({
 
     return (
         <div className="flex w-full min-w-0 flex-col md:h-full md:min-h-0">
-            <Head title={`${title} - Lab`} />
+            <Head title={`${title} - ${tLab('library.labTitleSuffix')}`} />
             <div className="flex flex-col rounded-xl bg-[#070708] md:min-h-0 md:flex-1 md:overflow-hidden">
                 {usesStudioLab ? (
                     <div className="flex flex-col md:min-h-0 md:flex-1 md:overflow-hidden md:flex-row">

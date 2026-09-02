@@ -56,24 +56,25 @@ type Props = {
     hidePrompt?: boolean;
 };
 
-const TIME_FILTERS = [
-    { id: 'all', label: 'All time', days: null },
-    { id: '1d', label: 'Past 1 day', days: 1 },
-    { id: '2d', label: 'Past 2 days', days: 2 },
-    { id: '3d', label: 'Past 3 days', days: 3 },
-    { id: '7d', label: 'Past 7 days', days: 7 },
+const TIME_FILTER_IDS = ['all', '1d', '2d', '3d', '7d'] as const;
+const TIME_FILTER_DAYS: Record<(typeof TIME_FILTER_IDS)[number], number | null> = {
+    all: null,
+    '1d': 1,
+    '2d': 2,
+    '3d': 3,
+    '7d': 7,
+};
+
+const METHOD_FILTER_IDS = [
+    'text-to-image',
+    'image-to-image',
+    'text-to-video',
+    'image-to-video',
+    'reference-to-video',
 ] as const;
 
-const METHOD_FILTERS = [
-    { id: 'text-to-image', label: 'Text to Image' },
-    { id: 'image-to-image', label: 'Image to Image' },
-    { id: 'text-to-video', label: 'Text to Video' },
-    { id: 'image-to-video', label: 'Image to Video' },
-    { id: 'reference-to-video', label: 'Reference to Video' },
-] as const;
-
-type TimeFilterId = (typeof TIME_FILTERS)[number]['id'];
-type MethodFilterId = 'all' | (typeof METHOD_FILTERS)[number]['id'];
+type TimeFilterId = (typeof TIME_FILTER_IDS)[number];
+type MethodFilterId = 'all' | (typeof METHOD_FILTER_IDS)[number];
 
 function IconSparkles({ className = 'h-4 w-4' }: { className?: string }) {
     return (
@@ -155,9 +156,8 @@ export default function ImageLabLibrary({
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        const timeOpt = TIME_FILTERS.find((t) => t.id === timeFilter);
-        const cutoff =
-            timeOpt?.days != null ? Date.now() - timeOpt.days * 24 * 60 * 60 * 1000 : null;
+        const days = TIME_FILTER_DAYS[timeFilter];
+        const cutoff = days != null ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
 
         return images.filter((img) => {
             if (favoritesOnly && !img.favorite) return false;
@@ -176,9 +176,9 @@ export default function ImageLabLibrary({
     const libraryFilterCount =
         (timeFilter !== 'all' ? 1 : 0) + (!hideMethodFilters && methodFilter !== 'all' ? 1 : 0);
     const activeFilterCount = libraryFilterCount + (favoritesOnly ? 1 : 0) + (search.trim() ? 1 : 0);
-    const timeLabel = TIME_FILTERS.find((t) => t.id === timeFilter)?.label ?? 'All time';
+    const timeLabel = t(`library.time.${timeFilter}`);
     const methodLabel =
-        METHOD_FILTERS.find((m) => m.id === methodFilter)?.label ?? 'All methods';
+        methodFilter === 'all' ? t('library.allMethods') : t(`library.method.${methodFilter}`);
     useEffect(() => {
         if (!filtersOpen) return;
         const onPointerDown = (e: MouseEvent) => {
@@ -249,10 +249,10 @@ export default function ImageLabLibrary({
                     <div className="inline-flex items-center rounded-xl border border-white/[0.06] bg-[#101016] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                         {(
                             hideAlbums
-                                ? [{ id: 'generation' as const, label: 'Generation', Icon: IconSparkles }]
+                                ? [{ id: 'generation' as const, label: t('library.generation'), Icon: IconSparkles }]
                                 : [
-                                      { id: 'generation' as const, label: 'Generation', Icon: IconSparkles },
-                                      { id: 'albums' as const, label: 'Albums', Icon: IconAlbums },
+                                      { id: 'generation' as const, label: t('library.generation'), Icon: IconSparkles },
+                                      { id: 'albums' as const, label: t('library.albums'), Icon: IconAlbums },
                                   ]
                         ).map((item) => {
                             const active = tab === item.id;
@@ -297,7 +297,7 @@ export default function ImageLabLibrary({
                                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-[12px] font-semibold tracking-tight text-zinc-200 transition hover:bg-white/[0.08] hover:text-white"
                             >
                                 <IconDownload className="h-3.5 w-3.5" />
-                                Download {selected.length}
+                                {t('library.downloadCount', { count: selected.length })}
                             </button>
                             <button
                                 type="button"
@@ -308,7 +308,7 @@ export default function ImageLabLibrary({
                                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-red-400/35 bg-red-500/20 px-2.5 text-[12px] font-semibold tracking-tight text-red-100 transition hover:bg-red-500/30"
                             >
                                 <IconTrash className="h-3.5 w-3.5" />
-                                Delete {selected.length}
+                                {t('library.deleteCount', { count: selected.length })}
                             </button>
                         </div>
                     )}
@@ -337,7 +337,7 @@ export default function ImageLabLibrary({
                                     onClick={() => setFiltersOpen((v) => !v)}
                                 >
                                     <IconFilter className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Filters</span>
+                                    <span className="hidden sm:inline">{t('library.filters')}</span>
                                     {libraryFilterCount > 0 && (
                                         <span className="rounded bg-[#FF5733]/25 px-1.5 py-0.5 text-[10px] font-semibold text-[#ffb39f]">
                                             {libraryFilterCount}
@@ -349,7 +349,7 @@ export default function ImageLabLibrary({
                                         <>
                                             <motion.button
                                                 type="button"
-                                                aria-label="Close filters"
+                                                aria-label={t('library.closeFilters')}
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 exit={{ opacity: 0 }}
@@ -366,14 +366,14 @@ export default function ImageLabLibrary({
                                             <div className="mx-auto mb-1 mt-2 h-1 w-10 rounded-full bg-white/15 md:hidden" />
                                             <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
                                                 <div className="min-w-0">
-                                                    <p className="text-[13px] font-semibold tracking-tight text-zinc-100">Filters</p>
-                                                    <p className="mt-0.5 text-[12px] text-zinc-500">Refine by time and creation method</p>
+                                                    <p className="text-[13px] font-semibold tracking-tight text-zinc-100">{t('library.filters')}</p>
+                                                    <p className="mt-0.5 text-[12px] text-zinc-500">{t('library.filtersSub')}</p>
                                                 </div>
                                                 <div className="flex shrink-0 items-center gap-1">
                                                 {libraryFilterCount > 0 && (
                                                     <button
                                                         type="button"
-                                                        title="Reset filters"
+                                                        title={t('library.resetFilters')}
                                                         onClick={() => {
                                                             setTimeFilter('all');
                                                             setMethodFilter('all');
@@ -388,7 +388,7 @@ export default function ImageLabLibrary({
                                                 )}
                                                 <button
                                                     type="button"
-                                                    title="Close"
+                                                    title={t('close')}
                                                     onClick={() => setFiltersOpen(false)}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100 md:hidden"
                                                 >
@@ -402,23 +402,23 @@ export default function ImageLabLibrary({
                                             <div className="space-y-4 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4">
                                                 <div>
                                                     <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                                                        Time range
+                                                        {t('library.timeRange')}
                                                     </p>
                                                     <div className="flex flex-wrap gap-1.5">
-                                                        {TIME_FILTERS.map((f) => {
-                                                            const active = timeFilter === f.id;
+                                                        {TIME_FILTER_IDS.map((fId) => {
+                                                            const active = timeFilter === fId;
                                                             return (
                                                                 <button
-                                                                    key={f.id}
+                                                                    key={fId}
                                                                     type="button"
-                                                                    onClick={() => setTimeFilter(f.id)}
+                                                                    onClick={() => setTimeFilter(fId)}
                                                                     className={`cursor-pointer rounded-full px-3 py-1.5 text-[12px] font-medium tracking-tight transition ${
                                                                         active
                                                                             ? 'bg-[#FF5733] text-white shadow-[0_6px_20px_rgba(255,87,51,0.35)]'
                                                                             : 'bg-white/[0.04] text-zinc-400 ring-1 ring-inset ring-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
                                                                     }`}
                                                                 >
-                                                                    {f.label}
+                                                                    {t(`library.time.${fId}`)}
                                                                 </button>
                                                             );
                                                         })}
@@ -428,17 +428,17 @@ export default function ImageLabLibrary({
                                                 {!hideMethodFilters && (
                                                 <div>
                                                     <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                                                        Creation method
+                                                        {t('library.creationMethod')}
                                                     </p>
                                                     <div className="grid grid-cols-1 gap-1.5">
-                                                        {METHOD_FILTERS.map((f) => {
-                                                            const active = methodFilter === f.id;
+                                                        {METHOD_FILTER_IDS.map((fId) => {
+                                                            const active = methodFilter === fId;
                                                             return (
                                                                 <button
-                                                                    key={f.id}
+                                                                    key={fId}
                                                                     type="button"
-                                                                    onClick={() => setMethodFilter(active ? 'all' : f.id)}
-                                                                    className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                                                                    onClick={() => setMethodFilter(active ? 'all' : fId)}
+                                                                    className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-start transition ${
                                                                         active
                                                                             ? 'bg-[#FF5733]/12 ring-1 ring-inset ring-[#FF5733]/35'
                                                                             : 'bg-white/[0.03] ring-1 ring-inset ring-white/[0.05] hover:bg-white/[0.06]'
@@ -449,7 +449,7 @@ export default function ImageLabLibrary({
                                                                             active ? 'bg-[#FF5733]/20 text-[#FF5733]' : 'bg-white/[0.05] text-zinc-500'
                                                                         }`}
                                                                     >
-                                                                        {f.id === 'image-to-image' ? (
+                                                                        {fId === 'image-to-image' ? (
                                                                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                                                                 <rect width="18" height="18" x="3" y="3" rx="2" />
                                                                                 <circle cx="9" cy="9" r="2" />
@@ -465,12 +465,12 @@ export default function ImageLabLibrary({
                                                                     </span>
                                                                     <span className="min-w-0 flex-1">
                                                                         <span className={`block text-[13px] font-medium tracking-tight ${active ? 'text-zinc-50' : 'text-zinc-200'}`}>
-                                                                            {f.label}
+                                                                            {t(`library.method.${fId}`)}
                                                                         </span>
                                                                         <span className="mt-0.5 block text-[11px] text-zinc-500">
-                                                                            {f.id === 'text-to-image'
-                                                                                ? 'Generated from a text prompt'
-                                                                                : 'Remixed from reference images'}
+                                                                            {fId === 'text-to-image'
+                                                                                ? t('library.method.text-to-imageHint')
+                                                                                : t('library.method.image-to-imageHint')}
                                                                         </span>
                                                                     </span>
                                                                     {active && (
@@ -493,7 +493,7 @@ export default function ImageLabLibrary({
 
                             <IconBtn
                                 active={favoritesOnly}
-                                title="Favorites"
+                                title={t('library.favorites')}
                                 onClick={() => setFavoritesOnly((v) => !v)}
                             >
                                 <svg
@@ -512,11 +512,11 @@ export default function ImageLabLibrary({
                                 disabled={!hasImages}
                                 onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
                             >
-                                {selectMode ? 'Done' : 'Select'}
+                                {selectMode ? t('library.done') : t('library.select')}
                             </ToolBtn>
 
                             <div className="ms-0.5 hidden items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 lg:flex">
-                                <span className="text-[11px] font-medium text-zinc-500">Size</span>
+                                <span className="text-[11px] font-medium text-zinc-500">{t('library.size')}</span>
                                 <input
                                     type="range"
                                     min={3}
@@ -525,7 +525,7 @@ export default function ImageLabLibrary({
                                     value={11 - columns}
                                     onChange={(e) => setColumns(11 - Number(e.target.value))}
                                     className="h-1.5 w-24 cursor-pointer appearance-none rounded-full bg-white/15 accent-[#FF5733]"
-                                    title={`${columns} per row`}
+                                    title={t('library.perRow', { count: columns })}
                                 />
                                 <span className="min-w-[1.5rem] text-right text-[11px] font-medium tabular-nums text-zinc-400">
                                     {columns}
@@ -539,7 +539,7 @@ export default function ImageLabLibrary({
                 {tab === 'generation' && activeFilterCount > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.05] px-3 py-2 md:px-4">
                         {search.trim() && (
-                            <Chip onClear={() => setSearch('')}>Search: “{search.trim().slice(0, 24)}{search.trim().length > 24 ? '…' : ''}”</Chip>
+                            <Chip onClear={() => setSearch('')}>{t('library.searchChip', { query: `${search.trim().slice(0, 24)}${search.trim().length > 24 ? '…' : ''}` })}</Chip>
                         )}
                         {timeFilter !== 'all' && (
                             <Chip onClear={() => setTimeFilter('all')}>{timeLabel}</Chip>
@@ -547,9 +547,9 @@ export default function ImageLabLibrary({
                         {!hideMethodFilters && methodFilter !== 'all' && (
                             <Chip onClear={() => setMethodFilter('all')}>{methodLabel}</Chip>
                         )}
-                        {favoritesOnly && <Chip onClear={() => setFavoritesOnly(false)}>Favorites</Chip>}
+                        {favoritesOnly && <Chip onClear={() => setFavoritesOnly(false)}>{t('library.favorites')}</Chip>}
                         <button type="button" onClick={resetFilters} className="ms-1 text-[11px] font-medium text-orange-300/90 hover:text-orange-200">
-                            Clear all
+                            {t('library.clearAll')}
                         </button>
                     </div>
                 )}
@@ -561,23 +561,23 @@ export default function ImageLabLibrary({
                     {tab === 'albums' ? (
                         <EmptyState
                             key="albums"
-                            title="Albums"
-                            description="Group generations into curated collections as your library grows."
+                            title={t('library.albumsEmptyTitle')}
+                            description={t('library.albumsEmptyDescription')}
                         />
                     ) : generating && !hasImages ? (
-                        <GeneratingState key="gen" />
+                        <GeneratingState t={t} />
                     ) : !hasImages ? (
                         <EmptyState
                             key="empty"
-                            title="Your canvas is ready"
-                            description="Describe an image on the left and hit Generate — results appear here with search, filters, and favorites."
+                            title={t('library.emptyCanvasTitle')}
+                            description={t('library.emptyCanvasDescription')}
                         />
                     ) : !hasResults ? (
                         <EmptyState
                             key="none"
-                            title="Nothing matches"
-                            description="Try a different search or clear your filters."
-                            action="Clear filters"
+                            title={t('library.nothingMatchesTitle')}
+                            description={t('library.nothingMatchesDescription')}
+                            action={t('library.clearFilters')}
                             onAction={resetFilters}
                         />
                     ) : (
@@ -611,6 +611,7 @@ export default function ImageLabLibrary({
                                     return (
                                         <BuildingCard
                                             key={img.id}
+                                            t={t}
                                             prompt={img.prompt}
                                             hidePrompt={hidePrompt}
                                             status={img.status}
@@ -710,6 +711,7 @@ export default function ImageLabLibrary({
                                                     </div>
                                                 )}
                                                 <ImageCardActions
+                                                    t={t}
                                                     src={img.videoUrl || img.src}
                                                     filename={
                                                         img.videoUrl ||
@@ -754,13 +756,13 @@ export default function ImageLabLibrary({
                         className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4"
                     >
                         <div className="flex items-center gap-2 rounded-2xl border border-white/12 bg-[#16161e] px-3 py-2 shadow-2xl">
-                            <span className="px-2 text-xs font-medium text-white/70">{selected.length} selected</span>
+                            <span className="px-2 text-xs font-medium text-white/70">{t('library.selectedCount', { count: selected.length })}</span>
                             <button
                                 type="button"
                                 onClick={() => setSelected(filtered.map((i) => i.id))}
                                 className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs text-white/55 hover:bg-white/[0.08] hover:text-white"
                             >
-                                Select all
+                                {t('library.selectAll')}
                             </button>
                             <button
                                 type="button"
@@ -768,7 +770,7 @@ export default function ImageLabLibrary({
                                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/[0.08] px-2.5 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/[0.12]"
                             >
                                 <IconDownload className="h-3.5 w-3.5" />
-                                Download
+                                {t('download')}
                             </button>
                             <button
                                 type="button"
@@ -779,10 +781,10 @@ export default function ImageLabLibrary({
                                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-500/25 px-2.5 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-500/35"
                             >
                                 <IconTrash className="h-3.5 w-3.5" />
-                                Delete
+                                {t('delete')}
                             </button>
                             <button type="button" onClick={exitSelectMode} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs text-white/45 hover:text-white">
-                                Cancel
+                                {t('library.cancel')}
                             </button>
                         </div>
                     </motion.div>
@@ -864,14 +866,14 @@ function EmptyState({
     );
 }
 
-function GeneratingState() {
+function GeneratingState({ t }: { t: (key: string) => string }) {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex min-h-[320px] h-full flex-col items-center justify-center px-6 text-center">
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
                 <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-white/50" />
             </div>
-            <h3 className="text-lg font-semibold text-white">Crafting your image</h3>
-            <p className="mt-2 max-w-sm text-sm text-white/45">Lighting, detail, and composition are being refined…</p>
+            <h3 className="text-lg font-semibold text-white">{t('library.craftingImage')}</h3>
+            <p className="mt-2 max-w-sm text-sm text-white/45">{t('library.craftingImageSub')}</p>
         </motion.div>
     );
 }
@@ -912,6 +914,7 @@ function useLabCardProgress(
 }
 
 function BuildingCard({
+    t,
     prompt,
     hidePrompt = false,
     status,
@@ -924,6 +927,7 @@ function BuildingCard({
     method,
     onRevealComplete,
 }: {
+    t: (key: string, opts?: Record<string, unknown>) => string;
     prompt: string;
     hidePrompt?: boolean;
     status?: LabImage['status'];
@@ -946,6 +950,7 @@ function BuildingCard({
         progress,
         completing,
         kind: isVideo ? 'video' : 'image',
+        t,
     });
 
     useEffect(() => {
@@ -1008,11 +1013,13 @@ function BuildingCard({
                     <p className="text-[11px] font-medium tracking-wide text-white/70">{phase}</p>
                     {isVideo && status === 'queued' && typeof queuePosition === 'number' && queuePosition >= 0 && !completing && (
                         <p className="text-[10px] text-white/30">
-                            {queuePosition > 0 ? `Queue #${queuePosition}` : 'Next up'}
+                            {queuePosition > 0
+                                ? t('library.progress.queue', { pos: queuePosition })
+                                : t('library.progress.nextUp')}
                         </p>
                     )}
                     {isVideo && status === 'in_progress' && !completing && (
-                        <p className="text-[10px] text-white/30">Usually a few minutes</p>
+                        <p className="text-[10px] text-white/30">{t('library.usuallyFewMinutes')}</p>
                     )}
                 </div>
                 {!hidePrompt && (
@@ -1063,12 +1070,14 @@ function ToolBtn({
 }
 
 function ImageCardActions({
+    t,
     src,
     filename,
     favorite,
     onToggleFavorite,
     onDelete,
 }: {
+    t: (key: string) => string;
     src: string;
     filename: string;
     favorite: boolean;
@@ -1085,7 +1094,7 @@ function ImageCardActions({
         <div className="pointer-events-none absolute end-2 top-2 z-10 flex flex-col gap-1">
             <button
                 type="button"
-                title="Download"
+                title={t('download')}
                 onClick={(e) => {
                     e.stopPropagation();
                     void downloadMediaAsset(src, filename).catch(() => {});
@@ -1097,7 +1106,7 @@ function ImageCardActions({
             </button>
             <button
                 type="button"
-                title="Favorite"
+                title={t('favorite')}
                 onClick={(e) => {
                     e.stopPropagation();
                     onToggleFavorite();
@@ -1119,7 +1128,7 @@ function ImageCardActions({
             </button>
             <button
                 type="button"
-                title="Delete"
+                title={t('delete')}
                 onClick={(e) => {
                     e.stopPropagation();
                     onDelete();

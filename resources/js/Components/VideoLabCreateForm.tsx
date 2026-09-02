@@ -858,7 +858,7 @@ export default function VideoLabCreateForm({
                         <button
                             type="button"
                             onClick={() => setModelOpen(true)}
-                            className="group relative min-h-[72px] w-full cursor-pointer overflow-hidden rounded-2xl border border-white/[0.08] text-left shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset] transition hover:border-orange-400/35"
+                            className="group relative min-h-[72px] w-full cursor-pointer overflow-hidden rounded-2xl border border-white/[0.08] text-start shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset] transition hover:border-orange-400/35"
                         >
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_20%,rgba(255,87,51,0.35),transparent_55%),linear-gradient(135deg,#1a1020_0%,#0d0d14_50%,#12101a_100%)]" />
                             <div className="absolute inset-0 opacity-40 mix-blend-overlay [background-image:url('data:image/svg+xml;utf8,<svg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22 opacity=%220.35%22/></svg>')]" />
@@ -1303,7 +1303,7 @@ export default function VideoLabCreateForm({
                                 </span>
                             </div>
                             <svg
-                                className={`h-4 w-4 text-white/40 transition ${settingsOpen ? 'rotate-180' : ''}`}
+                                className={`h-4 w-4 text-white/40 transition rtl:rotate-180 ${settingsOpen ? 'rotate-180' : ''}`}
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -1834,7 +1834,7 @@ function PremiumSegmented({
     onChange: (id: string) => void;
 }) {
     return (
-        <div className="relative flex rounded-xl border border-white/[0.06] bg-black/30 p-0.5">
+        <div dir="ltr" className="relative flex rounded-xl border border-white/[0.06] bg-black/30 p-0.5">
             {options.map((opt) => {
                 const active = value === opt.id;
                 return (

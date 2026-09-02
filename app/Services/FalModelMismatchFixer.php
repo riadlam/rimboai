@@ -201,10 +201,14 @@ class FalModelMismatchFixer
 
     private function bustCatalogCaches(): void
     {
+        $locales = ['en', 'fr', 'ar'];
         foreach ([
             'text_to_image_models' => 'text_to_image_categories',
             'text_to_video_models' => 'text_to_video_categories',
         ] as $models => $categories) {
+            foreach ($locales as $locale) {
+                Cache::forget("catalog.brands.v5.{$locale}.{$models}.{$categories}");
+            }
             Cache::forget("catalog.brands.v4.{$models}.{$categories}");
             Cache::forget("catalog.brands.v3.{$models}.{$categories}");
         }

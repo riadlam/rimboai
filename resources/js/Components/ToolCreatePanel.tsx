@@ -530,7 +530,7 @@ export default function ToolCreatePanel({
                             >
                                 <span className="text-[12px] font-medium text-white/70">{t('detail.settings')}</span>
                                 <svg
-                                    className={`h-4 w-4 text-white/40 transition ${settingsOpen ? 'rotate-180' : ''}`}
+                                    className={`h-4 w-4 text-white/40 transition rtl:rotate-180 ${settingsOpen ? 'rotate-180' : ''}`}
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     stroke="currentColor"

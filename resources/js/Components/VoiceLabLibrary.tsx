@@ -165,8 +165,8 @@ export default function VoiceLabLibrary({
                     <div className="inline-flex items-center rounded-xl border border-white/[0.06] bg-black p-1">
                         {(
                             [
-                                { id: 'generation' as const, label: 'Voiceovers', Icon: IconMic },
-                                { id: 'playlists' as const, label: 'Collections', Icon: IconAlbums },
+                                { id: 'generation' as const, label: t('library.voiceovers'), Icon: IconMic },
+                                { id: 'playlists' as const, label: t('library.collections'), Icon: IconAlbums },
                             ]
                         ).map((item) => {
                             const active = tab === item.id;
@@ -319,7 +319,7 @@ export default function VoiceLabLibrary({
                                 selectMode ? 'border-orange-400/40 bg-orange-500/10 text-orange-100' : 'border-white/10 text-zinc-400'
                             }`}
                         >
-                            {selectMode ? 'Done' : 'Select'}
+                            {selectMode ? t('library.done') : t('library.select')}
                         </button>
                     </div>
                 </div>
@@ -358,7 +358,7 @@ export default function VoiceLabLibrary({
                             onClick={() => onDelete?.(selected)}
                             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 text-[12px] font-medium text-red-300"
                         >
-                            Delete ({selected.length})
+                            {t('library.deleteCount', { count: selected.length })}
                         </button>
                     </div>
                 )}
@@ -370,8 +370,8 @@ export default function VoiceLabLibrary({
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
                             <IconAlbums className="h-6 w-6 text-zinc-500" />
                         </div>
-                        <p className="text-sm font-medium text-zinc-300">Collections coming soon</p>
-                        <p className="max-w-xs text-xs text-zinc-500">Organize voiceovers into reusable sets.</p>
+                        <p className="text-sm font-medium text-zinc-300">{t('library.collectionsComingSoon')}</p>
+                        <p className="max-w-xs text-xs text-zinc-500">{t('library.collectionsEmptyHint')}</p>
                     </div>
                 ) : !hasVoices && !generating ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -381,8 +381,8 @@ export default function VoiceLabLibrary({
                                 <IconMic className="h-7 w-7 text-orange-300" />
                             </div>
                         </div>
-                        <p className="text-sm font-medium text-zinc-200">No voiceovers yet</p>
-                        <p className="max-w-sm text-xs text-zinc-500">Enter text on the left and Create to generate speech.</p>
+                        <p className="text-sm font-medium text-zinc-200">{t('library.noVoiceoversYet')}</p>
+                        <p className="max-w-sm text-xs text-zinc-500">{t('library.noVoiceoversHint')}</p>
                     </div>
                 ) : (
                     <div className="space-y-px p-2 md:p-3">
@@ -504,7 +504,7 @@ export default function VoiceLabLibrary({
                                                 )}
                                                 {!selectMode && (
                                                     <div className="absolute end-1 top-1 flex flex-col gap-0.5 opacity-0 transition group-hover:opacity-100">
-                                                        <IconBtn title="Favorite" active={item.favorite} onClick={() => onToggleFavorite?.(item.id)}>
+                                                        <IconBtn title={t('favorite')} active={item.favorite} onClick={() => onToggleFavorite?.(item.id)}>
                                                             <svg
                                                                 className="h-3.5 w-3.5"
                                                                 fill={item.favorite ? 'currentColor' : 'none'}
@@ -515,7 +515,7 @@ export default function VoiceLabLibrary({
                                                                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                                                             </svg>
                                                         </IconBtn>
-                                                        <IconBtn title="Delete" onClick={() => onDelete?.([item.id])}>
+                                                        <IconBtn title={t('delete')} onClick={() => onDelete?.([item.id])}>
                                                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                                                 <path d="M4.5 7h15" />
                                                                 <path d="M9.5 7V5.5A1.5 1.5 0 0 1 11 4h2a1.5 1.5 0 0 1 1.5 1.5V7" />

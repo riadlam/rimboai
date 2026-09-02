@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { router } from '@inertiajs/react';
 
 import enCommon from '../locales/en/common.json';
 import enNav from '../locales/en/nav.json';
@@ -90,8 +91,17 @@ export function syncLangCookie(lang: AppLang): void {
     document.cookie = `${APP_LANG_COOKIE}=${lang};path=/;max-age=${maxAge};SameSite=Lax`;
 }
 
-/** Apply document lang/dir, persist, sync cookie, and update i18next. */
-export function applyLanguage(lang: AppLang): void {
+/** Reload server props that depend on locale (e.g. model descriptions in brands). */
+export function reloadLocaleDependentProps(): void {
+    if (typeof window === 'undefined') return;
+    const props = (router as { page?: { props?: Record<string, unknown> } }).page?.props;
+    if (props && 'brands' in props) {
+        router.reload({ only: ['brands'], preserveScroll: true, preserveState: true });
+    }
+}
+
+/** Apply document lang/dir, persist, sync cookie, update i18next, and refresh locale-bound props. */
+export function applyLanguage(lang: AppLang, options?: { reload?: boolean }): void {
     if (typeof window !== 'undefined') {
         window.localStorage.setItem(APP_LANG_STORAGE_KEY, lang);
     }
@@ -102,6 +112,9 @@ export function applyLanguage(lang: AppLang): void {
     syncLangCookie(lang);
     if (i18n.language !== lang) {
         void i18n.changeLanguage(lang);
+    }
+    if (options?.reload !== false) {
+        reloadLocaleDependentProps();
     }
 }
 
