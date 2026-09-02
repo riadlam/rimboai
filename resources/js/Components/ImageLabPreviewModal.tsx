@@ -284,26 +284,38 @@ export default function ImageLabPreviewModal({
                                 <LabVideoPlayer
                                     src={mediaUrl}
                                     poster={posterUrl}
+                                    warmKey={warmCacheKey}
                                     autoPlay
+                                    userPlay
                                     objectFit="contain"
                                     className="absolute inset-0 size-full"
                                 />
                             ) : (
                                 <>
-                                    <LabPreviewVideoStill
-                                        src={mediaUrl}
-                                        poster={posterUrl}
-                                        warmKey={warmCacheKey}
-                                        onPoster={setGridPoster}
-                                        onPosterError={() => setPosterBroken(true)}
-                                    />
-                                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                        <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm">
+                                    <div className="pointer-events-none absolute inset-0">
+                                        <LabPreviewVideoStill
+                                            src={mediaUrl}
+                                            poster={posterUrl}
+                                            warmKey={warmCacheKey}
+                                            onPoster={setGridPoster}
+                                            onPosterError={() => setPosterBroken(true)}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="absolute inset-0 z-10 flex cursor-pointer items-center justify-center"
+                                        aria-label={t('library.play')}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setVideoPlaying(true);
+                                        }}
+                                    >
+                                        <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60">
                                             <svg className="ms-0.5 h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
                                                 <path d="M8 5v14l11-7z" />
                                             </svg>
                                         </span>
-                                    </span>
+                                    </button>
                                 </>
                             )
                         ) : (

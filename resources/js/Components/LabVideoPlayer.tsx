@@ -8,6 +8,8 @@ type Props = {
     poster?: string;
     className?: string;
     autoPlay?: boolean;
+    /** User clicked play — try unmuted autoplay, fall back to muted. */
+    userPlay?: boolean;
     /** When true, clip loops until the user pauses. */
     loop?: boolean;
     /** Muted teaser: play from 0 then pause at this second (false Play continues full clip). Ignored when `loop` is set. */
@@ -29,6 +31,7 @@ export default function LabVideoPlayer({
     poster,
     className = '',
     autoPlay = false,
+    userPlay = false,
     loop = false,
     previewSeconds,
     objectFit = 'contain',
@@ -52,6 +55,20 @@ export default function LabVideoPlayer({
         playerRef.current?.destroy();
         playerRef.current = null;
 
+        const kickPlayback = (play: () => Promise<void> | void, setMuted: (muted: boolean) => void) => {
+            if (!shouldAutoplay) return;
+            if (userPlay) {
+                setMuted(false);
+                void Promise.resolve(play()).catch(() => {
+                    setMuted(true);
+                    void Promise.resolve(play()).catch(() => undefined);
+                });
+                return;
+            }
+            setMuted(true);
+            void Promise.resolve(play()).catch(() => undefined);
+        };
+
         let adopted: HTMLVideoElement | null = null;
         if (warmKey) {
             adopted = claimTrendWarmVideo(warmKey);
@@ -70,16 +87,23 @@ export default function LabVideoPlayer({
             adopted.controls = true;
             adopted.playsInline = true;
             adopted.loop = loop;
-            adopted.muted = shouldAutoplay;
-            adopted.defaultMuted = shouldAutoplay;
             if (adopted.srcObject) adopted.srcObject = null;
+            try {
+                adopted.currentTime = 0;
+            } catch {
+                /* ignore */
+            }
 
             mount.appendChild(adopted);
             adoptedRef.current = adopted;
 
-            if (shouldAutoplay) {
-                void adopted.play().catch(() => undefined);
-            }
+            kickPlayback(
+                () => adopted!.play(),
+                (muted) => {
+                    adopted!.muted = muted;
+                    adopted!.defaultMuted = muted;
+                },
+            );
 
             return () => {
                 const borrowed = adoptedRef.current;
@@ -122,8 +146,8 @@ export default function LabVideoPlayer({
             tooltips: { controls: true, seek: true },
             autopause: true,
             storage: { enabled: false },
-            muted: shouldAutoplay,
-            autoplay: shouldAutoplay,
+            muted: shouldAutoplay && !userPlay,
+            autoplay: false,
         });
 
         const player = playerRef.current;
@@ -137,7 +161,7 @@ export default function LabVideoPlayer({
             }
         };
         const onPlay = () => {
-            if (previewDoneRef.current) {
+            if (previewDoneRef.current || userPlay) {
                 player.muted = false;
             }
         };
@@ -145,9 +169,12 @@ export default function LabVideoPlayer({
         player.on('timeupdate', onTimeUpdate);
         player.on('play', onPlay);
 
-        if (shouldAutoplay) {
-            void player.play().catch(() => undefined);
-        }
+        kickPlayback(
+            () => player.play(),
+            (muted) => {
+                player.muted = muted;
+            },
+        );
 
         return () => {
             player.off('timeupdate', onTimeUpdate);
@@ -155,7 +182,7 @@ export default function LabVideoPlayer({
             player.destroy();
             playerRef.current = null;
         };
-    }, [src, autoPlay, loop, teaserSeconds, shouldAutoplay, fitClass, warmKey, poster]);
+    }, [src, autoPlay, userPlay, loop, teaserSeconds, shouldAutoplay, fitClass, warmKey, poster]);
 
     return (
         <div ref={mountRef} className={`lab-plyr h-full w-full overflow-hidden rounded-[5px] bg-black ${className}`}>
@@ -167,7 +194,7 @@ export default function LabVideoPlayer({
                 loop={loop}
                 poster={poster || undefined}
                 preload="metadata"
-                muted={shouldAutoplay}
+                muted={shouldAutoplay && !userPlay}
             >
                 <source src={src} type="video/mp4" />
             </video>
