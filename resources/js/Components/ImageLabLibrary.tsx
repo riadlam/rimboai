@@ -54,7 +54,36 @@ type Props = {
     hideMethodFilters?: boolean;
     /** Tools: hide prompt overlays / detail prompt */
     hidePrompt?: boolean;
+    /** Scope preview prev/next to videos or images only */
+    labKind?: 'image' | 'video';
 };
+
+function isVideoItem(img: LabImage): boolean {
+    return (
+        img.method === 'text-to-video' ||
+        img.method === 'image-to-video' ||
+        img.method === 'reference-to-video' ||
+        img.method === 'first-last-frame-to-video' ||
+        Boolean(img.videoUrl)
+    );
+}
+
+function isPreviewableItem(img: LabImage, labKind?: 'image' | 'video'): boolean {
+    const isBuilding =
+        img.completing === true ||
+        (img.status !== undefined &&
+            img.status !== 'completed' &&
+            img.status !== 'failed' &&
+            img.status !== 'cancelled');
+    const isFailed = !img.completing && (img.status === 'failed' || img.status === 'cancelled');
+    if (isBuilding || isFailed) return false;
+
+    const video = isVideoItem(img);
+    if (labKind === 'video' && !video) return false;
+    if (labKind === 'image' && video) return false;
+
+    return Boolean(video ? img.videoUrl || img.src : img.src);
+}
 
 const TIME_FILTER_IDS = ['all', '1d', '2d', '3d', '7d'] as const;
 const TIME_FILTER_DAYS: Record<(typeof TIME_FILTER_IDS)[number], number | null> = {
@@ -140,6 +169,7 @@ export default function ImageLabLibrary({
     hideAlbums = false,
     hideMethodFilters = false,
     hidePrompt = false,
+    labKind,
 }: Props) {
     const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'albums'>('generation');
@@ -170,7 +200,11 @@ export default function ImageLabLibrary({
         });
     }, [images, search, favoritesOnly, timeFilter, methodFilter, hideMethodFilters]);
 
-    const preview = previewIndex !== null ? filtered[previewIndex] : null;
+    const previewableItems = useMemo(
+        () => filtered.filter((img) => isPreviewableItem(img, labKind)),
+        [filtered, labKind],
+    );
+    const preview = previewIndex !== null ? previewableItems[previewIndex] ?? null : null;
     const hasImages = images.length > 0;
     const hasResults = filtered.length > 0;
     const libraryFilterCount =
@@ -200,7 +234,7 @@ export default function ImageLabLibrary({
     };
 
     const openPreview = (id: string) => {
-        const idx = filtered.findIndex((i) => i.id === id);
+        const idx = previewableItems.findIndex((i) => i.id === id);
         if (idx >= 0) setPreviewIndex(idx);
     };
 
@@ -796,10 +830,16 @@ export default function ImageLabLibrary({
                     <ImageLabPreviewModal
                         image={preview}
                         index={previewIndex}
-                        total={filtered.length}
+                        total={previewableItems.length}
                         onClose={closePreview}
-                        onPrev={() => setPreviewIndex((i) => (i === null ? 0 : (i - 1 + filtered.length) % filtered.length))}
-                        onNext={() => setPreviewIndex((i) => (i === null ? 0 : (i + 1) % filtered.length))}
+                        onPrev={() =>
+                            setPreviewIndex((i) =>
+                                i === null ? 0 : (i - 1 + previewableItems.length) % previewableItems.length,
+                            )
+                        }
+                        onNext={() =>
+                            setPreviewIndex((i) => (i === null ? 0 : (i + 1) % previewableItems.length))
+                        }
                         onToggleFavorite={onToggleFavorite}
                         onDelete={onDelete}
                         onReuseSettings={onReuseSettings}

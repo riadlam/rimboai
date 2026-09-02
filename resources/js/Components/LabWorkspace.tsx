@@ -1459,6 +1459,7 @@ function LabWorkspaceInner({
                                 <ImageLabLibrary
                                     images={images}
                                     generating={imageGenerating || videoGenerating}
+                                    labKind={isVideoLab ? 'video' : isImageLab ? 'image' : undefined}
                                     onToggleFavorite={toggleFavorite}
                                     onDelete={deleteImages}
                                     onReuseSettings={handleReuseSettings}

@@ -104,7 +104,9 @@
     "collectionsEmptyHint": "Organize voiceovers into reusable sets.",
     "newTrack": "New track",
     "vocals": "Vocals",
-    "play": "Play"
+    "play": "Play",
+    "previous": "Previous",
+    "next": "Next"
   },
   "model": "Model",
   "selectModel": "Select Model",

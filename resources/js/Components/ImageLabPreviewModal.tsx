@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
+import VideoThumb, { getCachedVideoPoster } from '@/Components/VideoThumb';
 import { captureVideoLastFrameFile } from '@/lib/labReuse';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 
@@ -88,6 +89,7 @@ export default function ImageLabPreviewModal({
     const [reusing, setReusing] = useState(false);
     const [capturingFrame, setCapturingFrame] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [videoLightboxOpen, setVideoLightboxOpen] = useState(false);
 
     const isVideo =
         image.method === 'text-to-video' ||
@@ -96,6 +98,11 @@ export default function ImageLabPreviewModal({
         Boolean(image.videoUrl);
 
     const mediaUrl = isVideo ? image.videoUrl || image.src : image.src;
+    const posterUrl = isVideo
+        ? image.src && image.src !== mediaUrl
+            ? image.src
+            : getCachedVideoPoster(mediaUrl)
+        : undefined;
     const modelDisplay = image.modelName?.trim() ? formatModelName(image.modelName.trim()) : '—';
     const downloadName = isVideo ? `video-${image.id}.mp4` : `image-${image.id}.jpg`;
 
@@ -150,17 +157,31 @@ export default function ImageLabPreviewModal({
 
     useEffect(() => {
         setLightboxOpen(false);
+        setVideoLightboxOpen(false);
         setZoom(1);
     }, [image.id]);
 
     useEffect(() => {
-        if (!lightboxOpen) return;
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setLightboxOpen(false);
+            if (e.key === 'Escape') {
+                if (videoLightboxOpen) {
+                    setVideoLightboxOpen(false);
+                    return;
+                }
+                if (lightboxOpen) {
+                    setLightboxOpen(false);
+                    return;
+                }
+                onClose();
+                return;
+            }
+            if (lightboxOpen || videoLightboxOpen) return;
+            if (e.key === 'ArrowLeft') onPrev?.();
+            if (e.key === 'ArrowRight') onNext?.();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [lightboxOpen]);
+    }, [lightboxOpen, videoLightboxOpen, onClose, onPrev, onNext]);
 
     const ratio =
         image.aspect && /^\d+:\d+$/.test(image.aspect)
@@ -204,7 +225,7 @@ export default function ImageLabPreviewModal({
 
                     <div
                         className={`relative overflow-hidden rounded-[5px] bg-[#14141c] transition-transform duration-200 ${
-                            !isVideo ? 'cursor-zoom-in' : ''
+                            !isVideo ? 'cursor-zoom-in' : 'cursor-pointer'
                         }`}
                         style={{
                             aspectRatio: ratio,
@@ -214,26 +235,35 @@ export default function ImageLabPreviewModal({
                             maxHeight: '100%',
                             transform: isVideo ? undefined : `scale(${zoom})`,
                         }}
-                        onClick={!isVideo ? () => setLightboxOpen(true) : undefined}
-                        role={!isVideo ? 'button' : undefined}
-                        tabIndex={!isVideo ? 0 : undefined}
-                        onKeyDown={
-                            !isVideo
-                                ? (e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                          e.preventDefault();
-                                          setLightboxOpen(true);
-                                      }
-                                  }
-                                : undefined
-                        }
-                        aria-label={!isVideo ? 'View full image' : undefined}
+                        onClick={isVideo ? () => setVideoLightboxOpen(true) : () => setLightboxOpen(true)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                if (isVideo) setVideoLightboxOpen(true);
+                                else setLightboxOpen(true);
+                            }
+                        }}
+                        aria-label={isVideo ? t('library.play') : 'View full image'}
                     >
                         {isVideo ? (
-                            <LabVideoPlayer
-                                src={mediaUrl}
-                                poster={image.src !== mediaUrl ? image.src : undefined}
-                            />
+                            <>
+                                <VideoThumb
+                                    src={mediaUrl}
+                                    poster={posterUrl}
+                                    seekTo={0.15}
+                                    playOnHover={false}
+                                    className="absolute inset-0 size-full object-contain object-center"
+                                />
+                                <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                    <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm">
+                                        <svg className="ms-0.5 h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z" />
+                                        </svg>
+                                    </span>
+                                </span>
+                            </>
                         ) : (
                             <img
                                 key={image.id}
@@ -282,18 +312,24 @@ export default function ImageLabPreviewModal({
                     {total > 1 && onPrev && onNext && (
                         <>
                             <NavArrow
-                                side="left"
+                                direction="prev"
+                                label={t('library.previous')}
                                 onClick={() => {
                                     setZoom(1);
                                     setCopied(false);
+                                    setLightboxOpen(false);
+                                    setVideoLightboxOpen(false);
                                     onPrev();
                                 }}
                             />
                             <NavArrow
-                                side="right"
+                                direction="next"
+                                label={t('library.next')}
                                 onClick={() => {
                                     setZoom(1);
                                     setCopied(false);
+                                    setLightboxOpen(false);
+                                    setVideoLightboxOpen(false);
                                     onNext();
                                 }}
                             />
@@ -579,6 +615,55 @@ export default function ImageLabPreviewModal({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Full-screen video cinema — tap video to open; explicit close control */}
+            <AnimatePresence>
+                {videoLightboxOpen && isVideo && (
+                    <motion.div
+                        key="video-lightbox"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        className="fixed inset-0 z-[70] flex flex-col bg-black/95 backdrop-blur-md"
+                        onClick={() => setVideoLightboxOpen(false)}
+                    >
+                        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pb-8 pt-[max(0.75rem,env(safe-area-inset-top))] bg-gradient-to-b from-black/80 to-transparent">
+                            <span className="pointer-events-none text-[13px] font-medium text-white/50">
+                                {index + 1} / {total}
+                            </span>
+                            <motion.button
+                                type="button"
+                                title={t('close')}
+                                aria-label={t('close')}
+                                initial={{ opacity: 0, scale: 0.85, y: -6 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVideoLightboxOpen(false);
+                                }}
+                                className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-lg backdrop-blur-md transition hover:bg-black/80"
+                            >
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path d="M18 6 6 18" />
+                                    <path d="m6 6 12 12" />
+                                </svg>
+                            </motion.button>
+                        </div>
+
+                        <div
+                            className="flex min-h-0 flex-1 items-center justify-center p-4 sm:p-8"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="h-full w-full max-h-[85vh] max-w-5xl">
+                                <LabVideoPlayer src={mediaUrl} poster={posterUrl} objectFit="contain" />
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 }
@@ -640,16 +725,31 @@ function DetailBtn({
     );
 }
 
-function NavArrow({ side, onClick }: { side: 'left' | 'right'; onClick: () => void }) {
+function NavArrow({
+    direction,
+    label,
+    onClick,
+}: {
+    direction: 'prev' | 'next';
+    label?: string;
+    onClick: () => void;
+}) {
     return (
         <button
             type="button"
+            aria-label={label}
             onClick={onClick}
-            className={`absolute top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/50 font-sans text-base text-zinc-200 backdrop-blur-md transition hover:bg-black/70 hover:text-white ${
-                side === 'left' ? 'start-3' : 'end-3'
+            className={`absolute top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/50 text-zinc-200 backdrop-blur-md transition hover:bg-black/70 hover:text-white ${
+                direction === 'prev' ? 'left-3' : 'right-3'
             }`}
         >
-            {side === 'left' ? '‹' : '›'}
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                {direction === 'prev' ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
+                ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6 6-6" />
+                )}
+            </svg>
         </button>
     );
 }

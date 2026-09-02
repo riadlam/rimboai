@@ -104,7 +104,9 @@
     "collectionsEmptyHint": "Organisez vos voix off en ensembles réutilisables.",
     "newTrack": "Nouveau titre",
     "vocals": "Voix",
-    "play": "Lecture"
+    "play": "Lecture",
+    "previous": "Précédent",
+    "next": "Suivant"
   },
   "model": "Modèle",
   "selectModel": "Sélectionner un modèle",

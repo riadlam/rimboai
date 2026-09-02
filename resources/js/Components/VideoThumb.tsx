@@ -26,6 +26,11 @@ type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'
 /** Module cache so scrolling a grid of videos doesn't re-capture the same first frame. */
 const framePosterCache = new Map<string, string>();
 
+/** Reuse a captured still when opening the preview modal (avoids black screen before play). */
+export function getCachedVideoPoster(src: string): string | undefined {
+    return framePosterCache.get(src);
+}
+
 function withTimeFragment(url: string, seconds: number): string {
     if (!url || url.includes('#') || url.startsWith('blob:') || url.startsWith('data:')) return url;
     return `${url}#t=${Math.max(0.05, seconds).toFixed(2)}`;
