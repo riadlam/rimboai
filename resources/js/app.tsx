@@ -6,7 +6,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import AppErrorBoundary from './Components/AppErrorBoundary';
 import { ThemeProvider } from './Context/ThemeContext';
 import { ModalProvider } from './Context/ModalContext';
-import { dismissAppBoot, scheduleAppBootTimeout } from './lib/appBoot';
+import { dismissAppBoot, scheduleAppBootTimeout, showAppBootError } from './lib/appBoot';
 import { applyLanguage, readSavedLang } from './lib/i18n';
 import { router } from '@inertiajs/react';
 
@@ -24,7 +24,7 @@ router.on('before', (event) => {
     };
 });
 
-createInertiaApp({
+void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) =>
         resolvePageComponent(
@@ -46,4 +46,7 @@ createInertiaApp({
     progress: {
         color: '#C721FF',
     },
+}).catch((error) => {
+    console.error('App boot failed:', error);
+    showAppBootError();
 });

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
+import legacy from '@vitejs/plugin-legacy';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath, URL } from 'node:url';
@@ -12,6 +13,9 @@ export default defineConfig({
         }),
         react(),
         tailwindcss(),
+        legacy({
+            targets: ['iOS >= 12', 'Android >= 8', 'Chrome >= 64', 'Safari >= 12'],
+        }),
     ],
     resolve: {
         alias: {

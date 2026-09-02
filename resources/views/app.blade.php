@@ -51,6 +51,22 @@
         })();
     </script>
 
+    <?php
+        $viteManifestPath = public_path('build/manifest.json');
+        $viteManifest = is_file($viteManifestPath)
+            ? json_decode(file_get_contents($viteManifestPath), true)
+            : [];
+        $legacyPolyfill = $viteManifest['vite/legacy-polyfills-legacy']['file'] ?? null;
+        $legacyEntry = $viteManifest['resources/js/app-legacy.tsx']['file'] ?? null;
+        $hasLegacyBundle = is_string($legacyPolyfill) && is_string($legacyEntry);
+    ?>
+
+    @if ($hasLegacyBundle)
+        {{-- Detect module-capable WebViews that cannot parse the modern production bundle. --}}
+        <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();window.__vite_is_modern_browser=true</script>
+        <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("Loading compatibility bundle");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");if(!e)return;n.src=e.src;n.onload=function(){System.import(document.getElementById("vite-legacy-entry").getAttribute("data-src"))};document.body.appendChild(n)}();</script>
+    @endif
+
     @viteReactRefresh
     @vite(['resources/css/app.css', 'resources/js/app.tsx'])
     @inertiaHead
@@ -69,12 +85,27 @@
         style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;background:#0d0d12;color:#e4e4e7;font-family:system-ui,-apple-system,sans-serif"
     >
         <img src="/storage/ai_icons/logo_icon_only.png" alt="" width="56" height="56" style="width:3.5rem;height:3.5rem;border-radius:1rem" />
-        <p style="margin:0;font-size:0.875rem;color:#a1a1aa">Loading…</p>
-        <p data-boot-hint hidden style="margin:0;max-width:16rem;padding:0 1rem;font-size:0.75rem;line-height:1.5;text-align:center;color:#71717a">
-            Taking too long? Tap ⋯ in the menu and choose &ldquo;Open in browser&rdquo;.
-        </p>
+        <p data-boot-loading style="margin:0;font-size:0.875rem;color:#a1a1aa">Loading…</p>
+        <div data-boot-error hidden style="max-width:20rem;padding:0 1rem;text-align:center">
+            <p style="margin:0;font-size:0.875rem;line-height:1.5;color:#d4d4d8">
+                This browser could not start the app.
+            </p>
+            <p style="margin:.5rem 0 0;font-size:.75rem;line-height:1.5;color:#71717a">
+                Refresh this page, or tap ⋯ and choose &ldquo;Open in browser&rdquo;.
+            </p>
+            <button
+                type="button"
+                onclick="location.reload()"
+                style="margin-top:1rem;border:0;border-radius:.75rem;background:#FF5733;padding:.65rem 1.25rem;color:white;font:600 .875rem system-ui,-apple-system,sans-serif"
+            >Refresh</button>
+        </div>
     </div>
     @inertia
+    @if ($hasLegacyBundle)
+        <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
+        <script nomodule crossorigin id="vite-legacy-polyfill" src="{{ asset('build/'.$legacyPolyfill) }}"></script>
+        <script nomodule crossorigin id="vite-legacy-entry" data-src="{{ asset('build/'.$legacyEntry) }}">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+    @endif
     <noscript>
         <div style="max-width:48rem;margin:2rem auto;padding:0 1rem;font-family:system-ui,sans-serif">
             <h1>{{ config('seo.site_name', config('app.name')) }}</h1>

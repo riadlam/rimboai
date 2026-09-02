@@ -5,6 +5,16 @@ export function dismissAppBoot(): void {
     document.getElementById(BOOT_ID)?.remove();
 }
 
+export function showAppBootError(): void {
+    const boot = document.getElementById(BOOT_ID);
+    if (!boot) return;
+
+    const loading = boot.querySelector<HTMLElement>('[data-boot-loading]');
+    const error = boot.querySelector<HTMLElement>('[data-boot-error]');
+    if (loading) loading.hidden = true;
+    if (error) error.hidden = false;
+}
+
 export function scheduleAppBootTimeout(): void {
     if (typeof window === 'undefined') return;
 
@@ -12,9 +22,6 @@ export function scheduleAppBootTimeout(): void {
         const boot = document.getElementById(BOOT_ID);
         if (!boot) return;
 
-        const hint = boot.querySelector<HTMLElement>('[data-boot-hint]');
-        if (hint) {
-            hint.hidden = false;
-        }
+        showAppBootError();
     }, BOOT_TIMEOUT_MS);
 }
