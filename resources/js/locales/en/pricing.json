@@ -67,7 +67,7 @@
     "paymentOk": "Payment confirmed.",
     "tokensAdded": "{{count}} tokens added.",
     "paymentFailed": "Payment was not completed.",
-    "switchDzd": "Payments are processed in Algerian Dinar (DZD) via SofizPay. Prices switched to DZD — tap Get Started again to continue.",
+    "switchDzd": "Payments are processed in Algerian Dinar (DZD) via Algerie Post. Prices switched to DZD — tap Get Started again to continue.",
     "checkoutError": "Could not start the payment. Please try again.",
     "networkError": "Network error. Please try again."
   },
@@ -81,7 +81,7 @@
     "q4": "Can I top up again later?",
     "a4": "Anytime. Open Buy Tokens from the header or Pricing page.",
     "q5": "What currencies can I view?",
-    "a5": "Prices are shown in USD, EUR, GBP, or DZD. Checkout in Algeria is processed in DZD via SofizPay.",
+    "a5": "Prices are shown in USD, EUR, GBP, or DZD. Checkout in Algeria is processed in DZD via Algerie Post.",
     "q6": "What if I only want to try the platform?",
     "a6": "Create a free account and claim starter tokens to explore the Lab."
   }

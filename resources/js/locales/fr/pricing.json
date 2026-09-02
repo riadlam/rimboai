@@ -67,7 +67,7 @@
     "paymentOk": "Paiement confirmé.",
     "tokensAdded": "{{count}} jetons ajoutés.",
     "paymentFailed": "Le paiement n'a pas été finalisé.",
-    "switchDzd": "Les paiements sont traités en dinar algérien (DZD) via SofizPay. Prix basculés en DZD — appuyez à nouveau sur Commencer pour continuer.",
+    "switchDzd": "Les paiements sont traités en dinar algérien (DZD) via Algérie Post. Prix basculés en DZD — appuyez à nouveau sur Commencer pour continuer.",
     "checkoutError": "Impossible de démarrer le paiement. Veuillez réessayer.",
     "networkError": "Erreur réseau. Veuillez réessayer."
   },
@@ -81,7 +81,7 @@
     "q4": "Puis-je recharger plus tard ?",
     "a4": "À tout moment. Ouvrez Acheter des jetons depuis l'en-tête ou la page Tarifs.",
     "q5": "Quelles devises puis-je afficher ?",
-    "a5": "Les prix s'affichent en USD, EUR, GBP ou DZD. Le paiement en Algérie est traité en DZD via SofizPay.",
+    "a5": "Les prix s'affichent en USD, EUR, GBP ou DZD. Le paiement en Algérie est traité en DZD via Algérie Post.",
     "q6": "Et si je veux seulement essayer la plateforme ?",
     "a6": "Créez un compte gratuit et récupérez des jetons de démarrage pour explorer le Lab."
   }
