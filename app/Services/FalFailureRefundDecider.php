@@ -48,6 +48,12 @@ class FalFailureRefundDecider
         $creation->refresh();
 
         if ($this->walletCost->wasFalCharged($creation)) {
+            try {
+                app(CreationTelegramNotifier::class)->notifyFailedCharged($type, $creation);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
             Log::info('fal.failure.no_user_refund_charged', [
                 'type' => $type,
                 'creation_id' => $creation->getKey(),

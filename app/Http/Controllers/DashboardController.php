@@ -457,7 +457,7 @@ class DashboardController extends Controller
     private function loadBrands(string $modelsTable, string $categoriesTable, ?FalImageInputBuilder $imageInputBuilder = null): \Illuminate\Support\Collection
     {
         $locale = app()->getLocale();
-        $cacheKey = "catalog.brands.v5.{$locale}.{$modelsTable}.{$categoriesTable}";
+        $cacheKey = \App\Services\CatalogCache::brandsKey($locale, $modelsTable, $categoriesTable);
 
         /** @var list<array<string, mixed>> $cached */
         $cached = Cache::remember(

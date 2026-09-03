@@ -12,6 +12,7 @@ use App\Services\FalVideoInputBuilder;
 use App\Services\FalWalletCostTracker;
 use App\Services\FalWebhookProcessor;
 use App\Services\LabCreationPresenter;
+use App\Services\MediaProbeService;
 use App\Services\MediaReferenceStorage;
 use App\Services\Tokens\TokenService;
 use App\Services\VideoModelCapabilities;
@@ -37,6 +38,7 @@ class VideoGenerationController extends Controller
         AssetPromptReferences $promptReferences,
         FalWalletCostTracker $walletCost,
         FalWebhookProcessor $processor,
+        MediaProbeService $mediaProbe,
     ): JsonResponse {
         $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
         if ($contentLength > 0 && $request->all() === [] && $request->allFiles() === []) {
@@ -269,14 +271,28 @@ class VideoGenerationController extends Controller
             ], 503);
         }
 
+        $referenceVideoSeconds = 0.0;
+        foreach ($videoFiles as $videoFile) {
+            if (! $videoFile instanceof UploadedFile) {
+                continue;
+            }
+            $probed = $mediaProbe->probeUploaded($videoFile);
+            if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
+                $referenceVideoSeconds += (float) $probed['duration'];
+            }
+        }
+
         $cost = $costEstimator->estimate([
             'endpoint_id' => $submitEndpoint,
             'unit' => $billing['unit'],
             'unit_price' => $billing['unit_price'],
             'duration_seconds' => $durationSeconds,
             'audio' => $withAudio,
+            'voice_control' => (bool) ($data['voice_control'] ?? $data['voice'] ?? false),
             'resolution' => $built['resolution'] ?? ($data['resolution'] ?? '720p'),
             'aspect' => $built['aspect_ratio'] ?? ($data['aspect'] ?? '16:9'),
+            'reference_video_seconds' => $referenceVideoSeconds,
+            'reference_image_count' => count($imageUrls),
         ]);
 
         if ((int) $cost['credits'] <= 0) {

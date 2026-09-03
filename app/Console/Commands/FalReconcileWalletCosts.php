@@ -19,15 +19,15 @@ use Illuminate\Database\Eloquent\Model;
 class FalReconcileWalletCosts extends Command
 {
     protected $signature = 'fal:reconcile-wallet-costs
-                            {--hours=48 : Look back this many hours}
-                            {--limit=40 : Max creations to reconcile per run}';
+                            {--hours=720 : Look back this many hours}
+                            {--limit=80 : Max creations to reconcile per run}';
 
-    protected $description = 'Reconcile fal cost_usd + wallet snapshots for recent Lab creations';
+    protected $description = 'Reconcile fal cost_usd + wallet snapshots for Lab creations (oldest first)';
 
     public function handle(FalWalletCostTracker $tracker, FalFailureRefundDecider $refundDecider): int
     {
         $hours = max(1, (int) $this->option('hours'));
-        $limit = max(1, min(100, (int) $this->option('limit')));
+        $limit = max(1, min(200, (int) $this->option('limit')));
         $since = now()->subHours($hours);
 
         $types = [
@@ -37,7 +37,7 @@ class FalReconcileWalletCosts extends Command
             'voice' => UserVoiceCreation::class,
         ];
 
-        $done = 0;
+        $queue = [];
 
         foreach ($types as $type => $class) {
             /** @var Builder $query */
@@ -46,34 +46,54 @@ class FalReconcileWalletCosts extends Command
                 ->whereNotNull('fal_request_id')
                 ->where(function (Builder $q) {
                     $q->whereNull('cost_usd')
-                        ->orWhereNull('fal_wallet_balance_after');
+                        ->orWhereNull('fal_wallet_balance_after')
+                        ->orWhere('cost_usd_source', 'wallet_delta')
+                        ->orWhere('cost_usd_source', 'zero_provisional')
+                        ->orWhere(function (Builder $inner) {
+                            $inner->where('cost_usd', 0)
+                                ->where(function (Builder $f) {
+                                    $f->whereNull('cost_usd_is_final')
+                                        ->orWhere('cost_usd_is_final', false);
+                                });
+                        });
                 })
                 ->whereIn('status', ['completed', 'failed'])
-                ->orderByDesc('id')
+                ->orderBy('id')
                 ->limit($limit);
 
-            /** @var Model $creation */
             foreach ($query->get() as $creation) {
-                $ageMinutes = $creation->created_at?->diffInMinutes(now()) ?? 0;
-                $finalizeZero = $ageMinutes >= 20 || (string) $creation->getAttribute('status') === 'failed';
-
-                $tracker->reconcile($creation, $finalizeZero && (string) $creation->status === 'failed');
-                $creation->refresh();
-
-                if ((string) $creation->getAttribute('status') === 'failed') {
-                    $refundDecider->finalize($type, $creation, $finalizeZero);
-                }
-
-                $done++;
-                $this->line(sprintf(
-                    '%s#%s status=%s cost=%s after=%s',
-                    $type,
-                    $creation->getKey(),
-                    $creation->getAttribute('status'),
-                    $creation->getAttribute('cost_usd') ?? 'null',
-                    $creation->getAttribute('fal_wallet_balance_after') ?? 'null',
-                ));
+                $queue[] = ['type' => $type, 'creation' => $creation, 'id' => (int) $creation->getKey()];
             }
+        }
+
+        usort($queue, fn ($a, $b) => $a['id'] <=> $b['id']);
+        $queue = array_slice($queue, 0, $limit);
+        $done = 0;
+
+        foreach ($queue as $item) {
+            $type = $item['type'];
+            /** @var Model $creation */
+            $creation = $item['creation'];
+            $ageMinutes = $creation->created_at?->diffInMinutes(now()) ?? 0;
+            $finalizeZero = $ageMinutes >= 20 || (string) $creation->getAttribute('status') === 'failed';
+
+            $tracker->reconcile($creation, $finalizeZero && (string) $creation->status === 'failed');
+            $creation->refresh();
+
+            if ((string) $creation->getAttribute('status') === 'failed') {
+                $refundDecider->finalize($type, $creation, $finalizeZero);
+            }
+
+            $done++;
+            $this->line(sprintf(
+                '%s#%s status=%s cost=%s after=%s source=%s',
+                $type,
+                $creation->getKey(),
+                $creation->getAttribute('status'),
+                $creation->getAttribute('cost_usd') ?? 'null',
+                $creation->getAttribute('fal_wallet_balance_after') ?? 'null',
+                $creation->getAttribute('cost_usd_source') ?? '—',
+            ));
         }
 
         $this->info("Reconciled {$done} creation(s).");

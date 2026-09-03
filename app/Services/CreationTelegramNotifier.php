@@ -145,30 +145,67 @@ class CreationTelegramNotifier
             return;
         }
 
+        if ($creation->getAttribute('cost_settled_notified_at') !== null) {
+            return;
+        }
+
         try {
             $creation->refresh();
+            if ($creation->getAttribute('cost_settled_notified_at') !== null) {
+                return;
+            }
+
             $user = User::query()->find($creation->getAttribute('user_id'));
-            $settings = is_array($creation->getAttribute('settings')) ? $creation->getAttribute('settings') : [];
-            $credits = $creation->getAttribute('credits_charged') ?? ($settings['credits'] ?? null);
             $mode = (string) ($creation->getAttribute('mode') ?? '');
+            $pnl = app(CreationProfitCalculator::class)->compute($creation, $creationType);
+
+            $title = $pnl['negative_nominal'] || $pnl['variance_alert']
+                ? '<b>⚠️ Creation cost settled</b>'
+                : '<b>Creation cost settled</b>';
 
             $lines = [
-                '<b>Creation cost settled</b>',
+                $title,
+                'Surface: '.$this->e($pnl['surface']),
                 'Type: '.$this->e($creationType),
                 'ID: '.(int) $creation->getKey(),
                 'Status: '.$this->e((string) ($creation->getAttribute('status') ?? '')),
                 'User: '.$this->e((string) ($user?->email ?? '—')).' (#'.(int) ($creation->getAttribute('user_id') ?? 0).')',
                 'Balance: '.number_format((int) ($user?->tokens ?? 0)).' tokens',
-                'Tokens charged: '.$this->fmtNum($credits),
-                'cost_usd: '.$this->fmtUsd($creation->getAttribute('cost_usd')),
-                'Wallet before: '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_before')),
-                'Wallet after: '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_after')),
-                'Deducted: '.$this->fmtUsd($creation->getAttribute('deducted_amount_from_main_wallet')),
-                'Mode: '.$this->e($mode !== '' ? $mode : '—'),
-                'Model: '.$this->e((string) ($creation->getAttribute('model_name') ?? '—')),
+                'Tokens charged: '.$this->fmtNum($pnl['tokens_charged']).($pnl['refunded'] ? ' (refunded)' : ''),
+                'Net tokens: '.$this->fmtNum($pnl['net_tokens']),
+                'Est. fal USD: '.$this->fmtUsd($pnl['estimated_fal_usd']),
+                'Actual fal USD: '.$this->fmtUsd($pnl['actual_fal_usd']),
             ];
 
+            if ($pnl['estimate_variance_percent'] !== null) {
+                $lines[] = 'Estimate Δ: '.$this->fmtUsd($pnl['estimate_delta_usd'])
+                    .' ('.$pnl['estimate_variance_percent'].'%)';
+            }
+
+            $lines[] = 'Nominal revenue: '.$this->fmtUsd($pnl['nominal_revenue_usd']);
+            $lines[] = 'Nominal profit: '.$this->fmtUsd($pnl['nominal_profit_usd'])
+                .($pnl['nominal_margin_percent'] !== null ? ' ('.$pnl['nominal_margin_percent'].'%)' : '');
+
+            if ($pnl['cash_available']) {
+                $lines[] = 'Cash revenue: '.$this->fmtUsd($pnl['cash_revenue_usd'])
+                    .' / '.number_format((float) ($pnl['cash_revenue_dzd'] ?? 0), 2).' DZD';
+                $lines[] = 'Cash profit: '.$this->fmtUsd($pnl['cash_profit_usd'])
+                    .($pnl['cash_margin_percent'] !== null ? ' ('.$pnl['cash_margin_percent'].'%)' : '');
+            } else {
+                $lines[] = 'Cash profit: unavailable ('.$this->e((string) ($pnl['cash_note'] ?? 'legacy/free tokens')).')';
+            }
+
+            $lines[] = 'Wallet before: '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_before'));
+            $lines[] = 'Wallet after: '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_after'));
+            $lines[] = 'Deducted: '.$this->fmtUsd($creation->getAttribute('deducted_amount_from_main_wallet'));
+            $lines[] = 'Mode: '.$this->e($mode !== '' ? $mode : '—');
+            $lines[] = 'Model: '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
+
             $this->telegram->send(implode("\n", $lines));
+
+            if ($creation->isFillable('cost_settled_notified_at') || array_key_exists('cost_settled_notified_at', $creation->getAttributes())) {
+                $creation->forceFill(['cost_settled_notified_at' => now()])->save();
+            }
         } catch (Throwable $e) {
             report($e);
             Log::warning('CreationTelegramNotifier notifyCostSettled failed', [
@@ -176,6 +213,50 @@ class CreationTelegramNotifier
                 'creation_id' => $creation->getKey(),
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    public function notifyRefunded(User $user, string $creationType, Model $creation, string $reason): void
+    {
+        if (! $this->telegram->isConfigured()) {
+            return;
+        }
+
+        try {
+            $credits = $creation->getAttribute('credits_charged');
+            $this->telegram->send(implode("\n", [
+                '<b>↩️ Tokens refunded</b>',
+                'Type: '.$this->e($creationType),
+                'ID: '.(int) $creation->getKey(),
+                'User: '.$this->e((string) ($user->email ?? '—')),
+                'Tokens: '.$this->fmtNum($credits),
+                'Reason: '.$this->e($reason),
+                'Balance: '.number_format((int) $user->tokens),
+            ]));
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    public function notifyFailedCharged(string $creationType, Model $creation): void
+    {
+        if (! $this->telegram->isConfigured()) {
+            return;
+        }
+
+        try {
+            $user = User::query()->find($creation->getAttribute('user_id'));
+            $this->telegram->send(implode("\n", [
+                '<b>⚠️ Failed creation — fal billed, tokens kept</b>',
+                'Type: '.$this->e($creationType),
+                'ID: '.(int) $creation->getKey(),
+                'User: '.$this->e((string) ($user?->email ?? '—')),
+                'Tokens charged: '.$this->fmtNum($creation->getAttribute('credits_charged')),
+                'cost_usd: '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+                'Endpoint: '.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')),
+            ]));
+        } catch (Throwable $e) {
+            report($e);
         }
     }
 

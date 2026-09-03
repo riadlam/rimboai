@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Credits\CreditCalculator;
 use App\Models\User;
 use App\Services\CreationTelegramNotifier;
+use App\Services\Tokens\TokenLotLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -73,15 +74,22 @@ class GoogleAuthController extends Controller
             }
         } else {
             $isNewUser = true;
+            $starter = app(CreditCalculator::class)->starterTokens();
             $user = User::create([
                 'name' => $googleUser->getName() ?: Str::before($email, '@'),
                 'email' => $email,
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
                 'password' => null,
-                'tokens' => app(CreditCalculator::class)->starterTokens(),
+                'tokens' => $starter,
                 'email_verified_at' => now(),
             ]);
+
+            try {
+                app(TokenLotLedger::class)->grantStarter($user, $starter);
+            } catch (Throwable $e) {
+                report($e);
+            }
 
             try {
                 app(CreationTelegramNotifier::class)->notifyNewRegistration($user, 'google');

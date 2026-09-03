@@ -42,6 +42,8 @@ export type ToolCreditOptions = {
     inputHeight?: number;
     /** Selected "2x"/"4x" scale control (upscaler). */
     scale?: string;
+    pass2?: boolean;
+    samMask?: boolean;
 };
 
 export type ToolCreditEstimate = {
@@ -199,11 +201,27 @@ export function estimateToolCredits(
     options: ToolCreditOptions = {},
     config: CreditsConfig = DEFAULT_CONFIG,
 ): ToolCreditEstimate {
+    const endpoint = String(billing?.endpoint_id || '').toLowerCase();
+    if (endpoint.includes('void-video-inpainting') || endpoint.includes('void')) {
+        const pass2 = Boolean((options as { pass2?: boolean }).pass2);
+        const sam = Boolean((options as { samMask?: boolean }).samMask);
+        const falCostUsd = round6(0.05 + (pass2 ? 0.05 : 0) + (sam ? 0.05 : 0));
+        return {
+            falCostUsd,
+            credits: toolCreditsFromFalUsd(falCostUsd, config),
+            billableUnits: 1,
+            unit: 'video',
+        };
+    }
+
     if (!billing || !(billing.unit_price > 0)) {
         return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: billing?.unit || 'seconds' };
     }
 
     const unit = normalizeUnit(billing.unit);
+    if (unit === 'unit' || unit === 'units') {
+        return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: 'unsupported' };
+    }
     // Upscalers bill by real output resolution (input short edge × scale factor).
     const resolution = upscalerOutputResolution(
         billing,

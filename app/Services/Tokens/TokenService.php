@@ -41,6 +41,12 @@ class TokenService
                 throw new InvalidArgumentException('Token reservation requires a persisted creation.');
             }
 
+            try {
+                app(TokenLotLedger::class)->consume($lockedUser, $amount, $creationType, (int) $creation->getKey());
+            } catch (Throwable $e) {
+                report($e);
+            }
+
             $lockedUser->tokens = $available - $amount;
             $lockedUser->save();
 
@@ -104,6 +110,22 @@ class TokenService
                 $lockedUser->tokens = (int) $lockedUser->tokens + $amount;
                 $lockedUser->save();
 
+                try {
+                    $lots = app(TokenLotLedger::class);
+                    if (($metadata['reason'] ?? '') === 'sofizpay_purchase' && isset($metadata['payment_id'])) {
+                        $lots->grantPurchase(
+                            $lockedUser,
+                            $amount,
+                            (float) ($metadata['amount_dzd'] ?? 0),
+                            (int) $metadata['payment_id'],
+                        );
+                    } elseif (($metadata['reason'] ?? '') === 'starter_grant') {
+                        $lots->grantStarter($lockedUser, $amount);
+                    }
+                } catch (Throwable $e) {
+                    report($e);
+                }
+
                 DB::table('token_transactions')->insert([
                     'user_id' => $lockedUser->getKey(),
                     'kind' => 'credit',
@@ -166,6 +188,12 @@ class TokenService
                 $lockedUser->tokens = (int) $lockedUser->tokens + $amount;
                 $lockedUser->save();
 
+                try {
+                    app(TokenLotLedger::class)->restore($lockedUser, $creationType, (int) $creation->getKey());
+                } catch (Throwable $e) {
+                    report($e);
+                }
+
                 DB::table('token_transactions')->insert([
                     'user_id' => $lockedUser->getKey(),
                     'kind' => 'refund',
@@ -185,6 +213,11 @@ class TokenService
 
             if ($applied) {
                 $this->broadcastBalance($user);
+                try {
+                    app(CreationTelegramNotifier::class)->notifyRefunded($user, $creationType, $creation, $reason);
+                } catch (Throwable $e) {
+                    report($e);
+                }
             }
 
             return $applied;

@@ -11,6 +11,7 @@ class ToolGenerationCostEstimator
 {
     public function __construct(
         private readonly CreditCalculator $credits,
+        private readonly FalEndpointPricingPolicy $policy,
     ) {}
 
     /**
@@ -144,6 +145,26 @@ class ToolGenerationCostEstimator
     {
         $endpointId = (string) ($options['endpoint_id'] ?? '');
         $unit = $this->normalizeUnit($options['unit'] ?? 'seconds');
+
+        $void = $this->policy->quoteVoid([
+            'endpoint_id' => $endpointId,
+            'unit' => $unit,
+            'unit_price' => (float) ($options['unit_price'] ?? 0),
+            'duration_seconds' => (float) ($options['duration_seconds'] ?? 0),
+            'pass2' => (bool) ($options['pass2'] ?? false),
+            'sam_mask' => (bool) ($options['sam_mask'] ?? false),
+        ]);
+        if ($void !== null) {
+            return $this->pack($void['fal_cost_usd'], $void['billable_units'], $void['unit'], $void['unit_price'], $void['breakdown']);
+        }
+
+        if (in_array($unit, ['unit', 'units'], true)) {
+            return $this->pack(0.0, 0.0, $unit, 0.0, [
+                'formula' => 'unsupported_opaque_unit',
+                'policy' => 'fail_closed',
+            ]);
+        }
+
         $maxDuration = isset($options['max_duration']) ? (int) $options['max_duration'] : null;
         $duration = self::snapBillableDuration(
             (float) ($options['duration_seconds'] ?? 0),

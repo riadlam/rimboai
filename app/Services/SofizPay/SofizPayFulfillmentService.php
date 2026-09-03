@@ -106,6 +106,8 @@ class SofizPayFulfillmentService
                     'reason' => 'sofizpay_purchase',
                     'reference' => $p->reference,
                     'package' => $p->package_slug,
+                    'payment_id' => $p->id,
+                    'amount_dzd' => (float) $p->amount,
                 ]);
             }
 

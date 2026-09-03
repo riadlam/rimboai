@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Services\Credits\CreditCalculator;
 use App\Models\User;
 use App\Services\CreationTelegramNotifier;
+use App\Services\Tokens\TokenLotLedger;
 
 class AuthController extends Controller
 {
@@ -47,12 +48,19 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
+        $starter = app(CreditCalculator::class)->starterTokens();
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'tokens' => app(CreditCalculator::class)->starterTokens(),
+            'tokens' => $starter,
         ]);
+
+        try {
+            app(TokenLotLedger::class)->grantStarter($user, $starter);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         try {
             app(CreationTelegramNotifier::class)->notifyNewRegistration($user, 'email');
@@ -62,8 +70,6 @@ class AuthController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
-
-        $starter = app(CreditCalculator::class)->starterTokens();
 
         return redirect(route('home'))->with('welcome', ['tokens' => $starter]);
     }

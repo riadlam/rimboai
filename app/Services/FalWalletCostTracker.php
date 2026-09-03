@@ -118,18 +118,25 @@ class FalWalletCostTracker
     {
         $hadCostUsd = $creation->getAttribute('cost_usd') !== null
             && is_numeric($creation->getAttribute('cost_usd'));
+        $source = (string) ($creation->getAttribute('cost_usd_source') ?? '');
+        $isFinal = (bool) $creation->getAttribute('cost_usd_is_final');
+        $provisional = in_array($source, ['wallet_delta', 'zero_provisional'], true)
+            || ($hadCostUsd && ! $isFinal && (float) $creation->getAttribute('cost_usd') <= 0);
 
         $updates = [];
 
         $cost = $creation->getAttribute('cost_usd');
-        if ($cost === null) {
+        $cost = $cost !== null && is_numeric($cost) ? (float) $cost : null;
+
+        if ($cost === null || $provisional) {
             $resolved = $this->resolveCostUsd($creation);
             if ($resolved !== null) {
                 $cost = $resolved;
                 $updates['cost_usd'] = $resolved;
+                $updates['cost_usd_source'] = 'billing_events';
+                $updates['cost_usd_is_final'] = true;
+                $updates['settled_at'] = now();
             }
-        } else {
-            $cost = is_numeric($cost) ? (float) $cost : null;
         }
 
         $before = $creation->getAttribute('fal_wallet_balance_before');
@@ -151,9 +158,13 @@ class FalWalletCostTracker
             if ($delta > 0.0000001) {
                 $cost = round($delta, 8);
                 $updates['cost_usd'] = $cost;
+                $updates['cost_usd_source'] = 'wallet_delta';
+                $updates['cost_usd_is_final'] = false;
             } elseif ($finalizeZeroCharge && abs($delta) <= 0.0000001) {
                 $cost = 0.0;
                 $updates['cost_usd'] = 0.0;
+                $updates['cost_usd_source'] = 'zero_provisional';
+                $updates['cost_usd_is_final'] = false;
             }
         }
 
@@ -170,13 +181,18 @@ class FalWalletCostTracker
             }
         }
 
-        $costJustSet = ! $hadCostUsd && array_key_exists('cost_usd', $updates);
+        $shouldNotify = array_key_exists('cost_usd', $updates)
+            && $creation->getAttribute('cost_settled_notified_at') === null
+            && (
+                ! $hadCostUsd
+                || (($updates['cost_usd_source'] ?? '') === 'billing_events')
+            );
 
         if ($updates !== []) {
             $creation->forceFill($updates)->save();
         }
 
-        if ($costJustSet) {
+        if ($shouldNotify) {
             $type = $this->creationType($creation);
             if ($type !== null) {
                 try {
@@ -219,6 +235,14 @@ class FalWalletCostTracker
     {
         $cost = $creation->getAttribute('cost_usd');
         if ($cost === null || ! is_numeric($cost)) {
+            return false;
+        }
+
+        $source = (string) ($creation->getAttribute('cost_usd_source') ?? '');
+        if (in_array($source, ['wallet_delta', 'zero_provisional'], true)) {
+            return false;
+        }
+        if ((float) $cost <= 0 && ! (bool) $creation->getAttribute('cost_usd_is_final')) {
             return false;
         }
 

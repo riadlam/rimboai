@@ -12,8 +12,8 @@ Artisan::command('inspire', function () {
 // Runs in background without overlapping so a slow run never stacks.
 // Sends a run report to Telegram on completion (see FalSyncPricing).
 Schedule::command('fal:sync-pricing')
-    ->everyTenMinutes()
-    ->withoutOverlapping(10)
+    ->everyFiveMinutes()
+    ->withoutOverlapping(5)
     ->runInBackground();
 
 // Drain delayed jobs (wallet cost reconcile, etc.) on shared hosting without a queue daemon.
@@ -23,7 +23,7 @@ Schedule::command('queue:work database --stop-when-empty --max-time=50 --tries=1
     ->runInBackground();
 
 // Safety net if queue drain missed a job: fill cost_usd / wallet-after on recent creations.
-Schedule::command('fal:reconcile-wallet-costs --hours=48 --limit=40')
+Schedule::command('fal:reconcile-wallet-costs --hours=720 --limit=80')
     ->everyFiveMinutes()
     ->withoutOverlapping(5)
     ->runInBackground();

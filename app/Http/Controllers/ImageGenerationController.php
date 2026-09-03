@@ -246,12 +246,26 @@ class ImageGenerationController extends Controller
         if (! $creation->isTerminal() && $creation->fal_request_id) {
             $processor->syncFromFal('image', $creation);
             $creation->refresh();
-        } elseif (
-            $creation->status === UserImageCreation::STATUS_COMPLETED
-            && $creation->fal_request_id
+        }
+
+        if (
+            $creation->fal_request_id
+            && in_array($creation->status, [
+                UserImageCreation::STATUS_COMPLETED,
+                UserImageCreation::STATUS_FAILED,
+            ], true)
             && ! $walletCost->isFullyReconciled($creation)
         ) {
-            $walletCost->maybeFillCostUsd($creation);
+            try {
+                if ($creation->status === UserImageCreation::STATUS_COMPLETED) {
+                    $walletCost->recordAfterCompletion($creation);
+                } else {
+                    $walletCost->recordAfterFailure($creation);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+            $creation->refresh();
         }
 
         return response()->json($this->present($creation));

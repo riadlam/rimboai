@@ -36,10 +36,21 @@ class FalPricingService
                 continue;
             }
 
+            $select = ['endpoint_id', 'unit', 'unit_price'];
+            if (Schema::hasColumn($table, 'pricing_fetched_at')) {
+                $select[] = 'pricing_fetched_at';
+            }
+            if (Schema::hasColumn($table, 'pricing_checked_at')) {
+                $select[] = 'pricing_checked_at';
+            }
+            if (Schema::hasColumn($table, 'updated_at')) {
+                $select[] = 'updated_at';
+            }
+
             $row = DB::table($table)
                 ->where('endpoint_id', $endpointId)
                 ->where('status', 'active')
-                ->first(['endpoint_id', 'unit', 'unit_price']);
+                ->first($select);
 
             if (! $row) {
                 continue;
@@ -50,6 +61,16 @@ class FalPricingService
                     'endpoint_id' => $endpointId,
                     'table' => $table,
                     'unit_price' => $row->unit_price,
+                ]);
+
+                return null;
+            }
+
+            if ($this->isStale($row)) {
+                Log::warning('Active submit endpoint has stale catalog pricing.', [
+                    'endpoint_id' => $endpointId,
+                    'table' => $table,
+                    'pricing_fetched_at' => $row->pricing_fetched_at ?? null,
                 ]);
 
                 return null;
@@ -68,5 +89,26 @@ class FalPricingService
         ]);
 
         return null;
+    }
+
+    private function isStale(object $row): bool
+    {
+        $maxAge = max(0, (int) config('credits.pricing_max_age_minutes', 1440));
+        if ($maxAge <= 0) {
+            return false;
+        }
+
+        $fetched = $row->pricing_fetched_at ?? $row->pricing_checked_at ?? $row->updated_at ?? null;
+        if ($fetched === null || $fetched === '') {
+            return false;
+        }
+
+        try {
+            $at = \Illuminate\Support\Carbon::parse($fetched);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $at->lt(now()->subMinutes($maxAge));
     }
 }

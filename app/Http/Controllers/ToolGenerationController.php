@@ -10,6 +10,7 @@ use App\Services\FalToolInputBuilder;
 use App\Services\FalWalletCostTracker;
 use App\Services\FalWebhookProcessor;
 use App\Services\LabCreationPresenter;
+use App\Services\MediaProbeService;
 use App\Services\MediaReferenceStorage;
 use App\Services\Tokens\TokenService;
 use Illuminate\Http\JsonResponse;
@@ -87,6 +88,7 @@ class ToolGenerationController extends Controller
         TokenService $tokens,
         FalWalletCostTracker $walletCost,
         FalWebhookProcessor $processor,
+        MediaProbeService $mediaProbe,
     ): JsonResponse {
         if (! $fal->configured()) {
             return response()->json(['message' => 'Video service is not configured.'], 503);
@@ -197,12 +199,31 @@ class ToolGenerationController extends Controller
             }
         }
 
+        $probed = null;
+        $videoFile = $request->file('video');
+        if ($videoFile instanceof UploadedFile) {
+            $probed = $mediaProbe->probeUploaded($videoFile);
+            if ($probed === null || ($probed['duration'] ?? null) === null) {
+                return response()->json([
+                    'message' => 'Could not read the uploaded video. Try again or convert it to MP4.',
+                ], 422);
+            }
+        } elseif (! empty($urls['video']) && is_string($urls['video'])) {
+            $probed = $mediaProbe->probeUrl($urls['video']);
+        }
+
         $durationSeconds = isset($data['duration_seconds'])
             ? (float) $data['duration_seconds']
             : 0.0;
 
         if ($data['tool_slug'] === 'ai-video-extender') {
             $durationSeconds = (float) ($settings['duration'] ?? 5);
+        } elseif ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
+            $durationSeconds = (float) $probed['duration'];
+        } elseif ($videoFile instanceof UploadedFile) {
+            return response()->json([
+                'message' => 'Could not measure the uploaded video duration.',
+            ], 422);
         }
 
         $defaults = $this->decodeJson($model->defaults) ?? [];
@@ -256,7 +277,9 @@ class ToolGenerationController extends Controller
         $billDuration = $durationSeconds;
 
         $endpointId = (string) $model->endpoint_id;
-        $clientFps = isset($data['fps']) && is_numeric($data['fps']) ? (float) $data['fps'] : null;
+        $clientFps = ($probed['fps'] ?? null) !== null && is_numeric($probed['fps'] ?? null)
+            ? (float) $probed['fps']
+            : (isset($data['fps']) && is_numeric($data['fps']) ? (float) $data['fps'] : null);
         $estimateFps = $clientFps !== null && $clientFps > 0
             ? $clientFps
             : (\App\Services\Credits\ToolGenerationCostEstimator::usesWan22InputFrameBilling($endpointId)
@@ -269,12 +292,19 @@ class ToolGenerationController extends Controller
 
         // Upscalers (Topaz / ByteDance) bill by the ACTUAL output resolution, which is
         // the source's short edge × upscale factor — never the cheapest label default.
+        $inputHeight = isset($probed['height']) && is_numeric($probed['height'])
+            ? (int) $probed['height']
+            : (isset($data['input_height']) ? (int) $data['input_height'] : null);
+        $inputWidth = isset($probed['width']) && is_numeric($probed['width'])
+            ? (int) $probed['width']
+            : (isset($data['input_width']) ? (int) $data['input_width'] : null);
+
         $billingResolution = \App\Services\Tools\ToolWorkspaceBuilder::outputBillingResolution(
             $endpointId,
             $defaults,
             $settings,
-            isset($data['input_height']) ? (int) $data['input_height'] : null,
-            isset($data['input_width']) ? (int) $data['input_width'] : null,
+            $inputHeight,
+            $inputWidth,
             is_string($selectedResolution) ? $selectedResolution : null,
         ) ?? (is_string($selectedResolution) ? $selectedResolution : '720p');
 
@@ -296,6 +326,8 @@ class ToolGenerationController extends Controller
             'resolution' => $billingResolution,
             'fps' => $estimateFps,
             'pricing_defaults' => $defaults,
+            'pass2' => (bool) ($settings['pass2'] ?? $settings['pass_2'] ?? false),
+            'sam_mask' => (bool) ($settings['sam_mask'] ?? $settings['sam'] ?? false),
         ]);
 
         if ((int) $cost['credits'] <= 0) {

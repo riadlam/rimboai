@@ -212,12 +212,26 @@ class VoiceGenerationController extends Controller
         if (! $creation->isTerminal() && $creation->fal_request_id) {
             $processor->syncFromFal('voice', $creation);
             $creation->refresh();
-        } elseif (
-            $creation->status === UserVoiceCreation::STATUS_COMPLETED
-            && $creation->fal_request_id
+        }
+
+        if (
+            $creation->fal_request_id
+            && in_array($creation->status, [
+                UserVoiceCreation::STATUS_COMPLETED,
+                UserVoiceCreation::STATUS_FAILED,
+            ], true)
             && ! $walletCost->isFullyReconciled($creation)
         ) {
-            $walletCost->maybeFillCostUsd($creation);
+            try {
+                if ($creation->status === UserVoiceCreation::STATUS_COMPLETED) {
+                    $walletCost->recordAfterCompletion($creation);
+                } else {
+                    $walletCost->recordAfterFailure($creation);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+            $creation->refresh();
         }
 
         return response()->json($this->present($creation));
