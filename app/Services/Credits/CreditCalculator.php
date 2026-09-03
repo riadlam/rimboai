@@ -21,7 +21,7 @@ class CreditCalculator
 
     public function starterTokens(): int
     {
-        return max(0, (int) config('credits.starter_tokens', 50));
+        return max(0, (int) config('credits.starter_tokens', 25));
     }
 
     /**

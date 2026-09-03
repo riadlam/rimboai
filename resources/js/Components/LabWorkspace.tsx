@@ -418,7 +418,7 @@ function LabWorkspaceInner({
     const { pushError } = useLabToast();
     const { props: pageProps } = usePage<PageProps>();
     const resolvedCreditsConfig = creditsConfig ?? pageProps.creditsConfig;
-    const starterTokens = resolvedCreditsConfig?.starter_tokens ?? 50;
+    const starterTokens = resolvedCreditsConfig?.starter_tokens ?? 25;
     const isGuest = pageProps.auth.user === null;
     const [prompt, setPrompt] = useState('');
     const [tokenBalance, setTokenBalance] = useState(() => Math.max(0, pageProps.auth.user?.tokens ?? 0));

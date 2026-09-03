@@ -49,7 +49,7 @@ class UserResource extends Resource
                 TextInput::make('tokens')
                     ->required()
                     ->numeric()
-                    ->default(50)
+                    ->default(25)
                     ->minValue(0),
                 TextInput::make('avatar')
                     ->url()

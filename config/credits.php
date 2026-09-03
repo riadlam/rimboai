@@ -36,7 +36,7 @@ return [
     | min_credits.*: optional floor after markup (0 = disabled). Charge = ceil(Fal × markup).
     |
     */
-    'starter_tokens' => (int) env('CREDITS_STARTER_TOKENS', 50),
+    'starter_tokens' => (int) env('CREDITS_STARTER_TOKENS', 25),
 
     'min_credits' => [
         'video' => (int) env('CREDITS_MIN_VIDEO', 0),

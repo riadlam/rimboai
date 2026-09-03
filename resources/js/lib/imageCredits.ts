@@ -49,7 +49,7 @@ const DEFAULT_MIN_CREDITS: MinCreditsMap = {
 export const DEFAULT_CREDITS_CONFIG: CreditsConfig = {
     markup: 1.25,
     usd_per_credit: 0.01,
-    starter_tokens: 50,
+    starter_tokens: 25,
     min_credits: DEFAULT_MIN_CREDITS,
     elevenlabs_multiplier: 5,
 };

@@ -142,7 +142,7 @@ export default function WelcomeCreditsModal() {
     const welcome = props.flash?.welcome;
     const [open, setOpen] = useState(() => Boolean(welcome && typeof welcome.tokens === 'number'));
 
-    const count = welcome?.tokens ?? props.creditsConfig?.starter_tokens ?? 50;
+    const count = welcome?.tokens ?? props.creditsConfig?.starter_tokens ?? 25;
     const firstName = useMemo(() => {
         const name = props.auth.user?.name?.trim() ?? '';
         if (!name) return '';

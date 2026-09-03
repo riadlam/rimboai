@@ -174,7 +174,7 @@ export default function Pricing() {
     const { t: tc } = useTranslation('common');
     const { props } = usePage<PageProps>();
     const user = props.auth.user;
-    const starterTokens = props.creditsConfig?.starter_tokens ?? 50;
+    const starterTokens = props.creditsConfig?.starter_tokens ?? 25;
     const locale = intlLocale((i18n.language as 'en' | 'fr' | 'ar') || readSavedLang());
     const [currency, setCurrency] = useState<Currency>('DZD');
     const [modelTab, setModelTab] = useState<(typeof MODEL_TABS)[number]['id']>('image');
