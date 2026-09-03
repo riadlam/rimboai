@@ -1,0 +1,12 @@
+{
+  "resources/js/app-meta.tsx": {
+    "file": "assets/app-meta-D1AoVKzg.js",
+    "name": "app-meta",
+    "src": "resources/js/app-meta.tsx",
+    "isEntry": true
+  },
+  "style.css": {
+    "file": "assets/style-Oe_o5gmu.css",
+    "src": "style.css"
+  }
+}

@@ -26,6 +26,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\SetLocale::class,
             \App\Http\Middleware\ShareDefaultSeo::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
+        ], prepend: [
+            \App\Http\Middleware\EnforceCanonicalUrl::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

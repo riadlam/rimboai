@@ -18,11 +18,17 @@ use App\Http\Controllers\TrendsController;
 use App\Http\Controllers\ToolGenerationController;
 use App\Http\Controllers\VoiceGenerationController;
 use App\Http\Controllers\FalWebhookController;
+use App\Http\Controllers\ClientBootReportController;
 
 // fal.ai completion callbacks (CSRF exempt; signature-verified in controller).
 Route::post('/webhooks/fal', FalWebhookController::class)
     ->middleware('throttle:120,1')
     ->name('webhooks.fal');
+
+// Tiny same-origin pixel used only while the React application is still booting.
+Route::get('/client/boot-report.gif', ClientBootReportController::class)
+    ->middleware('throttle:30,1')
+    ->name('client.boot-report');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
