@@ -72,29 +72,46 @@ class SofizPayPaymentTelegramNotifier
         $status = (string) $payment->status;
         $email = (string) ($user?->email ?? '');
 
+        [$title, $subtitle, $statusEmoji] = match ($status) {
+            'paid' => ['🎉 <b>Token purchase — paid!</b>', 'tokens just landed in their wallet', '🟢'],
+            'canceled' => ['😅 <b>Token purchase — canceled</b>', 'they bailed at Algérie Poste', '🟠'],
+            'failed' => ['😵 <b>Token purchase — failed</b>', 'the bank said nope', '🔴'],
+            default => ['🛒 <b>Token purchase — checkout live</b>', 'waiting at Algérie Poste', '🟡'],
+        };
+
         $lines = [
-            '<b>Token purchase</b>',
-            'Status: <b>'.$this->e($status).'</b>',
-            'Pack: '.$this->e((string) $payment->package_slug),
-            'Tokens: '.number_format((int) $payment->tokens),
-            'Amount: '.number_format((float) $payment->amount, 2).' DZD',
-            'User: '.$this->e($email !== '' ? $email : '—').' (#'.(int) $payment->user_id.')',
-            'Ref: '.$this->e((string) $payment->reference),
+            $title,
+            '<i>'.$subtitle.'</i>',
+            $this->hr(),
+            $statusEmoji.' Status: <b>'.$this->e($status).'</b>',
+            '📦 Pack · <b>'.$this->e((string) $payment->package_slug).'</b>',
+            '🪙 Tokens · <b>'.number_format((int) $payment->tokens).'</b>',
+            '💵 Amount · <b>'.number_format((float) $payment->amount, 2).' DZD</b>',
+            '👤 User · '.$this->e($email !== '' ? $email : '—').' <code>#'.(int) $payment->user_id.'</code>',
+            '🧾 Ref · <code>'.$this->e((string) $payment->reference).'</code>',
         ];
 
         if ($status === 'pending') {
-            $lines[] = 'Checkout: waiting at Algérie Poste';
+            $lines[] = $this->hr();
+            $lines[] = '⏳ Checkout: waiting at Algérie Poste';
         }
 
         if ($status === 'paid' && $payment->paid_at) {
-            $lines[] = 'Paid at: '.$this->e($payment->paid_at->timezone('UTC')->format('Y-m-d H:i:s')).' UTC';
+            $lines[] = $this->hr();
+            $lines[] = '✅ Paid at · '.$this->e($payment->paid_at->timezone('UTC')->format('Y-m-d H:i:s')).' UTC';
         }
 
         if (($status === 'canceled' || $status === 'failed') && is_string($hint) && $hint !== '') {
-            $lines[] = 'Reason: '.$this->e($this->truncate($hint, 200));
+            $lines[] = $this->hr();
+            $lines[] = '💬 Reason · '.$this->e($this->truncate($hint, 200));
         }
 
         return implode("\n", $lines);
+    }
+
+    private function hr(): string
+    {
+        return '<i>────────────</i>';
     }
 
     private function e(string $value): string

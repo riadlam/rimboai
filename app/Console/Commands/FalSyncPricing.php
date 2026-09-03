@@ -104,58 +104,62 @@ class FalSyncPricing extends Command
         ));
 
         $lines = [];
-        $lines[] = $data['failed']
-            ? '<b>⚠️ fal Pricing Sync — Failed</b>'
-            : '<b>🔄 fal Pricing Sync — Done</b>';
+        $hasChanges = $deactivations !== [] || $reactivations !== [] || $priceChanges !== [];
+
+        if ($data['failed']) {
+            $lines[] = '💥 <b>fal Pricing Sync — yeeted</b>';
+            $lines[] = '<i>something exploded · prices may be stale</i>';
+        } elseif ($hasChanges) {
+            $lines[] = '✨ <b>fal Pricing Sync — fresh drops</b>';
+            $lines[] = '<i>catalogue got a little glow-up</i>';
+        } else {
+            $lines[] = '😴 <b>fal Pricing Sync — all quiet</b>';
+            $lines[] = '<i>no drama · models still napping in place</i>';
+        }
+
         if ($data['dry_run']) {
-            $lines[] = '<i>(dry-run: nothing written)</i>';
+            $lines[] = '🧪 <i>dry-run: nothing written</i>';
         }
         if (! empty($data['error'])) {
-            $lines[] = '<i>'.$this->esc((string) $data['error']).'</i>';
+            $lines[] = '🗯️ <i>'.$this->esc((string) $data['error']).'</i>';
         }
-        $lines[] = '';
-        $lines[] = sprintf('✅ Active models: <b>%d</b>', $data['total_active']);
-        $lines[] = sprintf('⛔ Inactive models: <b>%d</b>', $data['total_inactive']);
-        $lines[] = sprintf('💲 Priced OK: %d   ⚠️ Price failed: %d', $data['priced'], $data['price_failed']);
-        $lines[] = sprintf('📦 Coverage: <b>%.0f%%</b>   🚫 Quarantined: %d', $data['coverage'] * 100, $data['quarantined']);
-        $lines[] = sprintf('🟢 Reactivated: %d   🔴 Deactivated: %d', $data['reactivated'], $data['deactivated']);
-        $lines[] = sprintf('⏱ Duration: %ss', $data['duration']);
+        $lines[] = '<i>────────────</i>';
+        $lines[] = sprintf('🟢 Active · <b>%d</b>', $data['total_active']);
+        $lines[] = sprintf('⚫️ Inactive · <b>%d</b>', $data['total_inactive']);
+        $lines[] = sprintf('💲 Priced OK · <b>%d</b>    ⚠️ Failed · <b>%d</b>', $data['priced'], $data['price_failed']);
+        $lines[] = sprintf('📦 Coverage · <b>%.0f%%</b>    🚫 Quarantined · <b>%d</b>', $data['coverage'] * 100, $data['quarantined']);
+        $lines[] = sprintf('♻️ Reactivated · <b>%d</b>    🔻 Deactivated · <b>%d</b>', $data['reactivated'], $data['deactivated']);
+        $lines[] = sprintf('⏱️ Duration · <b>%ss</b>', $data['duration']);
 
         if ($deactivations !== []) {
             $lines[] = '';
-            $lines[] = '<b>🔴 Just deactivated:</b>';
+            $lines[] = '🔻 <b>Just sent to the bench</b>';
             foreach ($deactivations as $e) {
-                $lines[] = '• '.$this->esc($e['name']).' <i>('.$this->shortTable($e['table']).')</i>';
+                $lines[] = '· '.$this->esc($e['name']).' <i>('.$this->shortTable($e['table']).')</i>';
             }
         }
 
         if ($reactivations !== []) {
             $lines[] = '';
-            $lines[] = '<b>🟢 Just reactivated:</b>';
+            $lines[] = '♻️ <b>Back in the game</b>';
             foreach ($reactivations as $e) {
-                $lines[] = '• '.$this->esc($e['name']).' <i>('.$this->shortTable($e['table']).')</i>';
+                $lines[] = '· '.$this->esc($e['name']).' <i>('.$this->shortTable($e['table']).')</i>';
             }
         }
 
         if ($priceChanges !== []) {
             $lines[] = '';
-            $lines[] = '<b>💲 Pricing changes:</b>';
+            $lines[] = '💸 <b>Price tags moved</b>';
             foreach ($priceChanges as $e) {
                 $old = $e['old'] === null || $e['old'] === '' ? '—' : $e['old'];
-                $lines[] = sprintf(
-                    '• %s <i>(%s)</i>: %s %s → %s',
-                    $this->esc($e['name']),
-                    $this->shortTable($e['table']),
-                    $e['field'],
-                    $this->esc((string) $old),
-                    $this->esc((string) $e['new']),
-                );
+                $badge = $e['field'] === 'unit_price' ? '💰' : '📏';
+                $lines[] = $badge.' '.$this->esc($e['name']).' <i>('.$this->shortTable($e['table']).')</i>: <code>'.$this->esc((string) $old).'</code> → <code>'.$this->esc((string) $e['new']).'</code>';
             }
         }
 
         if ($events === [] && empty($data['error'])) {
             $lines[] = '';
-            $lines[] = 'No changes this run.';
+            $lines[] = '🧸 No changes this run. Go touch grass.';
         }
 
         $notifier->send(implode("\n", $lines));

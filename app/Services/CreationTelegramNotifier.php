@@ -38,29 +38,37 @@ class CreationTelegramNotifier
                 default => $via,
             };
 
+            $viaEmoji = match (strtolower($via)) {
+                'google' => '🔵',
+                'email' => '✉️',
+                default => '🚪',
+            };
+
             $lines = [
-                '<b>🆕 New user registered</b>',
-                'Via: '.$this->e($viaLabel),
-                'ID: #'.(int) $user->getKey(),
-                'Name: '.$this->e((string) ($user->name ?? '—')),
-                'Email: '.$this->e((string) ($user->email ?? '—')),
-                'Tokens: '.number_format((int) ($user->tokens ?? 0)),
-                'Google ID: '.$this->e((string) ($user->google_id ?: '—')),
+                '🎉 <b>New RIMBOAI human just landed</b>',
+                '<i>welcome to the lab · starter tokens unlocked</i>',
+                $this->hr(),
+                $viaEmoji.' Via · <b>'.$this->e($viaLabel).'</b>',
+                '🪪 ID · <code>#'.(int) $user->getKey().'</code>',
+                '👤 Name · '.$this->e((string) ($user->name ?? '—')),
+                '📧 Email · '.$this->e((string) ($user->email ?? '—')),
+                '🪙 Tokens · <b>'.number_format((int) ($user->tokens ?? 0)).'</b>',
+                '🔗 Google ID · '.$this->e((string) ($user->google_id ?: '—')),
             ];
 
             $avatar = is_string($user->avatar) ? trim($user->avatar) : '';
             if ($avatar !== '') {
-                $lines[] = 'Avatar: '.$this->e($this->truncate($avatar, 200));
+                $lines[] = '🖼️ Avatar · '.$this->e($this->truncate($avatar, 200));
             }
 
             $created = $user->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i:s');
             if ($created) {
-                $lines[] = 'Created: '.$this->e($created);
+                $lines[] = '📅 Created · '.$this->e($created);
             }
 
             $ip = request()?->ip();
             if (is_string($ip) && $ip !== '') {
-                $lines[] = 'IP: '.$this->e($ip);
+                $lines[] = '🌐 IP · <code>'.$this->e($ip).'</code>';
             }
 
             $this->telegram->send(implode("\n", $lines));
@@ -87,25 +95,30 @@ class CreationTelegramNotifier
             $mode = (string) ($creation->getAttribute('mode') ?? '');
             $toolSlug = str_starts_with($mode, 'tool:') ? substr($mode, 5) : null;
 
+            $typeEmoji = $this->typeEmoji($creationType);
+            $status = (string) ($creation->getAttribute('status') ?? '');
+
             $lines = [
-                '<b>New creation</b>',
-                'Type: '.$this->e($creationType),
-                'ID: '.(int) $creation->getKey(),
-                'Status: '.$this->e((string) ($creation->getAttribute('status') ?? '')),
-                'User: '.$this->e((string) ($user->email ?? '')).' (#'.(int) $user->getKey().')',
-                'Balance: '.number_format((int) $user->tokens).' tokens',
-                'Tokens charged: '.$this->fmtNum($credits),
-                'Est. fal USD: '.$this->fmtUsd($estimatedUsd),
-                'cost_usd: '.$this->fmtUsd($creation->getAttribute('cost_usd')),
-                'Mode: '.$this->e($mode !== '' ? $mode : '—'),
+                $typeEmoji.' <b>New '.$this->e($creationType).' is cooking</b>',
+                '<i>'.$this->e($this->surfaceBlurb($mode, $toolSlug)).'</i>',
+                $this->hr(),
+                '📦 Type · <b>'.$this->e($creationType).'</b>',
+                '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
+                $this->statusLine($status),
+                '👤 User · '.$this->e((string) ($user->email ?? '')).' <code>#'.(int) $user->getKey().'</code>',
+                '🪙 Balance · <b>'.number_format((int) $user->tokens).'</b> tokens',
+                '⚡️ Charged · <b>'.$this->fmtNum($credits).'</b>',
+                '🔮 Est. fal · '.$this->fmtUsd($estimatedUsd),
+                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+                '🎛️ Mode · '.$this->e($mode !== '' ? $mode : '—'),
             ];
 
             if ($toolSlug) {
-                $lines[] = 'Tool: '.$this->e($toolSlug);
+                $lines[] = '🛠️ Tool · <b>'.$this->e($toolSlug).'</b>';
             }
 
-            $lines[] = 'Model: '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
-            $lines[] = 'Endpoint: '.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—'));
+            $lines[] = '🧠 Model · '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
+            $lines[] = '🔌 Endpoint · <code>'.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')).'</code>';
 
             $aspect = $creation->getAttribute('aspect_ratio') ?? ($settings['aspect'] ?? null);
             $resolution = $creation->getAttribute('resolution') ?? ($settings['resolution'] ?? null);
@@ -114,18 +127,20 @@ class CreationTelegramNotifier
                 ?? ($settings['duration'] ?? null);
 
             if ($aspect !== null && $aspect !== '') {
-                $lines[] = 'Aspect: '.$this->e((string) $aspect);
+                $lines[] = '📐 Aspect · '.$this->e((string) $aspect);
             }
             if ($resolution !== null && $resolution !== '') {
-                $lines[] = 'Resolution: '.$this->e((string) $resolution);
+                $lines[] = '🖥️ Resolution · '.$this->e((string) $resolution);
             }
             if ($duration !== null && $duration !== '') {
-                $lines[] = 'Duration: '.$this->e((string) $duration);
+                $lines[] = '⏱️ Duration · '.$this->e((string) $duration);
             }
 
             $prompt = (string) ($creation->getAttribute('prompt') ?? '');
             if ($prompt !== '') {
-                $lines[] = 'Prompt: '.$this->e($this->truncate($prompt, 500));
+                $lines[] = $this->hr();
+                $lines[] = '📝 <b>Prompt</b>';
+                $lines[] = '<i>'.$this->e($this->truncate($prompt, 500)).'</i>';
             }
 
             $this->telegram->send(implode("\n", $lines));
@@ -160,46 +175,52 @@ class CreationTelegramNotifier
             $pnl = app(CreationProfitCalculator::class)->compute($creation, $creationType);
 
             $title = $pnl['negative_nominal'] || $pnl['variance_alert']
-                ? '<b>⚠️ Creation cost settled</b>'
-                : '<b>Creation cost settled</b>';
+                ? '😬 <b>Cost settled — peek at this one</b>'
+                : '💰 <b>Cost settled — looking tasty</b>';
+
+            $profitEmoji = ($pnl['nominal_profit_usd'] !== null && $pnl['nominal_profit_usd'] < 0) ? '📉' : '📈';
+            $cashEmoji = ($pnl['cash_profit_usd'] !== null && $pnl['cash_profit_usd'] < 0) ? '🔻' : '💚';
 
             $lines = [
                 $title,
-                'Surface: '.$this->e($pnl['surface']),
-                'Type: '.$this->e($creationType),
-                'ID: '.(int) $creation->getKey(),
-                'Status: '.$this->e((string) ($creation->getAttribute('status') ?? '')),
-                'User: '.$this->e((string) ($user?->email ?? '—')).' (#'.(int) ($creation->getAttribute('user_id') ?? 0).')',
-                'Balance: '.number_format((int) ($user?->tokens ?? 0)).' tokens',
-                'Tokens charged: '.$this->fmtNum($pnl['tokens_charged']).($pnl['refunded'] ? ' (refunded)' : ''),
-                'Net tokens: '.$this->fmtNum($pnl['net_tokens']),
-                'Est. fal USD: '.$this->fmtUsd($pnl['estimated_fal_usd']),
-                'Actual fal USD: '.$this->fmtUsd($pnl['actual_fal_usd']),
+                '<i>'.$this->e($pnl['surface']).' · '.$this->e($creationType).'</i>',
+                $this->hr(),
+                '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
+                $this->statusLine((string) ($creation->getAttribute('status') ?? '')),
+                '👤 User · '.$this->e((string) ($user?->email ?? '—')).' <code>#'.(int) ($creation->getAttribute('user_id') ?? 0).'</code>',
+                '🪙 Balance · <b>'.number_format((int) ($user?->tokens ?? 0)).'</b> tokens',
+                '⚡️ Charged · '.$this->fmtNum($pnl['tokens_charged']).($pnl['refunded'] ? ' <i>(refunded)</i>' : ''),
+                '🧮 Net tokens · '.$this->fmtNum($pnl['net_tokens']),
+                $this->hr(),
+                '🔮 Est. fal · '.$this->fmtUsd($pnl['estimated_fal_usd']),
+                '💸 Actual fal · '.$this->fmtUsd($pnl['actual_fal_usd']),
             ];
 
             if ($pnl['estimate_variance_percent'] !== null) {
-                $lines[] = 'Estimate Δ: '.$this->fmtUsd($pnl['estimate_delta_usd'])
-                    .' ('.$pnl['estimate_variance_percent'].'%)';
+                $lines[] = '📊 Estimate Δ · '.$this->fmtUsd($pnl['estimate_delta_usd'])
+                    .' <i>('.$pnl['estimate_variance_percent'].'%)</i>';
             }
 
-            $lines[] = 'Nominal revenue: '.$this->fmtUsd($pnl['nominal_revenue_usd']);
-            $lines[] = 'Nominal profit: '.$this->fmtUsd($pnl['nominal_profit_usd'])
-                .($pnl['nominal_margin_percent'] !== null ? ' ('.$pnl['nominal_margin_percent'].'%)' : '');
+            $lines[] = $profitEmoji.' Nominal · '.$this->fmtUsd($pnl['nominal_revenue_usd'])
+                .' in → '.$this->fmtUsd($pnl['nominal_profit_usd'])
+                .' profit'
+                .($pnl['nominal_margin_percent'] !== null ? ' <b>('.$pnl['nominal_margin_percent'].'%)</b>' : '');
 
             if ($pnl['cash_available']) {
-                $lines[] = 'Cash revenue: '.$this->fmtUsd($pnl['cash_revenue_usd'])
+                $lines[] = $cashEmoji.' Cash · '.$this->fmtUsd($pnl['cash_revenue_usd'])
                     .' / '.number_format((float) ($pnl['cash_revenue_dzd'] ?? 0), 2).' DZD';
-                $lines[] = 'Cash profit: '.$this->fmtUsd($pnl['cash_profit_usd'])
-                    .($pnl['cash_margin_percent'] !== null ? ' ('.$pnl['cash_margin_percent'].'%)' : '');
+                $lines[] = $cashEmoji.' Cash profit · '.$this->fmtUsd($pnl['cash_profit_usd'])
+                    .($pnl['cash_margin_percent'] !== null ? ' <b>('.$pnl['cash_margin_percent'].'%)</b>' : '');
             } else {
-                $lines[] = 'Cash profit: unavailable ('.$this->e((string) ($pnl['cash_note'] ?? 'legacy/free tokens')).')';
+                $lines[] = '💤 Cash profit · unavailable <i>('.$this->e((string) ($pnl['cash_note'] ?? 'legacy/free tokens')).')</i>';
             }
 
-            $lines[] = 'Wallet before: '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_before'));
-            $lines[] = 'Wallet after: '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_after'));
-            $lines[] = 'Deducted: '.$this->fmtUsd($creation->getAttribute('deducted_amount_from_main_wallet'));
-            $lines[] = 'Mode: '.$this->e($mode !== '' ? $mode : '—');
-            $lines[] = 'Model: '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
+            $lines[] = $this->hr();
+            $lines[] = '🏦 Wallet before · '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_before'));
+            $lines[] = '🏦 Wallet after · '.$this->fmtUsd($creation->getAttribute('fal_wallet_balance_after'));
+            $lines[] = '✂️ Deducted · '.$this->fmtUsd($creation->getAttribute('deducted_amount_from_main_wallet'));
+            $lines[] = '🎛️ Mode · '.$this->e($mode !== '' ? $mode : '—');
+            $lines[] = '🧠 Model · '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
 
             $this->telegram->send(implode("\n", $lines));
 
@@ -225,13 +246,15 @@ class CreationTelegramNotifier
         try {
             $credits = $creation->getAttribute('credits_charged');
             $this->telegram->send(implode("\n", [
-                '<b>↩️ Tokens refunded</b>',
-                'Type: '.$this->e($creationType),
-                'ID: '.(int) $creation->getKey(),
-                'User: '.$this->e((string) ($user->email ?? '—')),
-                'Tokens: '.$this->fmtNum($credits),
-                'Reason: '.$this->e($reason),
-                'Balance: '.number_format((int) $user->tokens),
+                '↩️ <b>Tokens bounced back</b>',
+                '<i>refunded · nothing to worry about… probably</i>',
+                $this->hr(),
+                '📦 Type · <b>'.$this->e($creationType).'</b>',
+                '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
+                '👤 User · '.$this->e((string) ($user->email ?? '—')),
+                '🪙 Tokens · <b>'.$this->fmtNum($credits).'</b>',
+                '💬 Reason · '.$this->e($reason),
+                '💼 Balance · <b>'.number_format((int) $user->tokens).'</b>',
             ]));
         } catch (Throwable $e) {
             report($e);
@@ -247,13 +270,15 @@ class CreationTelegramNotifier
         try {
             $user = User::query()->find($creation->getAttribute('user_id'));
             $this->telegram->send(implode("\n", [
-                '<b>⚠️ Failed creation — fal billed, tokens kept</b>',
-                'Type: '.$this->e($creationType),
-                'ID: '.(int) $creation->getKey(),
-                'User: '.$this->e((string) ($user?->email ?? '—')),
-                'Tokens charged: '.$this->fmtNum($creation->getAttribute('credits_charged')),
-                'cost_usd: '.$this->fmtUsd($creation->getAttribute('cost_usd')),
-                'Endpoint: '.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')),
+                '🚨 <b>Failed job — fal still took a bite</b>',
+                '<i>tokens kept · we paid fal anyway</i>',
+                $this->hr(),
+                '📦 Type · <b>'.$this->e($creationType).'</b>',
+                '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
+                '👤 User · '.$this->e((string) ($user?->email ?? '—')),
+                '⚡️ Charged · '.$this->fmtNum($creation->getAttribute('credits_charged')),
+                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+                '🔌 Endpoint · <code>'.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')).'</code>',
             ]));
         } catch (Throwable $e) {
             report($e);
@@ -269,6 +294,47 @@ class CreationTelegramNotifier
             $creation instanceof UserVoiceCreation => 'voice',
             default => null,
         };
+    }
+
+    private function typeEmoji(string $type): string
+    {
+        return match ($type) {
+            'image' => '🖼️',
+            'video' => '🎬',
+            'music' => '🎵',
+            'voice' => '🎙️',
+            default => '✨',
+        };
+    }
+
+    private function surfaceBlurb(?string $mode, ?string $toolSlug): string
+    {
+        if (is_string($toolSlug) && $toolSlug !== '') {
+            return 'tools · '.$toolSlug;
+        }
+        if (is_string($mode) && str_contains($mode, 'trend')) {
+            return 'trends remix';
+        }
+
+        return 'lab generation';
+    }
+
+    private function statusLine(string $status): string
+    {
+        $emoji = match (strtolower($status)) {
+            'completed', 'succeeded', 'success', 'paid' => '🟢',
+            'failed', 'error' => '🔴',
+            'canceled', 'cancelled' => '🟠',
+            'processing', 'running', 'pending' => '🟡',
+            default => '⚪️',
+        };
+
+        return $emoji.' Status · <b>'.$this->e($status !== '' ? $status : '—').'</b>';
+    }
+
+    private function hr(): string
+    {
+        return '<i>────────────</i>';
     }
 
     private function e(string $value): string
@@ -294,7 +360,7 @@ class CreationTelegramNotifier
             return $this->e((string) $value);
         }
 
-        return '$'.number_format((float) $value, 6, '.', '');
+        return '<code>$'.number_format((float) $value, 6, '.', '').'</code>';
     }
 
     private function fmtNum(mixed $value): string
