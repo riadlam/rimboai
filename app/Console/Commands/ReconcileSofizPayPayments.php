@@ -14,6 +14,9 @@ use Illuminate\Console\Command;
  * This re-verifies every pending SofizPay payment server-to-server and credits
  * tokens through the same idempotent path used by the browser return handler,
  * so a payment can never be fulfilled twice.
+ *
+ * Pending rows older than the lookback window that never became paid are marked
+ * canceled (abandoned) so Telegram and billing history stop showing them as live.
  */
 class ReconcileSofizPayPayments extends Command
 {
@@ -38,17 +41,15 @@ class ReconcileSofizPayPayments extends Command
             ->limit($limit)
             ->get();
 
-        if ($payments->isEmpty()) {
-            $this->info('No pending SofizPay payments to reconcile.');
-
-            return self::SUCCESS;
-        }
-
-        $this->info("Reconciling {$payments->count()} pending payment(s)...");
-
         $paid = 0;
         $stillPending = 0;
+        $canceled = 0;
+        $failed = 0;
         $errors = 0;
+
+        if ($payments->isNotEmpty()) {
+            $this->info("Reconciling {$payments->count()} pending payment(s)...");
+        }
 
         foreach ($payments as $payment) {
             try {
@@ -67,7 +68,15 @@ class ReconcileSofizPayPayments extends Command
                     $note = $result['credited'] ? 'credited' : 'already credited';
                     $this->line("  #{$payment->id} ({$payment->reference}): paid — {$note}");
                     break;
+                case 'canceled':
+                    $canceled++;
+                    $this->line("  #{$payment->id} ({$payment->reference}): canceled");
+                    break;
                 case 'failed':
+                    $failed++;
+                    $this->line("  #{$payment->id} ({$payment->reference}): failed");
+                    break;
+                case 'pending':
                     $stillPending++;
                     break;
                 default:
@@ -77,8 +86,40 @@ class ReconcileSofizPayPayments extends Command
             }
         }
 
+        $stale = Payment::query()
+            ->where('provider', 'sofizpay')
+            ->where('status', 'pending')
+            ->where('created_at', '<', now()->subHours($hours))
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        $reason = 'No payment within '.$hours.' hours.';
+        foreach ($stale as $payment) {
+            try {
+                $fulfillment->abandonStale($payment, $reason);
+            } catch (\Throwable $e) {
+                $errors++;
+                $this->error("  #{$payment->id} ({$payment->reference}): {$e->getMessage()}");
+                report($e);
+
+                continue;
+            }
+
+            if ($payment->fresh()?->status === 'canceled') {
+                $canceled++;
+                $this->line("  #{$payment->id} ({$payment->reference}): abandoned");
+            }
+        }
+
+        if ($payments->isEmpty() && $stale->isEmpty()) {
+            $this->info('No pending SofizPay payments to reconcile.');
+
+            return self::SUCCESS;
+        }
+
         $this->newLine();
-        $this->info("Done. paid={$paid} still_pending={$stillPending} errors={$errors}");
+        $this->info("Done. paid={$paid} still_pending={$stillPending} canceled={$canceled} failed={$failed} errors={$errors}");
 
         return self::SUCCESS;
     }

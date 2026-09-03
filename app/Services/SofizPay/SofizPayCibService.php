@@ -60,7 +60,7 @@ class SofizPayCibService
      */
     public function createCibTransaction(array $queryParams): array
     {
-        $url = $this->baseUrl() . $this->createPath();
+        $url = $this->baseUrl().$this->createPath();
         $timeout = (int) config('services.sofizpay.timeout', 30);
 
         try {
@@ -93,7 +93,7 @@ class SofizPayCibService
      */
     public function checkCibTransaction(string $orderNumber): array
     {
-        $url = $this->baseUrl() . $this->checkPath();
+        $url = $this->baseUrl().$this->checkPath();
         $timeout = (int) config('services.sofizpay.timeout', 30);
 
         try {
@@ -139,6 +139,43 @@ class SofizPayCibService
     }
 
     /**
+     * Map a CIB check payload to a payment lifecycle. Browser/query-string
+     * claims are never used — only this server-to-server payload.
+     *
+     * @param  array<string, mixed>  $data
+     * @return 'paid'|'canceled'|'failed'|'pending'
+     */
+    public function classifyCheck(array $data): string
+    {
+        if ($this->isPaidCheck($data)) {
+            return 'paid';
+        }
+
+        $resp = (string) ($data['respCode'] ?? '');
+        $orderStatus = $data['orderStatus'] ?? null;
+        $status = $orderStatus === null || $orderStatus === '' ? null : (string) $orderStatus;
+
+        if ($resp === '17' || $status === '3') {
+            return 'canceled';
+        }
+
+        if ($status === '6') {
+            return 'failed';
+        }
+
+        if ($resp !== '' && $resp !== '00') {
+            return 'failed';
+        }
+
+        $err = $data['errorCode'] ?? null;
+        if ($err !== null && $err !== '' && $err !== 0 && $err !== '0') {
+            return 'failed';
+        }
+
+        return 'pending';
+    }
+
+    /**
      * A clearer user-facing failure message when {@see isPaidCheck} is false.
      *
      * @param  array<string, mixed>  $data
@@ -149,7 +186,7 @@ class SofizPayCibService
         if ($resp !== '' && $resp !== '00') {
             $desc = trim((string) ($data['ResponseDescription'] ?? $data['responseDescription'] ?? $data['message'] ?? ''));
 
-            return $desc !== '' ? $desc : ('Bank response code: ' . $resp . '. Payment was not completed.');
+            return $desc !== '' ? $desc : ('Bank response code: '.$resp.'. Payment was not completed.');
         }
 
         $err = $data['errorCode'] ?? null;
@@ -163,7 +200,7 @@ class SofizPayCibService
         if ($rc !== null && (string) $rc !== '' && (string) $rc !== '0' && (string) $rc !== '00') {
             $desc = trim((string) ($data['ResponseDescription'] ?? $data['responseDescription'] ?? ''));
 
-            return $desc !== '' ? $desc : ('Payment was not accepted (code ' . (string) $rc . ').');
+            return $desc !== '' ? $desc : ('Payment was not accepted (code '.(string) $rc.').');
         }
 
         return null;

@@ -71,6 +71,14 @@
     "checkoutError": "Could not start the payment. Please try again.",
     "networkError": "Network error. Please try again."
   },
+  "result": {
+    "canceledTitle": "Payment canceled",
+    "canceledBody": "You left checkout before paying. Nothing was charged — pick a pack when you're ready.",
+    "failedTitle": "Payment didn't go through",
+    "failedBody": "The bank didn't complete this payment. No tokens were added. You can try again.",
+    "tryAgain": "Try again",
+    "close": "Close"
+  },
   "faqs": {
     "q1": "How do RIMBOAI tokens work?",
     "a1": "Tokens are the fuel for every generation in the Lab. Each model costs a different amount based on quality and length.",

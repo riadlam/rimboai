@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
@@ -23,6 +23,7 @@ class Payment extends Model
         'cib_order_id',
         'create_response',
         'last_check_response',
+        'telegram_message_id',
         'paid_at',
     ];
 
@@ -33,6 +34,7 @@ class Payment extends Model
             'amount' => 'decimal:2',
             'create_response' => 'array',
             'last_check_response' => 'array',
+            'telegram_message_id' => 'integer',
             'paid_at' => 'datetime',
         ];
     }

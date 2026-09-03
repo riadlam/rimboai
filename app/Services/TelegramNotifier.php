@@ -64,10 +64,7 @@ class TelegramNotifier
     public function send(string $message): bool
     {
         if (! $this->isConfigured()) {
-            $hint = $this->channel === 'creations'
-                ? 'TELEGRAM_CREATIONS_BOT_TOKEN or TELEGRAM_CREATIONS_CHAT_ID / TELEGRAM_CHAT_ID'
-                : 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID';
-            Log::warning("TelegramNotifier [{$this->channel}] skipped — {$hint} is missing");
+            $this->logUnconfigured();
 
             return false;
         }
@@ -75,13 +72,86 @@ class TelegramNotifier
         $ok = true;
 
         foreach ($this->chunk($message) as $part) {
-            $ok = $this->sendChunk($part) && $ok;
+            $ok = $this->postSendMessage($part)['ok'] && $ok;
         }
 
         return $ok;
     }
 
-    private function sendChunk(string $text): bool
+    /**
+     * Send a message and return Telegram's message_id (first chunk).
+     */
+    public function sendReturningId(string $text): ?int
+    {
+        if (! $this->isConfigured()) {
+            $this->logUnconfigured();
+
+            return null;
+        }
+
+        $firstId = null;
+
+        foreach ($this->chunk($text) as $i => $part) {
+            $result = $this->postSendMessage($part);
+            if (! $result['ok']) {
+                return $firstId;
+            }
+            if ($i === 0) {
+                $firstId = $result['message_id'];
+            }
+        }
+
+        return $firstId;
+    }
+
+    /**
+     * Edit an existing message in the same chat. Returns false if the message
+     * is gone so the caller can send a replacement.
+     */
+    public function edit(int $messageId, string $text): bool
+    {
+        if (! $this->isConfigured() || $messageId <= 0) {
+            return false;
+        }
+
+        try {
+            $response = Http::asForm()
+                ->timeout(15)
+                ->post("https://api.telegram.org/bot{$this->token}/editMessageText", [
+                    'chat_id' => $this->chatId,
+                    'message_id' => $messageId,
+                    'text' => $text,
+                    'parse_mode' => 'HTML',
+                    'disable_web_page_preview' => true,
+                ]);
+
+            if ($response->successful()) {
+                return true;
+            }
+
+            $description = strtolower((string) ($response->json('description') ?? ''));
+            if (str_contains($description, 'message is not modified')) {
+                return true;
+            }
+
+            Log::error("Telegram [{$this->channel}] editMessageText failed", [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'message_id' => $messageId,
+            ]);
+
+            return false;
+        } catch (\Throwable $e) {
+            Log::error("Telegram [{$this->channel}] editMessageText error: ".$e->getMessage());
+
+            return false;
+        }
+    }
+
+    /**
+     * @return array{ok: bool, message_id: int|null}
+     */
+    private function postSendMessage(string $text): array
     {
         try {
             $response = Http::asForm()
@@ -99,15 +169,28 @@ class TelegramNotifier
                     'body' => $response->body(),
                 ]);
 
-                return false;
+                return ['ok' => false, 'message_id' => null];
             }
 
-            return true;
+            $id = $response->json('result.message_id');
+
+            return [
+                'ok' => true,
+                'message_id' => is_numeric($id) && (int) $id > 0 ? (int) $id : null,
+            ];
         } catch (\Throwable $e) {
             Log::error("Telegram [{$this->channel}] sendMessage error: ".$e->getMessage());
 
-            return false;
+            return ['ok' => false, 'message_id' => null];
         }
+    }
+
+    private function logUnconfigured(): void
+    {
+        $hint = $this->channel === 'creations'
+            ? 'TELEGRAM_CREATIONS_BOT_TOKEN or TELEGRAM_CREATIONS_CHAT_ID / TELEGRAM_CHAT_ID'
+            : 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID';
+        Log::warning("TelegramNotifier [{$this->channel}] skipped — {$hint} is missing");
     }
 
     /**

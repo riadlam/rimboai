@@ -4,7 +4,6 @@ namespace App\Services\SofizPay;
 
 use App\Models\Payment;
 use App\Models\User;
-use App\Services\TelegramNotifier;
 use App\Services\Tokens\TokenService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -21,18 +20,21 @@ use Illuminate\Support\Facades\Log;
  *  - We validate the paid amount against our stored amount.
  *  - We validate the destination account is our merchant.
  *  - Crediting is atomic + idempotent (row lock + unique token_transactions index).
+ *  - canceled/failed are written only from terminal CIB codes, never from the return URL hit.
+ *  - paid always wins over canceled/failed.
  */
 class SofizPayFulfillmentService
 {
     public function __construct(
         private SofizPayCibService $sofizPay,
         private TokenService $tokens,
+        private SofizPayPaymentTelegramNotifier $telegram,
     ) {}
 
     /**
      * Verify and (if paid) fulfil a payment.
      *
-     * @return array{status: 'success'|'failed'|'error', message: string, credited: bool}
+     * @return array{status: 'success'|'failed'|'error'|'canceled'|'pending', message: string, credited: bool}
      */
     public function verifyAndFulfill(Payment $payment): array
     {
@@ -52,12 +54,36 @@ class SofizPayFulfillmentService
 
         $payment->update(['last_check_response' => $checkData]);
 
-        if (! $check['success'] || ! $this->sofizPay->isPaidCheck($checkData)) {
+        if (! $check['success']) {
             $hint = $this->sofizPay->parsePaymentFailureHint($checkData);
 
             return [
-                'status' => 'failed',
+                'status' => 'pending',
                 'message' => $hint ?? __('messages.payment_pending'),
+                'credited' => false,
+            ];
+        }
+
+        $classification = $this->sofizPay->classifyCheck($checkData);
+
+        if ($classification === 'pending') {
+            $hint = $this->sofizPay->parsePaymentFailureHint($checkData);
+
+            return [
+                'status' => 'pending',
+                'message' => $hint ?? __('messages.payment_pending'),
+                'credited' => false,
+            ];
+        }
+
+        if ($classification === 'canceled' || $classification === 'failed') {
+            $hint = $this->sofizPay->parsePaymentFailureHint($checkData)
+                ?? __('messages.payment_not_completed');
+            $this->persistTerminalStatus($payment, $classification, $hint);
+
+            return [
+                'status' => $classification,
+                'message' => $hint,
                 'credited' => false,
             ];
         }
@@ -119,35 +145,42 @@ class SofizPayFulfillmentService
         }, 3);
 
         if ($credited) {
-            $this->notifyPurchase($payment->fresh());
+            $this->telegram->notifyStatusChanged($payment->fresh());
         }
 
         return ['status' => 'success', 'message' => __('messages.payment_confirmed'), 'credited' => $credited];
     }
 
-    private function notifyPurchase(?Payment $payment): void
+    /**
+     * Mark a pending checkout canceled after the reconcile window. Telegram is
+     * updated once; paid still wins if a later CIB check proves settlement.
+     */
+    public function abandonStale(Payment $payment, string $reason): void
     {
-        if (! $payment) {
-            return;
-        }
+        $this->persistTerminalStatus($payment, 'canceled', $reason);
+    }
 
-        try {
-            $notifier = TelegramNotifier::forCreations();
-            if (! $notifier->isConfigured()) {
+    private function persistTerminalStatus(Payment $payment, string $status, ?string $hint): void
+    {
+        $changed = false;
+
+        DB::transaction(function () use ($payment, $status, &$changed) {
+            /** @var Payment|null $p */
+            $p = Payment::where('id', $payment->id)->lockForUpdate()->first();
+            if (! $p || $p->status === 'paid') {
+                return;
+            }
+            if ($p->status === $status) {
                 return;
             }
 
-            $user = User::find($payment->user_id);
-            $notifier->send(implode("\n", [
-                '<b>💳 New token purchase</b>',
-                'Pack: '.htmlspecialchars((string) $payment->package_slug, ENT_QUOTES, 'UTF-8'),
-                'Tokens: '.number_format((int) $payment->tokens),
-                'Amount: '.number_format((float) $payment->amount, 2).' DZD',
-                'User: '.htmlspecialchars((string) ($user->email ?? $payment->user_id), ENT_QUOTES, 'UTF-8'),
-                'Ref: '.htmlspecialchars((string) $payment->reference, ENT_QUOTES, 'UTF-8'),
-            ]));
-        } catch (\Throwable $e) {
-            report($e);
+            $p->status = $status;
+            $p->save();
+            $changed = true;
+        }, 3);
+
+        if ($changed) {
+            $this->telegram->notifyStatusChanged($payment->fresh(), $hint);
         }
     }
 }

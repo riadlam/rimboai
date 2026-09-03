@@ -7,6 +7,7 @@ use App\Models\TokenPackage;
 use App\Models\User;
 use App\Services\SofizPay\SofizPayCibService;
 use App\Services\SofizPay\SofizPayFulfillmentService;
+use App\Services\SofizPay\SofizPayPaymentTelegramNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,7 +73,7 @@ class BillingController extends Controller
     /**
      * Create a SofizPay CIB (DZD) checkout for a token pack and return its URL.
      */
-    public function createSofizPay(Request $request, SofizPayCibService $sofizPay): JsonResponse
+    public function createSofizPay(Request $request, SofizPayCibService $sofizPay, SofizPayPaymentTelegramNotifier $telegram): JsonResponse
     {
         if (! $sofizPay->isEnabled() || ! $sofizPay->isConfigured()) {
             return response()->json([
@@ -117,7 +118,7 @@ class BillingController extends Controller
         ]);
 
         $returnUrl = route('billing.sofizpay.return', [], true)
-            . '?eid=' . rawurlencode(Crypt::encryptString((string) $payment->id));
+            .'?eid='.rawurlencode(Crypt::encryptString((string) $payment->id));
 
         // SofizPay rejects empty phone/email ("Full name, phone, and email are required").
         $phone = trim((string) ($user->phone ?? ''));
@@ -194,6 +195,12 @@ class BillingController extends Controller
             'create_response' => $data,
         ]);
 
+        try {
+            $telegram->notifyCheckoutReady($payment->fresh() ?? $payment);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         return response()->json([
             'success' => true,
             'checkout_url' => $paymentUrl,
@@ -231,8 +238,15 @@ class BillingController extends Controller
         $result = $fulfillment->verifyAndFulfill($payment);
 
         $tokensCredited = $result['status'] === 'success' ? $payment->fresh()->tokens : null;
+        $redirectStatus = match ($result['status']) {
+            'success' => 'success',
+            'canceled' => 'canceled',
+            'error' => 'error',
+            'pending' => 'pending',
+            default => 'failed',
+        };
 
-        return $this->redirectResult($result['status'], $result['message'], $tokensCredited);
+        return $this->redirectResult($redirectStatus, $result['message'], $tokensCredited);
     }
 
     private function generateReference(): string

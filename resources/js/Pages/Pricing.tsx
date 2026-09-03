@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AppLayout from '@/Layouts/AppLayout';
 import CreditsModal from '@/Components/CreditsModal';
+import PaymentResultModal, { type PaymentResultKind } from '@/Components/PaymentResultModal';
 import { intlLocale, readSavedLang } from '@/lib/i18n';
 import type { PageProps } from '@/types';
 
@@ -181,6 +182,7 @@ export default function Pricing() {
     const [creditsOpen, setCreditsOpen] = useState(false);
     const [busyPack, setBusyPack] = useState<PackId | null>(null);
     const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+    const [paymentResult, setPaymentResult] = useState<{ kind: PaymentResultKind; detail: string } | null>(null);
 
     const PACKS = useMemo(() => {
         const packages = props.tokenPackages ?? [];
@@ -224,8 +226,12 @@ export default function Pricing() {
                 ? `${t('notices.paymentOk')} ${t('notices.tokensAdded', { count: Number(tokens).toLocaleString(locale) })}`
                 : t('notices.paymentOk');
             setNotice({ type: 'success', text: message || fallback });
+        } else if (result === 'canceled') {
+            setPaymentResult({ kind: 'canceled', detail: message });
         } else if (result === 'failed' || result === 'error') {
-            setNotice({ type: 'error', text: message || t('notices.paymentFailed') });
+            setPaymentResult({ kind: 'failed', detail: message });
+        } else if (result === 'pending') {
+            setNotice({ type: 'info', text: message || t('notices.paymentFailed') });
         }
 
         params.delete('payment');
@@ -462,7 +468,7 @@ export default function Pricing() {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 gap-5 pt-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div id="token-packs" className="grid grid-cols-1 gap-5 pt-3 md:grid-cols-2 xl:grid-cols-4">
                             {PACKS.map((pack, i) => (
                                 <PackCard
                                     key={pack.id}
@@ -664,6 +670,16 @@ export default function Pricing() {
             </div>
 
             <CreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
+            <PaymentResultModal
+                open={paymentResult !== null}
+                kind={paymentResult?.kind ?? 'failed'}
+                detail={paymentResult?.detail}
+                onClose={() => setPaymentResult(null)}
+                onTryAgain={() => {
+                    setPaymentResult(null);
+                    document.getElementById('token-packs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+            />
         </AppLayout>
     );
 }

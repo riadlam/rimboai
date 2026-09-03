@@ -71,6 +71,14 @@
     "checkoutError": "Impossible de démarrer le paiement. Veuillez réessayer.",
     "networkError": "Erreur réseau. Veuillez réessayer."
   },
+  "result": {
+    "canceledTitle": "Paiement annulé",
+    "canceledBody": "Vous avez quitté le paiement avant de valider. Rien n'a été débité — choisissez un pack quand vous serez prêt.",
+    "failedTitle": "Le paiement n'a pas abouti",
+    "failedBody": "La banque n'a pas finalisé ce paiement. Aucun jeton n'a été ajouté. Vous pouvez réessayer.",
+    "tryAgain": "Réessayer",
+    "close": "Fermer"
+  },
   "faqs": {
     "q1": "Comment fonctionnent les jetons RIMBOAI ?",
     "a1": "Les jetons alimentent chaque génération dans le Lab. Chaque modèle coûte un montant différent selon la qualité et la durée.",
