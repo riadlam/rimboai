@@ -273,7 +273,8 @@ class FalPricingSyncService
             $streak = (int) ($row->status_missing_streak ?? 0);
 
             if ($status === null) {
-                $streak++;
+                // Column is unsignedTinyInteger (max 255); uncapped increment aborts the whole sync.
+                $streak = min(255, $streak + 1);
                 if (Schema::hasColumn($table, 'status_missing_streak')) {
                     $changes['status_missing_streak'] = $streak;
                 }

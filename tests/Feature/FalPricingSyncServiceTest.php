@@ -164,6 +164,38 @@ class FalPricingSyncServiceTest extends TestCase
         $this->assertSame(1, (int) $row->status_missing_streak);
     }
 
+    public function test_status_missing_streak_caps_at_tinyint_max(): void
+    {
+        \Illuminate\Support\Facades\DB::table('text_to_image_models')->insert([
+            'endpoint_id' => 'fal-ai/flux/dev',
+            'name' => 'Flux',
+            'status' => 'inactive',
+            'status_missing_streak' => 255,
+            'unit' => 'image',
+            'unit_price' => 0.025,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Http::fake([
+            'https://api.fal.ai/v1/models?*' => Http::response(['models' => []], 200),
+            'https://api.fal.ai/v1/models/pricing?*' => Http::response([
+                'prices' => [[
+                    'endpoint_id' => 'fal-ai/flux/dev',
+                    'unit_price' => 0.025,
+                    'unit' => 'image',
+                    'currency' => 'USD',
+                ]],
+                'has_more' => false,
+            ], 200),
+        ]);
+
+        $summary = app(FalPricingSyncService::class)->run(['text_to_image_models'], false, false, 0);
+
+        $this->assertFalse($summary['failed']);
+        $this->assertSame(255, (int) \Illuminate\Support\Facades\DB::table('text_to_image_models')->value('status_missing_streak'));
+    }
+
     public function test_suspicious_price_change_is_quarantined(): void
     {
         \Illuminate\Support\Facades\DB::table('text_to_image_models')->insert([
