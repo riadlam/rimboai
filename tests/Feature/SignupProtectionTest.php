@@ -144,4 +144,26 @@ class SignupProtectionTest extends TestCase
         $response->assertSessionHasErrors(['email' => $this->opaque]);
         $this->assertFalse(User::query()->where('email', 'newbie@example.com')->exists());
     }
+
+    public function test_login_rejects_failed_turnstile(): void
+    {
+        User::factory()->create([
+            'email' => 'ada@example.com',
+            'password' => bcrypt('password1'),
+        ]);
+
+        Http::fake([
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify' => Http::response(['success' => false], 200),
+        ]);
+
+        $response = $this->from('/?login')->post('/login', [
+            'email' => 'ada@example.com',
+            'password' => 'password1',
+            'cf-turnstile-response' => 'bad-token',
+        ]);
+
+        $response->assertRedirect('/?login');
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
 }

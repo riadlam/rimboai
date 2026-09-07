@@ -21,14 +21,24 @@ class AuthController extends Controller
         return redirect('/?login');
     }
 
-    public function login(Request $request)
+    public function login(Request $request, TurnstileVerifier $turnstile)
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
+            'cf-turnstile-response' => ['nullable', 'string'],
         ]);
 
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (! $turnstile->verify($request->input('cf-turnstile-response'), $request->ip())) {
+            throw ValidationException::withMessages([
+                'email' => __('auth.failed'),
+            ]);
+        }
+
+        if (Auth::attempt(
+            ['email' => $credentials['email'], 'password' => $credentials['password']],
+            $request->boolean('remember'),
+        )) {
             $request->session()->regenerate();
 
             return redirect()->intended(route('home'));

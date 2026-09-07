@@ -103,10 +103,13 @@ export default function Home({ tools, trendTemplates = [], innovationSections = 
 function InlineLogin() {
     const { t } = useTranslation('auth');
     const { t: th } = useTranslation('home');
+    const { props } = usePage<PageProps>();
+    const siteKey = props.turnstile?.siteKey ?? '';
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
         remember: true,
+        'cf-turnstile-response': '',
     });
 
     const submit = (event: FormEvent) => {
@@ -188,6 +191,16 @@ function InlineLogin() {
                         />
                         {t('keepSignedIn')}
                     </label>
+
+                    {siteKey ? (
+                        <div className="flex justify-center pt-1">
+                            <TurnstileWidget
+                                siteKey={siteKey}
+                                onToken={(token) => setData('cf-turnstile-response', token)}
+                                onExpire={() => setData('cf-turnstile-response', '')}
+                            />
+                        </div>
+                    ) : null}
 
                     <button
                         type="submit"

@@ -1,17 +1,22 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import AuthLayout from '@/Layouts/AuthLayout';
 import Input from '@/Components/Input';
 import Button from '@/Components/Button';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
+import TurnstileWidget from '@/Components/TurnstileWidget';
+import type { PageProps } from '@/types';
 import type { FormEvent } from 'react';
 
 export default function Login() {
     const { t } = useTranslation('auth');
+    const { props } = usePage<PageProps>();
+    const siteKey = props.turnstile?.siteKey ?? '';
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
         remember: false,
+        'cf-turnstile-response': '',
     });
 
     const submit = (e: FormEvent) => {
@@ -58,6 +63,15 @@ export default function Login() {
                     />
                     <span className="text-sm text-[#94a3b8]">{t('rememberMe')}</span>
                 </label>
+                {siteKey ? (
+                    <div className="flex justify-center">
+                        <TurnstileWidget
+                            siteKey={siteKey}
+                            onToken={(token) => setData('cf-turnstile-response', token)}
+                            onExpire={() => setData('cf-turnstile-response', '')}
+                        />
+                    </div>
+                ) : null}
                 <Button type="submit" variant="auth" className="w-full" loading={processing}>
                     {t('signIn')}
                     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
