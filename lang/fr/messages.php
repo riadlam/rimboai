@@ -30,6 +30,7 @@ return [
     'google_failed' => 'La connexion Google a échoué. Veuillez réessayer.',
     'google_not_configured' => 'La connexion Google n’est pas configurée.',
     'google_no_email' => 'Votre compte Google n’a pas partagé d’adresse e-mail.',
+    'registration_unavailable' => 'Impossible de terminer l’inscription. Veuillez réessayer plus tard.',
     'content_blocked_copyright' => 'Bloqué : votre invite ressemble à du contenu protégé ou à une célébrité (nom d’artiste/voix). Retirez les noms célèbres et réessayez.',
     'content_blocked_restricted' => 'Bloqué : votre invite ou vos paroles contiennent des mots restreints (injures, drogue, violence, etc.). Nettoyez-les et réessayez.',
     'generation_simplify' => 'La génération a échoué. Essayez une invite et des paroles plus simples, puis réessayez.',

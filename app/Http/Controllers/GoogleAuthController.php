@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Services\Credits\CreditCalculator;
 use App\Models\User;
 use App\Services\CreationTelegramNotifier;
+use App\Services\Security\SignupIpGuard;
 use App\Services\Tokens\TokenLotLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
 use Throwable;
 
@@ -26,7 +28,7 @@ class GoogleAuthController extends Controller
         return Socialite::driver('google')->redirect();
     }
 
-    public function callback(): RedirectResponse
+    public function callback(SignupIpGuard $signupIp): RedirectResponse
     {
         if (! $this->configured()) {
             return redirect()
@@ -73,6 +75,16 @@ class GoogleAuthController extends Controller
                 $user->forceFill($updates)->save();
             }
         } else {
+            $ip = request()->ip();
+
+            try {
+                $signupIp->assertAllowed($ip);
+            } catch (ValidationException $e) {
+                return redirect()
+                    ->to('/?register')
+                    ->withErrors($e->errors());
+            }
+
             $isNewUser = true;
             $starter = app(CreditCalculator::class)->starterTokens();
             $user = User::create([
@@ -83,7 +95,12 @@ class GoogleAuthController extends Controller
                 'password' => null,
                 'tokens' => $starter,
                 'email_verified_at' => now(),
+                'registration_ip' => $ip,
             ]);
+
+            if ($ip) {
+                $signupIp->remember($ip);
+            }
 
             try {
                 app(TokenLotLedger::class)->grantStarter($user, $starter);

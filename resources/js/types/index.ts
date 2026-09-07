@@ -200,6 +200,9 @@ export type PageProps = {
     auth: {
         user: User | null;
     };
+    turnstile?: {
+        siteKey?: string | null;
+    };
     tokenPackages?: TokenPackage[];
     flash?: {
         success?: string | null;

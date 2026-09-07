@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Services\Credits\CreditCalculator;
+use App\Services\CreationTelegramNotifier;
+use App\Services\Security\SignupIpGuard;
+use App\Services\Security\TurnstileVerifier;
+use App\Services\Tokens\TokenLotLedger;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use App\Services\Credits\CreditCalculator;
-use App\Models\User;
-use App\Services\CreationTelegramNotifier;
-use App\Services\Tokens\TokenLotLedger;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -27,6 +30,7 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
+
             return redirect()->intended(route('home'));
         }
 
@@ -37,16 +41,25 @@ class AuthController extends Controller
 
     public function showRegisterForm(): RedirectResponse
     {
-        return redirect('/?login');
+        return redirect('/?register');
     }
 
-    public function register(Request $request)
+    public function register(Request $request, TurnstileVerifier $turnstile, SignupIpGuard $signupIp)
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'cf-turnstile-response' => ['nullable', 'string'],
         ]);
+
+        if (! $turnstile->verify($request->input('cf-turnstile-response'), $request->ip())) {
+            throw ValidationException::withMessages([
+                'email' => $signupIp->opaqueMessage(),
+            ]);
+        }
+
+        $signupIp->assertAllowed($request->ip());
 
         $starter = app(CreditCalculator::class)->starterTokens();
         $user = User::create([
@@ -54,7 +67,12 @@ class AuthController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'tokens' => $starter,
+            'registration_ip' => $request->ip(),
         ]);
+
+        if ($request->ip()) {
+            $signupIp->remember($request->ip());
+        }
 
         try {
             app(TokenLotLedger::class)->grantStarter($user, $starter);
@@ -79,6 +97,7 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect('/');
     }
 }

@@ -1,19 +1,23 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import AuthLayout from '@/Layouts/AuthLayout';
 import Input from '@/Components/Input';
 import Button from '@/Components/Button';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
+import TurnstileWidget from '@/Components/TurnstileWidget';
+import type { PageProps } from '@/types';
 import type { FormEvent } from 'react';
 
 export default function Register() {
     const { t } = useTranslation('auth');
-    const { t: tc } = useTranslation('common');
+    const { props } = usePage<PageProps>();
+    const siteKey = props.turnstile?.siteKey ?? '';
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         email: '',
         password: '',
         password_confirmation: '',
+        'cf-turnstile-response': '',
     });
 
     const submit = (e: FormEvent) => {
@@ -71,6 +75,15 @@ export default function Register() {
                     placeholder={t('confirmPasswordPlaceholder')}
                     error={errors.password_confirmation}
                 />
+                {siteKey ? (
+                    <div className="flex justify-center">
+                        <TurnstileWidget
+                            siteKey={siteKey}
+                            onToken={(token) => setData('cf-turnstile-response', token)}
+                            onExpire={() => setData('cf-turnstile-response', '')}
+                        />
+                    </div>
+                ) : null}
                 <Button type="submit" variant="auth" className="w-full" loading={processing}>
                     {t('createAccountBtn')}
                 </Button>
@@ -78,7 +91,7 @@ export default function Register() {
             <p className="mt-6 text-center text-sm text-[#475569]">
                 {t('alreadyHaveAccount')}{' '}
                 <Link href="/login" className="font-medium text-[#3b82f6] transition-colors hover:text-[#2563eb]">
-                    {tc('signIn')}
+                    {t('signIn')}
                 </Link>
             </p>
         </AuthLayout>

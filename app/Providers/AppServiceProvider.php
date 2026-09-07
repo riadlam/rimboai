@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Filesystem\LocalFilesystemAdapter;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -32,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerLocalFilesystemWithoutFinfoFallback();
+        $this->configureRateLimiting();
 
         $appUrl = (string) config('app.url');
         $forceHttps = (bool) config('app.force_https')
@@ -40,6 +44,13 @@ class AppServiceProvider extends ServiceProvider
         if ($forceHttps) {
             URL::forceScheme('https');
         }
+    }
+
+    private function configureRateLimiting(): void
+    {
+        RateLimiter::for('register', function (Request $request) {
+            return Limit::perMinutes(10, 10)->by($request->ip() ?: 'unknown');
+        });
     }
 
     /**

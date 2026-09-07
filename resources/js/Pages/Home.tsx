@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import GoogleAuthButton from '@/Components/GoogleAuthButton';
+import TurnstileWidget from '@/Components/TurnstileWidget';
 import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
 import type { Brand, PageProps, Tool } from '@/types';
@@ -70,12 +71,17 @@ export default function Home({ tools, trendTemplates = [], innovationSections = 
     const { t: ta } = useTranslation('auth');
     const { url, props } = usePage<PageProps>();
     const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
-    const showLogin = !props.auth.user && new URLSearchParams(query).has('login');
+    const params = new URLSearchParams(query);
+    const showLogin = !props.auth.user && params.has('login');
+    const showRegister = !props.auth.user && params.has('register');
+    const showAuth = showLogin || showRegister;
 
     return (
-        <AppLayout flush={showLogin}>
-            <Head title={showLogin ? ta('signInTitle') : 'Home'} />
-            {showLogin ? (
+        <AppLayout flush={showAuth}>
+            <Head title={showRegister ? ta('registerTitle') : showLogin ? ta('signInTitle') : 'Home'} />
+            {showRegister ? (
+                <InlineRegister />
+            ) : showLogin ? (
                 <InlineLogin />
             ) : (
                 <div className="-mx-4 -my-4 sm:-mx-5 lg:-mx-6 lg:-my-5 xl:-mx-8">
@@ -200,6 +206,162 @@ function InlineLogin() {
                         )}
                     </button>
                 </form>
+
+                <p className="mt-5 text-center text-xs text-white/45">
+                    {t('noAccountYet')}{' '}
+                    <Link href="/?register" className="font-medium text-[#FF8A65] transition hover:text-[#FFB199]">
+                        {t('createOne')}
+                    </Link>
+                </p>
+            </motion.section>
+        </div>
+    );
+}
+
+function InlineRegister() {
+    const { t } = useTranslation('auth');
+    const { t: th } = useTranslation('home');
+    const { props } = usePage<PageProps>();
+    const siteKey = props.turnstile?.siteKey ?? '';
+    const { data, setData, post, processing, errors } = useForm({
+        name: '',
+        email: '',
+        password: '',
+        password_confirmation: '',
+        'cf-turnstile-response': '',
+    });
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        post('/register');
+    };
+
+    return (
+        <div className="relative -mx-4 -my-3 flex min-h-[calc(100dvh-6rem)] w-[calc(100%+2rem)] flex-1 items-center justify-center overflow-hidden py-6 sm:-mx-5 sm:w-[calc(100%+2.5rem)] md:h-full md:min-h-0 lg:-mx-6 lg:-my-4 lg:w-[calc(100%+3rem)] xl:-mx-8 xl:w-[calc(100%+4rem)]">
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+                <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-[#FF5733]/20 blur-[120px]" />
+                <div className="absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-violet-600/15 blur-[130px]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(255,255,255,0.045),transparent_48%)]" />
+            </div>
+
+            <motion.section
+                initial={entranceInitial({ opacity: 0, y: 18, scale: 0.985 })}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="scrollbar-thin relative max-h-full w-full max-w-[420px] overflow-y-auto rounded-[26px] border border-white/10 bg-[#101014]/95 p-6 shadow-[0_30px_100px_-32px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-7"
+            >
+                <Link
+                    href="/"
+                    aria-label={th('signInClose')}
+                    className="absolute end-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-white/35 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
+                    </svg>
+                </Link>
+
+                <div className="mb-5 text-center">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF7A55] to-[#E24216] font-[family-name:Outfit,sans-serif] text-xl font-extrabold text-white shadow-[0_16px_40px_-14px_rgba(255,87,51,0.9)]">
+                        R
+                    </div>
+                    <p className="mt-1.5 font-[family-name:Outfit,sans-serif] text-[13px] font-semibold tracking-[0.2em] text-[#FF8A65]">
+                        RIMBOAI
+                    </p>
+                    <h1 className="mt-3 font-[family-name:Outfit,sans-serif] text-xl font-semibold text-white">{t('createAccount')}</h1>
+                    <p className="mt-1 text-xs text-white/45">{t('registerSubtitle')}</p>
+                </div>
+
+                <GoogleAuthButton label={t('signUpWithGoogle')} />
+
+                <form onSubmit={submit} className="mt-4 space-y-3.5">
+                    <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/65">{t('name')}</span>
+                        <input
+                            type="text"
+                            value={data.name}
+                            onChange={(event) => setData('name', event.target.value)}
+                            autoComplete="name"
+                            required
+                            autoFocus
+                            placeholder={t('namePlaceholder')}
+                            className="h-12 w-full rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none transition placeholder:text-white/20 focus:border-[#FF5733]/60 focus:ring-4 focus:ring-[#FF5733]/10"
+                        />
+                        {errors.name && <span className="mt-1.5 block text-xs text-rose-400">{errors.name}</span>}
+                    </label>
+
+                    <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/65">{t('email')}</span>
+                        <input
+                            type="email"
+                            value={data.email}
+                            onChange={(event) => setData('email', event.target.value)}
+                            autoComplete="email"
+                            required
+                            placeholder={t('emailPlaceholder')}
+                            className="h-12 w-full rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none transition placeholder:text-white/20 focus:border-[#FF5733]/60 focus:ring-4 focus:ring-[#FF5733]/10"
+                        />
+                        {errors.email && <span className="mt-1.5 block text-xs text-rose-400">{errors.email}</span>}
+                    </label>
+
+                    <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/65">{t('password')}</span>
+                        <input
+                            type="password"
+                            value={data.password}
+                            onChange={(event) => setData('password', event.target.value)}
+                            autoComplete="new-password"
+                            required
+                            placeholder={t('passwordMinPlaceholder')}
+                            className="h-12 w-full rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none transition placeholder:text-white/20 focus:border-[#FF5733]/60 focus:ring-4 focus:ring-[#FF5733]/10"
+                        />
+                        {errors.password && <span className="mt-1.5 block text-xs text-rose-400">{errors.password}</span>}
+                    </label>
+
+                    <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-white/65">{t('confirmPassword')}</span>
+                        <input
+                            type="password"
+                            value={data.password_confirmation}
+                            onChange={(event) => setData('password_confirmation', event.target.value)}
+                            autoComplete="new-password"
+                            required
+                            placeholder={t('confirmPasswordPlaceholder')}
+                            className="h-12 w-full rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none transition placeholder:text-white/20 focus:border-[#FF5733]/60 focus:ring-4 focus:ring-[#FF5733]/10"
+                        />
+                        {errors.password_confirmation && (
+                            <span className="mt-1.5 block text-xs text-rose-400">{errors.password_confirmation}</span>
+                        )}
+                    </label>
+
+                    {siteKey ? (
+                        <div className="flex justify-center pt-1">
+                            <TurnstileWidget
+                                siteKey={siteKey}
+                                onToken={(token) => setData('cf-turnstile-response', token)}
+                                onExpire={() => setData('cf-turnstile-response', '')}
+                            />
+                        </div>
+                    ) : null}
+
+                    <button
+                        type="submit"
+                        disabled={processing}
+                        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#FF6A45] to-[#E24216] text-sm font-semibold text-white shadow-[0_12px_30px_-12px_rgba(255,87,51,0.95)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+                    >
+                        {processing ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        ) : (
+                            t('createAccountBtn')
+                        )}
+                    </button>
+                </form>
+
+                <p className="mt-5 text-center text-xs text-white/45">
+                    {t('alreadyHaveAccount')}{' '}
+                    <Link href="/?login" className="font-medium text-[#FF8A65] transition hover:text-[#FFB199]">
+                        {t('signIn')}
+                    </Link>
+                </p>
             </motion.section>
         </div>
     );

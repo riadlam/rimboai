@@ -30,6 +30,7 @@ return [
     'google_failed' => 'Google sign-in failed. Please try again.',
     'google_not_configured' => 'Google sign-in is not configured.',
     'google_no_email' => 'Your Google account did not share an email address.',
+    'registration_unavailable' => 'Unable to complete registration. Please try again later.',
     'content_blocked_copyright' => 'Blocked: your prompt looks like copyrighted or celebrity content (artist name/voice). Remove famous names and try again.',
     'content_blocked_restricted' => 'Blocked: your prompt or lyrics contain restricted words (profanity, drugs, violence, etc.). Clean them up and retry.',
     'generation_simplify' => 'Generation failed. Try a simpler prompt and lyrics, then retry.',

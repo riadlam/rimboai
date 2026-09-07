@@ -37,6 +37,11 @@ class HandleInertiaRequests extends Middleware
                     ]
                     : null,
             ],
+            'turnstile' => [
+                'siteKey' => $request->user()
+                    ? null
+                    : (config('services.turnstile.site_key') ?: null),
+            ],
             // Live catalogue for Pricing + Buy Credits modal. Checkout still
             // re-reads the DB row server-side — this is display-only.
             'tokenPackages' => fn () => \Illuminate\Support\Facades\Cache::remember(
