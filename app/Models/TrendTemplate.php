@@ -208,7 +208,7 @@ class TrendTemplate extends Model
     public static function defaultPromptScaffold(): string
     {
         return <<<'PROMPT'
-@Video1 is a line-drawing motion reference only: use its body movement, hand gestures, head turns, mouth timing, and camera framing. Do NOT copy faces, clothing, jewelry, or identity from @Video1.
+@Video1 is a line-drawing motion reference only: use its body movement, hand gestures, head turns, mouth timing, and camera framing. Do NOT copy faces, clothing, jewelry, color, or identity from @Video1. @Video1 has no real background color — ignore any white/black sketch backdrop.
 
 @Image1 is the character sheet for the person on the RIGHT: preserve exact face, hair, body proportions, and outfit from @Image1.
 @Image2 is the character sheet for the person on the LEFT: preserve exact face, hair, body proportions, and outfit from @Image2.
@@ -217,7 +217,9 @@ Create a photoreal video of the same performance. Each person wears only what th
 
 They perform every gesture, hand movement, head turn, body movement, and mouth movement from @Video1, frame for frame and perfectly in time.
 
-Locked-off camera with the same framing as @Video1. Warm studio lighting. Photoreal, sharp faces, natural skin texture.
+Environment (from the prompt, NOT from @Video1): solid vivid orange studio backdrop like an A COLORS SHOW stage — flat saturated orange wall filling the entire background, no hotel lobby furniture, no windows, no props behind them. Soft even stage lighting on the performers; keep the orange wall clean and uniform.
+
+Locked-off camera with the same framing as @Video1. Photoreal, sharp faces, natural skin texture.
 
 16:9 landscape. Same duration as @Video1. One continuous video with no separate scenes.
 PROMPT;
