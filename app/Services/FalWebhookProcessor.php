@@ -92,12 +92,14 @@ class FalWebhookProcessor
         }
 
         if (in_array($state, ['FAILED', 'ERROR', 'CANCELLED'], true) || ! empty($status['error'])) {
-            $this->fail($type, $creation, [
+            $failed = $this->fail($type, $creation, [
                 'error' => (string) ($status['error'] ?? __('messages.generation_failed')),
                 'error_type' => $status['error_type'] ?? 'error',
             ]);
             $creation->refresh();
-            $this->finalizeFailure($type, $creation);
+            if ($failed) {
+                $this->finalizeFailure($type, $creation);
+            }
             $this->broadcast($type, $creation);
 
             return;
@@ -108,12 +110,14 @@ class FalWebhookProcessor
         }
 
         if (! empty($status['error'])) {
-            $this->fail($type, $creation, [
+            $failed = $this->fail($type, $creation, [
                 'error' => (string) $status['error'],
                 'error_type' => $status['error_type'] ?? 'error',
             ]);
             $creation->refresh();
-            $this->finalizeFailure($type, $creation);
+            if ($failed) {
+                $this->finalizeFailure($type, $creation);
+            }
             $this->broadcast($type, $creation);
 
             return;
@@ -301,13 +305,18 @@ class FalWebhookProcessor
 
     /**
      * @param  array<string, mixed>  $payload
+     * @return bool true when the creation was marked failed (false when auto-retried)
      */
-    private function fail(string $type, Model $creation, array $payload): void
+    private function fail(string $type, Model $creation, array $payload): bool
     {
         $message = $this->friendlyError($type, $payload);
         $errorType = is_string($payload['error_type'] ?? null)
             ? $payload['error_type']
             : 'fal_error';
+
+        if ($type === 'video' && $this->retryTransientMediaLoadFailure($creation, $message)) {
+            return false;
+        }
 
         if (method_exists($creation, 'markFailed')) {
             $creation->markFailed($message, $errorType);
@@ -320,6 +329,92 @@ class FalWebhookProcessor
             'error' => $message,
             'error_type' => $errorType,
         ]);
+
+        return true;
+    }
+
+    /**
+     * Decart/Lucy (and some partners) intermittently 422 "Failed to load the video file"
+     * on a freshly uploaded fal CDN URL. Re-host + resubmit once.
+     */
+    private function retryTransientMediaLoadFailure(Model $creation, string $message): bool
+    {
+        $lower = strtolower($message);
+        if (
+            ! str_contains($lower, 'failed to load the video')
+            && ! str_contains($lower, 'failed to download the file')
+        ) {
+            return false;
+        }
+
+        $settings = $creation->getAttribute('settings');
+        $settings = is_array($settings) ? $settings : [];
+        if (! empty($settings['media_load_retried'])) {
+            return false;
+        }
+
+        $endpoint = (string) ($creation->getAttribute('endpoint_id') ?: ($settings['fal_endpoint'] ?? ''));
+        $input = $settings['fal_input'] ?? null;
+        if ($endpoint === '' || ! is_array($input)) {
+            return false;
+        }
+
+        try {
+            if (! empty($input['video_url']) && is_string($input['video_url'])) {
+                $input['video_url'] = $this->fal->ensureInferenceVideoUrl($input['video_url'], 'retry-video.mp4');
+            }
+            if (! empty($input['video_urls']) && is_array($input['video_urls'])) {
+                $input['video_urls'] = array_values(array_map(
+                    function ($url) {
+                        return is_string($url) && $url !== ''
+                            ? $this->fal->ensureInferenceVideoUrl($url, 'retry-video.mp4')
+                            : $url;
+                    },
+                    $input['video_urls'],
+                ));
+            }
+
+            $settings['fal_input'] = $input;
+            $settings['media_load_retried'] = true;
+
+            $creation->forceFill([
+                'settings' => $settings,
+                'status' => method_exists($creation, 'getTable')
+                    ? ($creation::STATUS_PENDING ?? 'pending')
+                    : 'pending',
+                'progress_message' => 'Retrying media delivery…',
+                'error_message' => null,
+                'error_type' => null,
+            ])->save();
+
+            $submit = $this->fal->submit($endpoint, $input);
+            if (method_exists($creation, 'markQueued')) {
+                $creation->markQueued(
+                    $submit['request_id'] ?? null,
+                    $submit['status_url'] ?? null,
+                    $submit['response_url'] ?? null,
+                );
+            }
+            if (isset($submit['queue_position'])) {
+                $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
+            }
+
+            Log::info('fal.media_load_retry', [
+                'creation_id' => $creation->getKey(),
+                'endpoint' => $endpoint,
+                'request_id' => $submit['request_id'] ?? null,
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('fal.media_load_retry_failed', [
+                'creation_id' => $creation->getKey(),
+                'message' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     /**

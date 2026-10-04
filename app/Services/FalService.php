@@ -245,7 +245,11 @@ class FalService
 
     /**
      * Ensure a video URL is partner-ready (faststart H.264 on fal CDN).
-     * Skips re-upload when the URL is already on fal CDN and the file is fine.
+     *
+     * Always re-hosts a fresh CDN object and waits until it is publicly
+     * readable. Partner workers (Decart/Lucy, MiniMax, …) intermittently 422
+     * "Failed to load the video file" when given a just-uploaded URL that our
+     * own GET can already read — CDN propagation race.
      *
      * @throws RequestException|RuntimeException
      */
@@ -280,10 +284,6 @@ class FalService
         file_put_contents($tmp, $bytes);
 
         try {
-            if ($this->isFalCdnUrl($url) && ! $this->normalize->needsInferenceRemux($tmp)) {
-                return $url;
-            }
-
             return $this->uploadNormalizedVideoPath($tmp, $filenameHint ?: 'video.mp4');
         } finally {
             @unlink($tmp);
@@ -426,7 +426,67 @@ class FalService
             $uploadResponse->throw();
         }
 
+        $this->waitUntilCdnUrlReady($fileUrl, $size);
+
         return $fileUrl;
+    }
+
+    /**
+     * Block until a freshly uploaded fal CDN URL is publicly readable.
+     * Partner model downloaders race this window and return vague 422s.
+     */
+    private function waitUntilCdnUrlReady(string $url, int $expectedSize, int $timeoutSeconds = 25): void
+    {
+        $deadline = time() + max(3, $timeoutSeconds);
+        $attempt = 0;
+
+        while (time() <= $deadline) {
+            $attempt++;
+            try {
+                $head = Http::timeout(15)
+                    ->withHeaders(['User-Agent' => 'rimboai-fal-rehost/1.0'])
+                    ->head($url);
+
+                if ($head->successful()) {
+                    $len = (int) ($head->header('Content-Length') ?: 0);
+                    if ($expectedSize <= 0 || $len <= 0 || abs($len - $expectedSize) <= 64 || $len >= (int) ($expectedSize * 0.98)) {
+                        // Confirm a ranged GET also works (some edges HEAD before body is ready).
+                        $probe = Http::timeout(15)
+                            ->withHeaders([
+                                'User-Agent' => 'rimboai-fal-rehost/1.0',
+                                'Range' => 'bytes=0-1023',
+                            ])
+                            ->get($url);
+
+                        if ($probe->successful() || $probe->status() === 206) {
+                            if ($attempt > 1) {
+                                Log::info('fal.cdn_ready', [
+                                    'url' => $url,
+                                    'attempts' => $attempt,
+                                    'bytes' => $len,
+                                ]);
+                            }
+
+                            return;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::info('fal.cdn_ready_retry', [
+                    'url' => $url,
+                    'attempt' => $attempt,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
+            usleep((int) min(2_000_000, 200_000 * $attempt));
+        }
+
+        Log::warning('fal.cdn_ready_timeout', [
+            'url' => $url,
+            'expected_size' => $expectedSize,
+            'attempts' => $attempt,
+        ]);
     }
 
     private function contentTypeFromExtension(string $ext): string
