@@ -183,6 +183,32 @@ class VideoModelCapabilities
             );
         }
 
+        // Kling O3 Pro/Standard R2V — character elements + one motion-video element (trends).
+        if (
+            str_contains($id, 'kling-video/o3/')
+            && str_contains($id, 'reference-to-video')
+            && ! str_contains($id, '/4k/')
+        ) {
+            $tier = str_contains($id, '/standard/') ? 'standard' : 'pro';
+
+            return $this->caps(
+                images: true,
+                videos: true,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 3,
+                maxVideos: 1,
+                maxAudios: 0,
+                reference: "fal-ai/kling-video/o3/{$tier}/reference-to-video",
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+
         if (str_contains($id, 'kling-video/o3/') && str_contains($id, 'text-to-video')) {
             $tier = str_contains($id, '/standard/') ? 'standard' : 'pro';
 

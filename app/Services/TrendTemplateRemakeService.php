@@ -107,7 +107,7 @@ class TrendTemplateRemakeService
         $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
         $model = $this->resolveVideoModel($endpointId);
         if (! $model) {
-            // Fall back to Seedance 2.5 catalog row if Wan is not seeded yet.
+            // Fall back to Kling O3 Standard if Pro catalog row is missing.
             $endpointId = TrendTemplate::FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
         }
@@ -162,7 +162,7 @@ class TrendTemplateRemakeService
                     'user_id' => $user->id,
                     'mode' => 'trend_template',
                     'endpoint_id' => $submitEndpoint,
-                    'model_name' => $template->model_name ?: ($model->name ?? 'Wan 2.7'),
+                    'model_name' => $template->model_name ?: ($model->name ?? 'Kling O3 Pro'),
                     'prompt' => $prompt,
                     'input_assets' => $inputAssets,
                     'settings' => [

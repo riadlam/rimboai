@@ -272,12 +272,20 @@ class FalVideoInputBuilder
                     unset($input['aspect_ratio'], $input['duration'], $input['resolution'], $input['generate_audio']);
                 }
             } elseif (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video')) {
+                // Character sheets → @Element1..N; optional motion sketch → extra video element.
+                // Fal allows only one element with video_url. Do not send top-level video_urls.
                 $limit = (str_contains($id, '/o1/') || str_contains($id, '/4k/')) ? 7 : 4;
-                $elements = $this->buildKlingElements(array_slice($imageUrls, 0, $limit));
+                $imageLimit = $videoUrls !== [] ? max(1, $limit - 1) : $limit;
+                $elements = $this->buildKlingElements(array_slice($imageUrls, 0, $imageLimit));
+                $imageCount = count($elements);
+                if ($videoUrls !== []) {
+                    $elements[] = ['video_url' => $videoUrls[0]];
+                }
                 if ($elements !== []) {
-                    $input['prompt'] = $this->withReferencePrefix($prompt, $this->referenceList('@Element', count($elements)));
+                    $input['prompt'] = $this->normalizeKlingR2VPrompt($prompt, $imageCount, $videoUrls !== []);
                     $input['elements'] = $elements;
                 }
+                unset($input['video_urls'], $input['image_urls'], $input['resolution']);
             } elseif (str_contains($id, 'wan/v2.7/reference-to-video')) {
                 if ($imageUrls !== []) {
                     $input['reference_image_urls'] = array_slice($imageUrls, 0, 5);
@@ -309,6 +317,7 @@ class FalVideoInputBuilder
             if (
                 $videoUrls !== []
                 && ! str_contains($id, 'wan/v2.7/reference-to-video')
+                && ! (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video'))
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
                 && ! str_contains($id, 'gemini-omni-flash')
             ) {
@@ -505,6 +514,11 @@ class FalVideoInputBuilder
         // Wan 2.7 R2V only accepts 2–10 (I2V/T2V go to 15 — do not confuse them).
         if (str_contains($id, 'wan/v2.7/reference-to-video')) {
             return max(2, min(10, $seconds));
+        }
+
+        // Kling O3 / O1 R2V: 3–15 seconds (string enum on fal).
+        if (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video')) {
+            return max(3, min(15, $seconds));
         }
 
         return $seconds;
@@ -712,6 +726,40 @@ class FalVideoInputBuilder
 
         if ($elementCount > 0 && ! preg_match('/@Element\d+\b/i', $prompt)) {
             $prompt = 'Replace the person in the video with @Element1. '.$prompt;
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * Hotel Lobby / Kapwing prompts use @Video1 + @ImageN. Kling O3 R2V only understands
+     * @ElementN (characters as image elements, motion sketch as one video element).
+     */
+    private function normalizeKlingR2VPrompt(string $prompt, int $imageElementCount, bool $hasMotionVideo): string
+    {
+        $prompt = trim($prompt);
+
+        $prompt = preg_replace('/@Image(\d+)\b/i', '@Element$1', $prompt) ?? $prompt;
+
+        if ($hasMotionVideo) {
+            $motionTag = '@Element'.($imageElementCount + 1);
+            $prompt = preg_replace('/@Video1\b/i', $motionTag, $prompt) ?? $prompt;
+        }
+
+        if ($prompt === '') {
+            $parts = [];
+            for ($i = 1; $i <= $imageElementCount; $i++) {
+                $parts[] = '@Element'.$i;
+            }
+            if ($hasMotionVideo) {
+                $parts[] = 'Follow motion from @Element'.($imageElementCount + 1);
+            }
+
+            return implode('. ', $parts).'.';
+        }
+
+        if ($imageElementCount > 0 && ! preg_match('/@Element\d+\b/i', $prompt)) {
+            $prompt = $this->withReferencePrefix($prompt, $this->referenceList('@Element', $imageElementCount));
         }
 
         return $prompt;

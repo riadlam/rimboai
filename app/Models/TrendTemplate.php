@@ -9,11 +9,14 @@ use Illuminate\Support\Str;
 
 class TrendTemplate extends Model
 {
-    /** Wan 2.7 R2V — character refs + motion video; Seedance on fal blocks recognizable faces. */
-    public const DEFAULT_ENDPOINT = 'fal-ai/wan/v2.7/reference-to-video';
+    /**
+     * Kling O3 Pro R2V — 3–15s, multi-character elements + motion video element.
+     * Seedance on fal blocks recognizable faces; Wan 2.7 R2V caps at 10s.
+     */
+    public const DEFAULT_ENDPOINT = 'fal-ai/kling-video/o3/pro/reference-to-video';
 
-    /** Legacy Seedance catalog row (real-face trends usually fail content policy). */
-    public const FALLBACK_ENDPOINT = 'bytedance/seedance-2.5/reference-to-video';
+    /** Cheaper Kling O3 tier with the same 15s / element capabilities. */
+    public const FALLBACK_ENDPOINT = 'fal-ai/kling-video/o3/standard/reference-to-video';
 
     public const DEFAULT_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 
