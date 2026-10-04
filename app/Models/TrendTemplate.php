@@ -222,9 +222,7 @@ Create a photoreal video of the same performance. @Image1 stands on the RIGHT. @
 
 The set is a seamless burnt-orange studio backdrop, warm and saturated, filling the entire frame edge to edge, with a silver condenser microphone hanging on a thin cable between them. No hotel lobby, no windows, no furniture, no dark walls, no grey or shadowy background — only bright burnt-orange.
 
-Locked-off camera with the same framing as the input video. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture. 16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes.
-
-If @Audio1 is provided: use it as the only performance soundtrack. Dialogue, singing, and timing must match @Audio1 exactly with accurate lip sync. Do not invent new voices or alternate vocals — keep the original vocal timbre and words from @Audio1.
+Locked-off camera with the same framing as the input video. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture. 16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes. Do not invent a soundtrack — mouth movement comes only from @Video1; the real song is added after generation.
 PROMPT;
     }
 

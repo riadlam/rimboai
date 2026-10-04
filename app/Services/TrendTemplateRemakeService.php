@@ -27,6 +27,7 @@ class TrendTemplateRemakeService
         private FalWalletCostTracker $walletCost,
         private FalWebhookProcessor $processor,
         private TrendsFeedService $trends,
+        private MediaMuxService $mux,
     ) {}
 
     /**
@@ -152,13 +153,14 @@ class TrendTemplateRemakeService
             'role' => 'motion_sketch',
         ];
 
-        $lockedAudioUrl = $template->optionalAudioUrl();
-        if (is_string($lockedAudioUrl) && $lockedAudioUrl !== '') {
+        // Kapwing-style: keep locked song for post-mux only — never send it to the model.
+        $muxAudioUrl = $template->optionalAudioUrl();
+        if (is_string($muxAudioUrl) && $muxAudioUrl !== '') {
             $inputAssets[] = [
-                'url' => $lockedAudioUrl,
-                'fal_url' => $lockedAudioUrl,
+                'url' => $muxAudioUrl,
+                'fal_url' => $muxAudioUrl,
                 'type' => 'audio',
-                'role' => 'audio',
+                'role' => 'mux_audio',
             ];
         }
 
@@ -179,7 +181,9 @@ class TrendTemplateRemakeService
                         'aspect' => $aspect,
                         'resolution' => $resolution,
                         'duration' => $duration,
-                        'audio' => $audio,
+                        'audio' => false,
+                        'mux_audio_after' => is_string($muxAudioUrl) && $muxAudioUrl !== '',
+                        'mux_audio_url' => (is_string($muxAudioUrl) && $muxAudioUrl !== '') ? $muxAudioUrl : null,
                         'catalog_endpoint' => $submitEndpoint,
                         'fal_endpoint' => $submitEndpoint,
                         'credits' => $credits,
@@ -193,7 +197,7 @@ class TrendTemplateRemakeService
                     'duration_seconds' => is_numeric($duration) ? (int) $duration : null,
                     'aspect_ratio' => $aspect,
                     'resolution' => $resolution,
-                    'with_audio' => $audio,
+                    'with_audio' => is_string($muxAudioUrl) && $muxAudioUrl !== '',
                     'credits_charged' => $credits,
                     'status' => UserVideoCreation::STATUS_PENDING,
                     'progress_message' => 'Generating character sheets…',
@@ -284,7 +288,9 @@ class TrendTemplateRemakeService
             return;
         }
 
-        $lockedAudioUrl = $template->optionalAudioUrl();
+        $settingsEarly = is_array($creation->settings) ? $creation->settings : [];
+        $muxAudioUrl = $settingsEarly['mux_audio_url'] ?? $template->optionalAudioUrl();
+        $muxAudioUrl = is_string($muxAudioUrl) && $muxAudioUrl !== '' ? $muxAudioUrl : null;
 
         try {
             @set_time_limit(max(120, 90 * count($orderedPhotos) + 60));
@@ -310,6 +316,21 @@ class TrendTemplateRemakeService
             return;
         }
 
+        // MiniMax H3 (and most R2V models) reject motion refs longer than 15s.
+        if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
+            $sketchSeconds = $this->mux->probeUrlDurationSeconds($sketchUrl);
+            if ($sketchSeconds !== null && $sketchSeconds > 15.05) {
+                $creation->markFailed(
+                    'Motion sketch is '.number_format($sketchSeconds, 1).'s — MiniMax H3 max is 15s. Use the Kapwing-style ~15s trend section (and matching locked audio), then retry.',
+                    'motion_sketch_too_long',
+                );
+                $this->tokens->refund($user, $creation, 'video', 'motion_sketch_too_long');
+                $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+                return;
+            }
+        }
+
         // Partner models often reject rimboai /storage URLs and moov-at-end MP4s.
         // Always rehost sheets + a normalized faststart motion sketch to fal CDN.
         try {
@@ -323,9 +344,6 @@ class TrendTemplateRemakeService
                 fn (string $url): string => $this->fal->ensureCdnUrl($url),
                 $sheetUrls,
             );
-            if (is_string($lockedAudioUrl) && $lockedAudioUrl !== '') {
-                $lockedAudioUrl = $this->fal->ensureCdnUrl($lockedAudioUrl, 'trend-audio.mp3');
-            }
         } catch (Throwable $e) {
             report($e);
             $creation->markFailed(
@@ -338,22 +356,20 @@ class TrendTemplateRemakeService
             return;
         }
 
-        $audioUrls = (is_string($lockedAudioUrl) && $lockedAudioUrl !== '')
-            ? [$lockedAudioUrl]
-            : [];
-        $prompt = $this->withLockedAudioPrompt($prompt, $audioUrls !== []);
+        // Kapwing-style: video-only to the model; song is muxed after webhook success.
+        $prompt = $this->withoutAudioReferencePrompt($prompt);
 
         $built = $this->videoInput->build($submitEndpoint, [
             'prompt' => $prompt,
             'aspect' => $aspect,
             'resolution' => $resolution,
             'duration' => $duration,
-            'audio' => $audio || $audioUrls !== [],
+            'audio' => false,
             'allowed_durations' => $allowedDurations,
             'mode' => 'reference-to-video',
             'image_urls' => $sheetUrls,
             'video_urls' => [$sketchUrl],
-            'audio_urls' => $audioUrls,
+            'audio_urls' => [],
             'enable_prompt_expansion' => false,
         ]);
 
@@ -392,7 +408,9 @@ class TrendTemplateRemakeService
             'aspect' => $built['aspect_ratio'],
             'resolution' => $built['resolution'],
             'duration' => $duration ?? $built['duration_value'],
-            'audio' => $built['with_audio'],
+            'audio' => false,
+            'mux_audio_after' => $muxAudioUrl !== null,
+            'mux_audio_url' => $muxAudioUrl,
             'fal_input' => $falInput,
             'fal_endpoint' => $submitEndpoint,
             'billing_endpoint' => $billing['endpoint_id'] ?? $submitEndpoint,
@@ -405,9 +423,8 @@ class TrendTemplateRemakeService
             'media_counts' => [
                 'images' => count($sheetUrls),
                 'videos' => 1,
-                'audios' => count($audioUrls),
+                'audios' => 0,
             ],
-            'locked_audio_url' => $audioUrls[0] ?? null,
         ]);
 
         $mergedAssets = array_merge($inputAssets, array_map(
@@ -421,14 +438,6 @@ class TrendTemplateRemakeService
             $sheetUrls,
             array_keys($sheetUrls),
         ));
-        if ($audioUrls !== []) {
-            $mergedAssets[] = [
-                'url' => $audioUrls[0],
-                'fal_url' => $audioUrls[0],
-                'type' => 'audio',
-                'role' => 'audio',
-            ];
-        }
 
         $creation->forceFill([
             'input_assets' => $mergedAssets,
@@ -437,7 +446,7 @@ class TrendTemplateRemakeService
             'duration_seconds' => $built['duration_seconds'],
             'aspect_ratio' => $built['aspect_ratio'],
             'resolution' => $built['resolution'],
-            'with_audio' => $built['with_audio'] || $audioUrls !== [],
+            'with_audio' => $muxAudioUrl !== null,
             'progress_message' => 'Starting video generation…',
         ])->save();
         $this->processor->broadcastSnapshot('video', $creation->fresh());
@@ -466,24 +475,15 @@ class TrendTemplateRemakeService
     }
 
     /**
-     * MiniMax H3 invents voices unless Audio 1 is cited. Append when locked audio is present.
+     * Strip Audio refs — song is muxed after generation (Kapwing-style), not sent to fal.
      */
-    private function withLockedAudioPrompt(string $prompt, bool $hasAudio): string
+    private function withoutAudioReferencePrompt(string $prompt): string
     {
         $prompt = trim($prompt);
-        if (! $hasAudio) {
-            return $prompt;
-        }
+        $prompt = preg_replace('/\n*If @Audio1 is provided:.*$/is', '', $prompt) ?? $prompt;
+        $prompt = preg_replace('/[^\n]*@Audio\d+[^\n]*\n?/i', '', $prompt) ?? $prompt;
 
-        if (preg_match('/@Audio1\b|Audio\s*1\b/i', $prompt) === 1) {
-            return $prompt;
-        }
-
-        $audioClause = <<<'TXT'
-Use @Audio1 as the only performance soundtrack — dialogue, singing, and timing must match @Audio1 exactly with accurate lip sync. Do not invent new voices, lyrics, or alternate vocals; keep the original vocal timbre and words from @Audio1. Motion and mouth shapes from @Video1 must stay locked to @Audio1.
-TXT;
-
-        return $prompt === '' ? $audioClause : ($prompt."\n\n".$audioClause);
+        return trim($prompt);
     }
 
     private function resolveTemplate(TrendTemplate|string|int $template): TrendTemplate

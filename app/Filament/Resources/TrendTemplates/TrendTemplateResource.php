@@ -112,15 +112,15 @@ class TrendTemplateResource extends Resource
                     ->directory('trend-templates/sketches')
                     ->visibility('public')
                     ->required()
-                    ->helperText('Line-drawing / sketch motion reference. Not shown as a client upload.')
+                    ->helperText('Line-drawing / sketch motion reference (≤15s for MiniMax H3). Use the Kapwing-style trend section, same cut as locked audio. Not shown as a client upload.')
                     ->columnSpanFull(),
                 FileUpload::make('locked_audio')
-                    ->label('Locked performance audio (voice / song)')
+                    ->label('Locked performance audio (muxed after generate)')
                     ->acceptedFileTypes(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/*'])
                     ->disk('public')
                     ->directory('trend-templates/audio')
                     ->visibility('public')
-                    ->helperText('Sent to MiniMax H3 as Audio 1 for voice clone + lip sync (2–15s). Extract the original vocals/song from the source trend clip. Without this, H3 invents new voices.')
+                    ->helperText('Kapwing-style: NOT sent to the AI model (avoids copyright/invented voices). Muxed onto the finished video so mouths from the motion sketch line up with this track. Must match the same ~15s cut as the motion sketch.')
                     ->columnSpanFull(),
                 Repeater::make('slots')
                     ->label('Client face slots')
@@ -197,9 +197,9 @@ class TrendTemplateResource extends Resource
                     ->required()
                     ->helperText('Used for fal cost estimate / Seedance duration.'),
                 Toggle::make('generate_audio')
-                    ->label('Generate audio')
-                    ->helperText('For MiniMax H3, native audio is always returned. Upload Locked performance audio above so the model clones that voice instead of inventing one.')
-                    ->default(true),
+                    ->label('Generate audio (unused for trends)')
+                    ->helperText('Trend remakes ignore this: AI video is generated without the song, then locked audio is muxed on afterwards.')
+                    ->default(false),
                 TextInput::make('fal_estimate_usd')
                     ->label('Fal estimate (USD)')
                     ->numeric()
