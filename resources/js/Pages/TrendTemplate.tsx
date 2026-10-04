@@ -6,6 +6,13 @@ import AppLayout from '@/Layouts/AppLayout';
 import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
 import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { ApiError, apiGet, apiPostForm } from '@/lib/api';
+import {
+    CREATION_SAFETY_NET_MS,
+    isTerminalCreationStatus,
+    matchesCreationEvent,
+    subscribeCreationUpdated,
+    type CreationUpdatedEvent,
+} from '@/lib/creationRealtime';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 import type { PageProps } from '@/types';
 
@@ -135,8 +142,11 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         (workspace.user_remake_count ?? 0) > 1 ? (workspace.user_latest ?? null) : null,
     );
     const [downloading, setDownloading] = useState(false);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const activeCreationIdRef = useRef<number | null>(null);
+    const safetyNetTimerRef = useRef<number | null>(null);
     const remakeCountRef = useRef(workspace.user_remake_count ?? 0);
+    const workspaceTypeRef = useRef(workspace.type);
+    workspaceTypeRef.current = workspace.type;
 
     useEffect(() => {
         setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
@@ -152,56 +162,119 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workspace.key]);
 
+    const stopTracking = useCallback(() => {
+        activeCreationIdRef.current = null;
+        if (safetyNetTimerRef.current != null) {
+            window.clearTimeout(safetyNetTimerRef.current);
+            safetyNetTimerRef.current = null;
+        }
+    }, []);
+
+    const applyRemakeStatus = useCallback(
+        (data: RemakeCreation) => {
+            setJob(data);
+            if (data.status === 'completed') {
+                stopTracking();
+                setCreating(false);
+                const nextCount = remakeCountRef.current + 1;
+                remakeCountRef.current = nextCount;
+                setCompletedRemakeCount(nextCount);
+                // Replace the template example only after the 2nd+ remake.
+                if (nextCount > 1) {
+                    setExampleOverride(data);
+                }
+                return;
+            }
+            if (data.status === 'failed' || data.status === 'cancelled') {
+                stopTracking();
+                setCreating(false);
+                setError(data.error || t('createFailed'));
+            }
+        },
+        [stopTracking, t],
+    );
+
+    const startSafetyNet = useCallback(
+        (creationId: number) => {
+            if (safetyNetTimerRef.current != null) {
+                window.clearTimeout(safetyNetTimerRef.current);
+                safetyNetTimerRef.current = null;
+            }
+
+            const loop = async () => {
+                if (activeCreationIdRef.current !== creationId) return;
+                if (document.visibilityState === 'visible') {
+                    try {
+                        const data = await apiGet<RemakeCreation>(
+                            statusUrl(workspaceTypeRef.current, creationId),
+                        );
+                        if (activeCreationIdRef.current === creationId) {
+                            applyRemakeStatus(data);
+                        }
+                    } catch {
+                        // Pusher is primary; ignore transient safety-net errors.
+                    }
+                }
+                if (activeCreationIdRef.current === creationId) {
+                    safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
+                }
+            };
+
+            safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
+        },
+        [applyRemakeStatus],
+    );
+
+    const trackCreation = useCallback(
+        (creationId: number) => {
+            activeCreationIdRef.current = creationId;
+            startSafetyNet(creationId);
+        },
+        [startSafetyNet],
+    );
+
+    // Pusher primary (fal webhook → CreationUpdated); safety-net covers misses.
+    useEffect(() => {
+        if (isGuest || !props.auth.user?.id) return;
+
+        const unsubscribe = subscribeCreationUpdated(props.auth.user.id, (event: CreationUpdatedEvent) => {
+            const creationId = activeCreationIdRef.current;
+            if (creationId == null) return;
+            if (!matchesCreationEvent(event, creationId, [workspaceTypeRef.current])) return;
+
+            const creation = event.creation;
+            if (!creation) return;
+
+            applyRemakeStatus({
+                id: creationId,
+                status: String(creation.status ?? ''),
+                progress_percent:
+                    typeof creation.progress_percent === 'number' ? creation.progress_percent : null,
+                progress_message: creation.progress_message ?? null,
+                video_url: creation.video_url ?? null,
+                thumbnail_url: creation.thumbnail_url ?? null,
+                preview_url: creation.preview_url ?? null,
+                images: creation.images,
+                audio_url: creation.audio_url ?? null,
+                cover_url: creation.cover_url ?? null,
+                error: creation.error ?? null,
+            });
+        });
+
+        return () => {
+            unsubscribe?.();
+        };
+    }, [applyRemakeStatus, isGuest, props.auth.user?.id]);
+
     useEffect(() => {
         return () => {
             Object.values(slots).forEach((s) => {
                 if (s.preview) URL.revokeObjectURL(s.preview);
             });
-            if (pollRef.current) clearInterval(pollRef.current);
+            stopTracking();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const stopPoll = useCallback(() => {
-        if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-        }
-    }, []);
-
-    const startPoll = useCallback(
-        (creationId: number) => {
-            stopPoll();
-            pollRef.current = setInterval(async () => {
-                try {
-                    const data = await apiGet<RemakeCreation>(statusUrl(workspace.type, creationId));
-                    setJob(data);
-                    if (data.status === 'completed') {
-                        stopPoll();
-                        setCreating(false);
-                        const nextCount = remakeCountRef.current + 1;
-                        remakeCountRef.current = nextCount;
-                        setCompletedRemakeCount(nextCount);
-                        // Replace the template example only after the 2nd+ remake.
-                        if (nextCount > 1) {
-                            setExampleOverride(data);
-                        }
-                        return;
-                    }
-                    if (data.status === 'failed' || data.status === 'cancelled') {
-                        stopPoll();
-                        setCreating(false);
-                        setError(data.error || t('createFailed'));
-                    }
-                } catch (e) {
-                    stopPoll();
-                    setCreating(false);
-                    setError(e instanceof ApiError ? e.message : t('createFailed'));
-                }
-            }, 2500);
-        },
-        [stopPoll, t, workspace.type],
-    );
 
     const requiredReady =
         workspace.uploads.length === 0 ||
@@ -278,16 +351,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
             if (mobile) {
                 setJob(data);
                 setModalOpen(true);
-                if (data.status === 'completed') {
-                    const nextCount = baseCount + 1;
-                    remakeCountRef.current = nextCount;
-                    setCompletedRemakeCount(nextCount);
-                    if (nextCount > 1) setExampleOverride(data);
-                    setCreating(false);
-                } else if (data.status !== 'failed') {
-                    startPoll(data.id);
+                if (isTerminalCreationStatus(data.status)) {
+                    applyRemakeStatus(data);
                 } else {
-                    setCreating(false);
+                    trackCreation(data.id);
                 }
                 return;
             }
@@ -307,7 +374,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     };
 
     const closeModal = () => {
-        stopPoll();
+        stopTracking();
         setModalOpen(false);
         setCreating(false);
         setDetailsOpen(false);

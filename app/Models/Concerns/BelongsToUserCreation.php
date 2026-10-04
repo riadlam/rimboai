@@ -3,8 +3,10 @@
 namespace App\Models\Concerns;
 
 use App\Models\User;
+use App\Services\CreationTelegramNotifier;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Throwable;
 
 trait BelongsToUserCreation
 {
@@ -86,6 +88,8 @@ trait BelongsToUserCreation
 
     public function markFailed(?string $message = null, ?string $type = null): void
     {
+        $alreadyFailed = (string) ($this->status ?? '') === self::STATUS_FAILED;
+
         $this->forceFill([
             'status' => self::STATUS_FAILED,
             'error_message' => $message,
@@ -93,5 +97,18 @@ trait BelongsToUserCreation
             'progress_message' => 'Failed',
             'completed_at' => now(),
         ])->save();
+
+        if ($alreadyFailed) {
+            return;
+        }
+
+        try {
+            $creationType = CreationTelegramNotifier::typeFromModel($this);
+            if ($creationType !== null) {
+                app(CreationTelegramNotifier::class)->notifyFailed($creationType, $this);
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 }

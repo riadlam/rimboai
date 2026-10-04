@@ -3,6 +3,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
+import {
+    CREATION_SAFETY_NET_MS,
+    isTerminalCreationStatus,
+    matchesCreationEvent,
+    subscribeCreationUpdated,
+    type CreationUpdatedEvent,
+} from '@/lib/creationRealtime';
 import { estimateToolCredits, snapBillableDuration } from '@/lib/toolCredits';
 import type { CreditsConfig } from '@/lib/imageCredits';
 import type { PageProps, Tool, ToolControlSpec, ToolUploadSpec, ToolWorkspace } from '@/types';
@@ -105,7 +112,10 @@ export default function ToolCreatePanel({
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const activeCreationIdRef = useRef<number | null>(null);
+    const safetyNetTimerRef = useRef<number | null>(null);
+    const onCreationUpdatedRef = useRef(onCreationUpdated);
+    onCreationUpdatedRef.current = onCreationUpdated;
 
     // Always use the primary model — AI Model picker is hidden from the tools UI.
     const modelOptions = workspace.models ?? [];
@@ -129,64 +139,121 @@ export default function ToolCreatePanel({
         setStatusMessage(null);
     }, [workspace.tool_slug, workspace.model_id]);
 
+    const stopTracking = useCallback(() => {
+        activeCreationIdRef.current = null;
+        if (safetyNetTimerRef.current != null) {
+            window.clearTimeout(safetyNetTimerRef.current);
+            safetyNetTimerRef.current = null;
+        }
+    }, []);
+
+    const applyCreationStatus = useCallback(
+        (data: ToolCreationResponse) => {
+            if (typeof data.progress_percent === 'number') {
+                setProgress(Math.max(5, Math.min(95, data.progress_percent)));
+            }
+            if (data.progress_message) setStatusMessage(data.progress_message);
+
+            if (data.status === 'completed') {
+                stopTracking();
+                setProgress(100);
+                setLoading(false);
+                setStatusMessage(t('detail.done'));
+                onCreationUpdatedRef.current?.(data);
+                void reconcileWalletAfterComplete(data.id);
+                return;
+            }
+            if (data.status === 'failed' || data.status === 'cancelled') {
+                stopTracking();
+                setLoading(false);
+                setProgress(0);
+                setError(data.error || t('detail.failed'));
+                onCreationUpdatedRef.current?.(data);
+                return;
+            }
+
+            onCreationUpdatedRef.current?.(data);
+        },
+        [stopTracking, t],
+    );
+
+    const startSafetyNet = useCallback(
+        (creationId: number) => {
+            if (safetyNetTimerRef.current != null) {
+                window.clearTimeout(safetyNetTimerRef.current);
+                safetyNetTimerRef.current = null;
+            }
+
+            const loop = async () => {
+                if (activeCreationIdRef.current !== creationId) return;
+                if (document.visibilityState === 'visible') {
+                    try {
+                        const data = await apiGet<ToolCreationResponse>(
+                            `/tools/creations/${creationId}/status`,
+                        );
+                        if (activeCreationIdRef.current === creationId) {
+                            applyCreationStatus(data);
+                        }
+                    } catch {
+                        // Pusher is primary; ignore transient safety-net errors.
+                    }
+                }
+                if (activeCreationIdRef.current === creationId) {
+                    safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
+                }
+            };
+
+            safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
+        },
+        [applyCreationStatus],
+    );
+
+    const trackCreation = useCallback(
+        (creationId: number) => {
+            activeCreationIdRef.current = creationId;
+            startSafetyNet(creationId);
+        },
+        [startSafetyNet],
+    );
+
+    // Pusher primary (fal webhook → CreationUpdated); safety-net above covers misses.
+    useEffect(() => {
+        if (isGuest || !pageProps.auth.user?.id) return;
+
+        const unsubscribe = subscribeCreationUpdated(pageProps.auth.user.id, (event: CreationUpdatedEvent) => {
+            const creationId = activeCreationIdRef.current;
+            if (creationId == null) return;
+            if (!matchesCreationEvent(event, creationId, ['video'])) return;
+
+            const creation = event.creation;
+            if (!creation) return;
+
+            applyCreationStatus({
+                id: creationId,
+                status: String(creation.status ?? ''),
+                progress_message: creation.progress_message ?? null,
+                progress_percent:
+                    typeof creation.progress_percent === 'number' ? creation.progress_percent : null,
+                video_url: creation.video_url ?? null,
+                preview_url: creation.preview_url ?? null,
+                error: creation.error ?? null,
+            });
+        });
+
+        return () => {
+            unsubscribe?.();
+        };
+    }, [applyCreationStatus, isGuest, pageProps.auth.user?.id]);
+
     useEffect(() => {
         return () => {
             Object.values(slots).forEach((s) => {
                 if (s.preview) URL.revokeObjectURL(s.preview);
             });
-            if (pollRef.current) clearInterval(pollRef.current);
+            stopTracking();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const stopPolling = useCallback(() => {
-        if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-        }
-    }, []);
-
-    const pollStatus = useCallback(
-        (creationId: number) => {
-            stopPolling();
-            pollRef.current = setInterval(async () => {
-                try {
-                    const data = await apiGet<ToolCreationResponse>(`/tools/creations/${creationId}/status`);
-                    if (typeof data.progress_percent === 'number') {
-                        setProgress(Math.max(5, Math.min(95, data.progress_percent)));
-                    }
-                    if (data.progress_message) setStatusMessage(data.progress_message);
-
-                    if (data.status === 'completed') {
-                        stopPolling();
-                        setProgress(100);
-                        setLoading(false);
-                        setStatusMessage(t('detail.done'));
-                        onCreationUpdated?.(data);
-                        // Silent follow-up polls so Fal cost_usd / wallet-after can land
-                        // after billing-events lag (same role as ReconcileFalCreationCostJob).
-                        void reconcileWalletAfterComplete(creationId);
-                        return;
-                    }
-                    if (data.status === 'failed' || data.status === 'cancelled') {
-                        stopPolling();
-                        setLoading(false);
-                        setProgress(0);
-                        setError(data.error || t('detail.failed'));
-                        onCreationUpdated?.(data);
-                        return;
-                    }
-
-                    onCreationUpdated?.(data);
-                } catch (e) {
-                    stopPolling();
-                    setLoading(false);
-                    setError(e instanceof ApiError ? e.message : t('detail.failed'));
-                }
-            }, 2500);
-        },
-        [onCreationUpdated, stopPolling, t],
-    );
 
     const videoDuration = slots.video?.duration ?? null;
     const videoFps = slots.video?.fps ?? null;
@@ -357,11 +424,15 @@ export default function ToolCreatePanel({
             setProgress(35);
             setStatusMessage(data.progress_message || t('detail.processing'));
             onCreationStarted?.(data);
-            pollStatus(data.id);
+            if (isTerminalCreationStatus(data.status)) {
+                applyCreationStatus(data);
+            } else {
+                trackCreation(data.id);
+            }
         } catch (e) {
             setLoading(false);
             setProgress(0);
-            stopPolling();
+            stopTracking();
             if (e instanceof ApiError && e.status === 401) {
                 window.location.href = '/login';
                 return;
@@ -376,14 +447,15 @@ export default function ToolCreatePanel({
         }
     }, [
         activeModelId,
+        applyCreationStatus,
         billDuration,
         isDurationEstimate,
         isGuest,
         onCreationStarted,
-        pollStatus,
         slots,
-        stopPolling,
+        stopTracking,
         t,
+        trackCreation,
         values,
         videoFps,
         videoWidth,

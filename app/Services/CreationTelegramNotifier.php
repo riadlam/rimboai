@@ -8,6 +8,7 @@ use App\Models\UserMusicCreation;
 use App\Models\UserVideoCreation;
 use App\Models\UserVoiceCreation;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -261,6 +262,113 @@ class CreationTelegramNotifier
         }
     }
 
+    /**
+     * Alert when a customer creation fails (Lab / Tools / Trends).
+     * Idempotent per creation so webhook + sync retries do not spam.
+     */
+    public function notifyFailed(string $creationType, Model $creation): void
+    {
+        if (! $this->telegram->isConfigured()) {
+            return;
+        }
+
+        $cacheKey = 'telegram:creation_failed:'.$creationType.':'.(int) $creation->getKey();
+        if (! Cache::add($cacheKey, 1, now()->addDays(7))) {
+            return;
+        }
+
+        try {
+            $creation->refresh();
+            $user = User::query()->find($creation->getAttribute('user_id'));
+            $settings = is_array($creation->getAttribute('settings')) ? $creation->getAttribute('settings') : [];
+            $mode = (string) ($creation->getAttribute('mode') ?? '');
+            $toolSlug = str_starts_with($mode, 'tool:') ? substr($mode, 5) : null;
+            $errorMessage = trim((string) ($creation->getAttribute('error_message') ?? ''));
+            $errorType = trim((string) ($creation->getAttribute('error_type') ?? ''));
+            $progressMessage = trim((string) ($creation->getAttribute('progress_message') ?? ''));
+            $requestId = trim((string) ($creation->getAttribute('fal_request_id') ?? ''));
+
+            $lines = [
+                '🚨 <b>Customer creation failed</b>',
+                '<i>'.$this->e($this->surfaceBlurb($mode, $toolSlug)).' · needs a look</i>',
+                $this->hr(),
+                $this->typeEmoji($creationType).' Type · <b>'.$this->e($creationType).'</b>',
+                '🪪 Creation · <code>#'.(int) $creation->getKey().'</code>',
+                $this->statusLine((string) ($creation->getAttribute('status') ?? 'failed')),
+                '👤 User · '.$this->e((string) ($user?->email ?? '—')).' <code>#'.(int) ($creation->getAttribute('user_id') ?? 0).'</code>',
+                '🪙 Balance · <b>'.number_format((int) ($user?->tokens ?? 0)).'</b> tokens',
+                '⚡️ Charged · <b>'.$this->fmtNum($creation->getAttribute('credits_charged')).'</b>',
+                '🔮 Est. fal · '.$this->fmtUsd($settings['fal_cost_usd'] ?? null),
+                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+            ];
+
+            if ($toolSlug) {
+                $lines[] = '🛠️ Tool · <b>'.$this->e($toolSlug).'</b>';
+            }
+
+            $lines[] = '🎛️ Mode · '.$this->e($mode !== '' ? $mode : '—');
+            $lines[] = '🧠 Model · '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
+            $lines[] = '🔌 Endpoint · <code>'.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')).'</code>';
+
+            if ($requestId !== '') {
+                $lines[] = '🆔 fal request · <code>'.$this->e($requestId).'</code>';
+            }
+
+            $aspect = $creation->getAttribute('aspect_ratio') ?? ($settings['aspect'] ?? null);
+            $resolution = $creation->getAttribute('resolution') ?? ($settings['resolution'] ?? null);
+            $duration = $creation->getAttribute('duration_seconds')
+                ?? $creation->getAttribute('duration_value')
+                ?? ($settings['duration'] ?? null);
+
+            if ($aspect !== null && $aspect !== '') {
+                $lines[] = '📐 Aspect · '.$this->e((string) $aspect);
+            }
+            if ($resolution !== null && $resolution !== '') {
+                $lines[] = '🖥️ Resolution · '.$this->e((string) $resolution);
+            }
+            if ($duration !== null && $duration !== '') {
+                $lines[] = '⏱️ Duration · '.$this->e((string) $duration);
+            }
+
+            $lines[] = $this->hr();
+            $lines[] = '🧨 Error type · <code>'.$this->e($errorType !== '' ? $errorType : '—').'</code>';
+            $lines[] = '💬 <b>Error message (full)</b>';
+            $lines[] = $errorMessage !== ''
+                ? '<pre>'.$this->e($this->truncate($errorMessage, 3500)).'</pre>'
+                : '<i>(empty)</i>';
+
+            if ($progressMessage !== '' && strcasecmp($progressMessage, 'Failed') !== 0) {
+                $lines[] = '📟 Progress · '.$this->e($this->truncate($progressMessage, 500));
+            }
+
+            $prompt = (string) ($creation->getAttribute('prompt') ?? '');
+            if ($prompt !== '') {
+                $lines[] = $this->hr();
+                $lines[] = '📝 <b>Prompt</b>';
+                $lines[] = '<i>'.$this->e($this->truncate($prompt, 800)).'</i>';
+            }
+
+            $failedAt = $creation->getAttribute('completed_at');
+            if ($failedAt) {
+                $lines[] = '📅 Failed at · '.$this->e(
+                    $failedAt instanceof \Carbon\CarbonInterface
+                        ? $failedAt->timezone(config('app.timezone'))->format('Y-m-d H:i:s')
+                        : (string) $failedAt
+                );
+            }
+
+            $this->telegram->send(implode("\n", $lines));
+        } catch (Throwable $e) {
+            report($e);
+            Cache::forget($cacheKey);
+            Log::warning('CreationTelegramNotifier notifyFailed failed', [
+                'type' => $creationType,
+                'creation_id' => $creation->getKey(),
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function notifyFailedCharged(string $creationType, Model $creation): void
     {
         if (! $this->telegram->isConfigured()) {
@@ -269,6 +377,7 @@ class CreationTelegramNotifier
 
         try {
             $user = User::query()->find($creation->getAttribute('user_id'));
+            $errorMessage = trim((string) ($creation->getAttribute('error_message') ?? ''));
             $this->telegram->send(implode("\n", [
                 '🚨 <b>Failed job — fal still took a bite</b>',
                 '<i>tokens kept · we paid fal anyway</i>',
@@ -279,6 +388,7 @@ class CreationTelegramNotifier
                 '⚡️ Charged · '.$this->fmtNum($creation->getAttribute('credits_charged')),
                 '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
                 '🔌 Endpoint · <code>'.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')).'</code>',
+                '💬 Error · '.$this->e($this->truncate($errorMessage !== '' ? $errorMessage : '—', 800)),
             ]));
         } catch (Throwable $e) {
             report($e);
