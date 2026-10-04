@@ -682,66 +682,55 @@ class VideoToolsModelsSeeder extends Seeder
                 'tags' => ['filters', 'v2v', 'kling', 'fallback'],
             ],
 
-            // ── Motion Reference (original → line-drawing sketch for Trends) ─
-            // Lucy Restyle: up to ~30 min on fal — expose 120s for trend/long takes ($0.01/s).
-            // Kling O3 edit: sharper short sketches (3–15s). Wan edit: 2–10s fallback.
-            // Client auto-picks the cheapest model that supports the uploaded clip length.
+            // ── Motion Reference (ReShot-style control videos for Trends) ─────
+            // Closest fal equivalents to open-source ReShot:
+            //   depth → fal-ai/depth-anything-video (Video Depth Anything)
+            //   pose  → fal-ai/dwpose/video (OpenPose / DWPose skeletons)
+            // (fal has no video canny endpoint — image-only preprocessor only.)
             [
                 'sort' => 274,
                 'tool_slug' => 'motion-reference',
                 'tool_name' => 'Motion Reference',
-                'endpoint_id' => 'decart/lucy-restyle',
-                'name' => 'Lucy Restyle Motion Sketch',
-                'description' => 'Long-clip line-drawing motion reference for Trend Templates (up to 120s).',
+                'endpoint_id' => 'fal-ai/depth-anything-video',
+                'name' => 'Depth Map (ReShot-style)',
+                'description' => 'Grey depth control video for Seedance / MiniMax H3 trend remakes — keeps motion & camera, strips faces.',
                 'unit' => 'seconds',
-                'unit_price' => 0.01,
-                'ref_cost_usd' => 0.01 * $s,
+                // Fal: $0.04 per second of video
+                'unit_price' => 0.04,
+                'ref_cost_usd' => 0.04 * $s,
                 'ref_duration_seconds' => 5,
-                'max_duration' => 120,
-                'enums' => ['720p'],
+                // API max_frames=2400 → ~80s @30fps; expose 60s for trends.
+                'max_duration' => 60,
+                'enums' => ['auto', '720p', '1080p'],
                 'is_primary' => true,
                 'defaults' => [
+                    'model' => 'VDA-Large',
+                    'colormap' => 'grayscale',
                     'resolution' => '720p',
-                    'enhance_prompt' => false,
+                    'side_by_side' => false,
+                    'include_raw_depths' => false,
                 ],
-                'tags' => ['motion-reference', 'sketch', 'trends', 'lucy', 'primary', 'long'],
+                'tags' => ['motion-reference', 'depth', 'reshot', 'trends', 'primary', 'h3', 'seedance'],
             ],
             [
                 'sort' => 275,
                 'tool_slug' => 'motion-reference',
                 'tool_name' => 'Motion Reference',
-                'endpoint_id' => 'fal-ai/kling-video/o3/standard/video-to-video/edit',
-                'name' => 'Kling O3 Motion Sketch',
-                'description' => 'Higher-detail short sketches for Trend Templates (3–15s).',
+                'endpoint_id' => 'fal-ai/dwpose/video',
+                'name' => 'Pose Skeleton (ReShot-style)',
+                'description' => 'OpenPose / DWPose skeleton video for dance & limb-accurate trend remakes.',
                 'unit' => 'seconds',
-                'unit_price' => 0.126,
-                'ref_cost_usd' => 0.126 * $s,
+                // Fal bills compute-seconds (~$0.0006); approximate per video-second for UI.
+                'unit_price' => 0.002,
+                'ref_cost_usd' => 0.002 * $s,
                 'ref_duration_seconds' => 5,
-                'max_duration' => 15,
+                'max_duration' => 60,
                 'enums' => null,
                 'is_primary' => false,
-                'defaults' => ['keep_audio' => false],
-                'tags' => ['motion-reference', 'sketch', 'trends', 'kling', 'fallback'],
-            ],
-            [
-                'sort' => 276,
-                'tool_slug' => 'motion-reference',
-                'tool_name' => 'Motion Reference',
-                'endpoint_id' => 'fal-ai/wan/v2.7/edit-video',
-                'name' => 'Wan 2.7 Motion Sketch',
-                'description' => 'Shorter-clip fallback (2–10s) for line-drawing motion references.',
-                'unit' => 'seconds',
-                'unit_price' => 0.10,
-                'ref_cost_usd' => 0.10 * $s,
-                'ref_duration_seconds' => 5,
-                'max_duration' => 10,
-                'enums' => ['720p', '1080p'],
-                'is_primary' => false,
                 'defaults' => [
-                    'resolution' => '720p',
-                    'audio_setting' => 'origin',
+                    'draw_mode' => 'full-pose',
                 ],
-                'tags' => ['motion-reference', 'sketch', 'trends', 'wan27', 'fallback'],
+                'tags' => ['motion-reference', 'pose', 'reshot', 'trends', 'dwpose', 'h3'],
             ],
 
             // ── Motion Control ──────────────────────────────────────────────

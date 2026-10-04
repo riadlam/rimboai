@@ -40,11 +40,12 @@ function pickAdaptiveToolModel(
     if (duration == null || !(duration > 0)) {
         return pool.find((m) => m.is_primary) ?? pool[0] ?? null;
     }
+    // Prefer the tool's primary model when it supports the clip, then cheapest.
     return [...pool].sort((a, b) => {
+        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
         const pa = a.billing?.unit_price ?? Number.POSITIVE_INFINITY;
         const pb = b.billing?.unit_price ?? Number.POSITIVE_INFINITY;
         if (pa !== pb) return pa - pb;
-        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
         return (b.billing?.max_duration ?? 0) - (a.billing?.max_duration ?? 0);
     })[0] ?? null;
 }

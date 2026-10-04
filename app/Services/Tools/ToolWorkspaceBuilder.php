@@ -350,16 +350,17 @@ class ToolWorkspaceBuilder
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
-            // Motion Reference — original clip → line-drawing sketch for Trend Templates
+            // Motion Reference — ReShot-style depth / pose control videos for Trends
             'motion-reference' => [
                 [
-                    'type' => 'textarea',
-                    'key' => 'prompt',
-                    'label_key' => 'motionReferenceDetailPrompt',
-                    'placeholder_key' => 'motionReferenceDetailPlaceholder',
-                    'default' => '',
-                    'required' => false,
+                    'type' => 'choice',
+                    'key' => 'draw_mode',
+                    'label_key' => 'poseDrawMode',
+                    'options' => ['full-pose', 'body-pose'],
+                    'default' => is_string($defaults['draw_mode'] ?? null) ? $defaults['draw_mode'] : 'full-pose',
+                    'option_label_prefix' => 'poseModes',
                 ],
+                $this->resolutionControl($enums, $defaults, ['auto', '720p', '1080p']),
             ],
 
             // AI Video Filters — Wan 2.7 edit: filter preset + res/aspect (prompt-driven)
