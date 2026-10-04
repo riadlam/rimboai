@@ -73,6 +73,88 @@ class MediaMuxService
         }
     }
 
+    /**
+     * If media is longer than $maxSeconds, trim from the start and store on public disk.
+     * Returns the original URL when already short enough.
+     *
+     * @return array{url: string, path: string|null, trimmed: bool, original_seconds: float|null}
+     */
+    public function ensureMaxDurationPublicUrl(
+        string $url,
+        float $maxSeconds,
+        string $storageDir,
+        string $filename,
+        string $kind = 'video',
+    ): array {
+        $maxSeconds = max(0.5, $maxSeconds);
+        $tmp = $this->downloadToTemp($url, 'trim-src-');
+        $originalSeconds = $this->probePathDurationSeconds($tmp);
+
+        try {
+            if ($originalSeconds === null || $originalSeconds <= ($maxSeconds + 0.05)) {
+                return [
+                    'url' => $url,
+                    'path' => null,
+                    'trimmed' => false,
+                    'original_seconds' => $originalSeconds,
+                ];
+            }
+
+            $ffmpeg = $this->normalize->ffmpegBinary();
+            if ($ffmpeg === null) {
+                throw new RuntimeException('ffmpeg is not available to trim media for H3.');
+            }
+
+            $outTmp = tempnam(sys_get_temp_dir(), 'trim-out-');
+            if ($outTmp === false) {
+                throw new RuntimeException('Could not create temp file for trim output.');
+            }
+            @unlink($outTmp);
+
+            $isAudio = $kind === 'audio';
+            $ext = $isAudio
+                ? (str_ends_with(strtolower($filename), '.wav') ? '.wav' : '.mp3')
+                : '.mp4';
+            $outPath = $outTmp.$ext;
+
+            $ok = $isAudio
+                ? $this->runTrimAudio($ffmpeg, $tmp, $outPath, $maxSeconds)
+                : $this->runTrimVideo($ffmpeg, $tmp, $outPath, $maxSeconds);
+
+            if (! $ok) {
+                throw new RuntimeException('ffmpeg trim failed for '.($isAudio ? 'audio' : 'video').'.');
+            }
+
+            $bytes = @file_get_contents($outPath);
+            if ($bytes === false || $bytes === '') {
+                throw new RuntimeException('Trimmed media was empty.');
+            }
+
+            if (! str_contains($filename, '.')) {
+                $filename .= $ext;
+            }
+            $path = trim($storageDir, '/').'/'.$filename;
+            Storage::disk('public')->put($path, $bytes);
+            @unlink($outPath);
+
+            Log::info('media.mux.trimmed', [
+                'kind' => $kind,
+                'original_seconds' => $originalSeconds,
+                'max_seconds' => $maxSeconds,
+                'path' => $path,
+            ]);
+
+            return [
+                'url' => url('/storage/'.$path),
+                'path' => $path,
+                'trimmed' => true,
+                'original_seconds' => $originalSeconds,
+            ];
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
     public function probeUrlDurationSeconds(string $url): ?float
     {
         try {
@@ -122,6 +204,84 @@ class MediaMuxService
         $seconds = (float) $raw;
 
         return $seconds > 0 ? $seconds : null;
+    }
+
+    private function runTrimVideo(string $ffmpeg, string $sourcePath, string $outPath, float $maxSeconds): bool
+    {
+        $t = number_format($maxSeconds, 3, '.', '');
+
+        // Prefer stream copy for speed; fall back to re-encode if keyframes break the cut.
+        if ($this->runFfmpeg($ffmpeg, [
+            '-y', '-i', $sourcePath,
+            '-t', $t,
+            '-map', '0:v:0',
+            '-an',
+            '-c:v', 'copy',
+            '-movflags', '+faststart',
+            '-f', 'mp4',
+            $outPath,
+        ])) {
+            return true;
+        }
+
+        @unlink($outPath);
+
+        return $this->runFfmpeg($ffmpeg, [
+            '-y', '-i', $sourcePath,
+            '-t', $t,
+            '-map', '0:v:0',
+            '-an',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '18',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            '-f', 'mp4',
+            $outPath,
+        ]);
+    }
+
+    private function runTrimAudio(string $ffmpeg, string $sourcePath, string $outPath, float $maxSeconds): bool
+    {
+        $t = number_format($maxSeconds, 3, '.', '');
+        $ext = strtolower(pathinfo($outPath, PATHINFO_EXTENSION));
+
+        if ($ext === 'wav') {
+            return $this->runFfmpeg($ffmpeg, [
+                '-y', '-i', $sourcePath,
+                '-t', $t,
+                '-vn',
+                '-c:a', 'pcm_s16le',
+                $outPath,
+            ]);
+        }
+
+        return $this->runFfmpeg($ffmpeg, [
+            '-y', '-i', $sourcePath,
+            '-t', $t,
+            '-vn',
+            '-c:a', 'libmp3lame',
+            '-b:a', '192k',
+            $outPath,
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $args
+     */
+    private function runFfmpeg(string $ffmpeg, array $args): bool
+    {
+        $result = Process::timeout(180)->run(array_merge([$ffmpeg], $args));
+        if (! $result->successful() || ! is_file($args[array_key_last($args)]) || filesize($args[array_key_last($args)]) <= 0) {
+            Log::info('media.mux.trim_ffmpeg_exit', [
+                'exit' => $result->exitCode(),
+                'stderr' => substr($result->errorOutput(), 0, 400),
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     private function runMux(string $ffmpeg, string $videoPath, string $audioPath, string $outPath): bool

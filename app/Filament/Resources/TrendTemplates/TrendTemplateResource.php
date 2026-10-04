@@ -112,7 +112,7 @@ class TrendTemplateResource extends Resource
                     ->directory('trend-templates/sketches')
                     ->visibility('public')
                     ->required()
-                    ->helperText('Line-drawing / sketch motion reference (≤15s for MiniMax H3). Use the Kapwing-style trend section, same cut as locked audio. Not shown as a client upload.')
+                    ->helperText('Line-drawing / sketch motion reference. MiniMax H3 max is 15s — longer clips are auto-trimmed from the start before generate. Not shown as a client upload.')
                     ->columnSpanFull(),
                 FileUpload::make('locked_audio')
                     ->label('Locked performance audio (muxed after generate)')
@@ -120,7 +120,7 @@ class TrendTemplateResource extends Resource
                     ->disk('public')
                     ->directory('trend-templates/audio')
                     ->visibility('public')
-                    ->helperText('Kapwing-style: NOT sent to the AI model (avoids copyright/invented voices). Muxed onto the finished video so mouths from the motion sketch line up with this track. Must match the same ~15s cut as the motion sketch.')
+                    ->helperText('Kapwing-style: NOT sent to the AI model. Muxed onto the finished video. If longer than 15s it is auto-trimmed from the start to match the motion sketch window.')
                     ->columnSpanFull(),
                 Repeater::make('slots')
                     ->label('Client face slots')

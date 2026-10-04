@@ -316,24 +316,60 @@ class TrendTemplateRemakeService
             return;
         }
 
-        // MiniMax H3 (and most R2V models) reject motion refs longer than 15s.
-        if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
-            $sketchSeconds = $this->mux->probeUrlDurationSeconds($sketchUrl);
-            if ($sketchSeconds !== null && $sketchSeconds > 15.05) {
-                $creation->markFailed(
-                    'Motion sketch is '.number_format($sketchSeconds, 1).'s — MiniMax H3 max is 15s. Use the Kapwing-style ~15s trend section (and matching locked audio), then retry.',
-                    'motion_sketch_too_long',
-                );
-                $this->tokens->refund($user, $creation, 'video', 'motion_sketch_too_long');
-                $this->processor->broadcastSnapshot('video', $creation->fresh());
-
-                return;
-            }
-        }
-
         // Partner models often reject rimboai /storage URLs and moov-at-end MP4s.
         // Always rehost sheets + a normalized faststart motion sketch to fal CDN.
+        // H3 hard-caps reference video at 15s — trim sketch (+ mux audio) from the start if longer.
         try {
+            $creation->forceFill([
+                'progress_message' => 'Preparing motion reference…',
+            ])->save();
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            $maxRefSeconds = 14.95;
+            if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
+                $trimDir = 'trend-remakes/'.((int) $user->id).'/trim';
+                $sketchTrim = $this->mux->ensureMaxDurationPublicUrl(
+                    $sketchUrl,
+                    $maxRefSeconds,
+                    $trimDir,
+                    'creation-'.$creation->id.'-sketch-15s.mp4',
+                    'video',
+                );
+                $sketchUrl = $sketchTrim['url'];
+                if ($sketchTrim['trimmed']) {
+                    $settingsEarly['motion_sketch_trimmed'] = true;
+                    $settingsEarly['motion_sketch_original_seconds'] = $sketchTrim['original_seconds'];
+                    $creation->forceFill([
+                        'progress_message' => 'Trimmed motion sketch to 15s…',
+                        'settings' => $settingsEarly,
+                    ])->save();
+                    $this->processor->broadcastSnapshot('video', $creation->fresh());
+                }
+
+                if ($muxAudioUrl !== null) {
+                    $audioTrim = $this->mux->ensureMaxDurationPublicUrl(
+                        $muxAudioUrl,
+                        $maxRefSeconds,
+                        $trimDir,
+                        'creation-'.$creation->id.'-audio-15s.mp3',
+                        'audio',
+                    );
+                    $muxAudioUrl = $audioTrim['url'];
+                    $settingsEarly['mux_audio_url'] = $muxAudioUrl;
+                    $settingsEarly['mux_audio_after'] = true;
+                    if ($audioTrim['trimmed']) {
+                        $settingsEarly['mux_audio_trimmed'] = true;
+                        $settingsEarly['mux_audio_original_seconds'] = $audioTrim['original_seconds'];
+                    }
+                    $creation->forceFill(['settings' => $settingsEarly])->save();
+                }
+
+                // Output duration must match the (possibly trimmed) reference window.
+                if (is_numeric($duration) && (float) $duration > 15) {
+                    $duration = '15';
+                }
+            }
+
             $creation->forceFill([
                 'progress_message' => 'Uploading motion reference…',
             ])->save();
