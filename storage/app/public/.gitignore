@@ -1,2 +1,4 @@
 *
 !.gitignore
+!ai_icons/
+!ai_icons/**
