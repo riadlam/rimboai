@@ -91,7 +91,9 @@ class MediaMuxService
         $originalSeconds = $this->probePathDurationSeconds($tmp);
 
         try {
-            if ($originalSeconds === null || $originalSeconds <= ($maxSeconds + 0.05)) {
+            // Fal rejects anything strictly above 15.0; leave a tiny headroom for
+            // re-encode frame rounding (we saw 14.95 → 15.03 → 15.10 on CDN).
+            if ($originalSeconds === null || $originalSeconds <= ($maxSeconds + 0.001)) {
                 return [
                     'url' => $url,
                     'path' => null,
@@ -210,22 +212,8 @@ class MediaMuxService
     {
         $t = number_format($maxSeconds, 3, '.', '');
 
-        // Prefer stream copy for speed; fall back to re-encode if keyframes break the cut.
-        if ($this->runFfmpeg($ffmpeg, [
-            '-y', '-i', $sourcePath,
-            '-t', $t,
-            '-map', '0:v:0',
-            '-an',
-            '-c:v', 'copy',
-            '-movflags', '+faststart',
-            '-f', 'mp4',
-            $outPath,
-        ])) {
-            return true;
-        }
-
-        @unlink($outPath);
-
+        // Always re-encode: stream-copy -t often overshoots on keyframes (15.03s+),
+        // which fal rejects as "Maximum is 15.0 seconds".
         return $this->runFfmpeg($ffmpeg, [
             '-y', '-i', $sourcePath,
             '-t', $t,

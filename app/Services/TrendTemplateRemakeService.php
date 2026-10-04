@@ -325,9 +325,10 @@ class TrendTemplateRemakeService
             ])->save();
             $this->processor->broadcastSnapshot('video', $creation->fresh());
 
-            $maxRefSeconds = 14.95;
+            // Stay under fal's hard 15.0s ceiling; CDN re-encode can add ~0.1s.
+            $maxRefSeconds = 14.5;
+            $trimDir = 'trend-remakes/'.((int) $user->id).'/trim';
             if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
-                $trimDir = 'trend-remakes/'.((int) $user->id).'/trim';
                 $sketchTrim = $this->mux->ensureMaxDurationPublicUrl(
                     $sketchUrl,
                     $maxRefSeconds,
@@ -376,6 +377,25 @@ class TrendTemplateRemakeService
             $this->processor->broadcastSnapshot('video', $creation->fresh());
 
             $sketchUrl = $this->fal->ensureInferenceVideoUrl($sketchUrl, 'motion-sketch.mp4');
+
+            // Partner-safe re-encode can nudge duration over 15.0 — trim the CDN file if needed.
+            if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
+                $cdnSeconds = $this->mux->probeUrlDurationSeconds($sketchUrl);
+                if ($cdnSeconds !== null && $cdnSeconds > 15.0) {
+                    $cdnTrim = $this->mux->ensureMaxDurationPublicUrl(
+                        $sketchUrl,
+                        $maxRefSeconds,
+                        $trimDir,
+                        'creation-'.$creation->id.'-sketch-cdn-15s.mp4',
+                        'video',
+                    );
+                    $sketchUrl = $this->fal->ensureInferenceVideoUrl($cdnTrim['url'], 'motion-sketch.mp4');
+                    $settingsEarly['motion_sketch_cdn_retried'] = true;
+                    $settingsEarly['motion_sketch_cdn_seconds_before'] = $cdnSeconds;
+                    $creation->forceFill(['settings' => $settingsEarly])->save();
+                }
+            }
+
             $sheetUrls = array_map(
                 fn (string $url): string => $this->fal->ensureCdnUrl($url),
                 $sheetUrls,
