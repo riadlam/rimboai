@@ -288,9 +288,11 @@ class FalModelInspector
     }
 
     /**
+     * Live fal pricing for admin estimate tools (not used on customer remake path).
+     *
      * @return array{unit: string|null, unit_price: float|null}|null
      */
-    private function fetchPricing(string $endpointId): ?array
+    public function fetchPricing(string $endpointId): ?array
     {
         $response = Http::timeout(30)
             ->withHeaders($this->headers())

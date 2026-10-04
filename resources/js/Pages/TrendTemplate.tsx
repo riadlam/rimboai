@@ -21,6 +21,7 @@ type TrendUpload = {
     kind: 'image' | 'video' | 'audio';
     label: string;
     label_key?: string;
+    hint?: string;
     accept: string;
     required: boolean;
 };
@@ -28,7 +29,7 @@ type TrendUpload = {
 type TrendTemplateCard = {
     id: string;
     creation_id: number;
-    type: 'image' | 'video' | 'music';
+    type: 'image' | 'video' | 'music' | 'template';
     name: string;
     trend_title?: string | null;
     creator: string;
@@ -41,6 +42,7 @@ type TrendTemplateCard = {
     samples: string[];
     uses: number;
     credits: number;
+    slug?: string | null;
 };
 
 type UserTrendLatest = {
@@ -55,11 +57,17 @@ type UserTrendLatest = {
 
 type TrendWorkspace = {
     key: string;
-    type: 'image' | 'video' | 'music';
+    type: 'image' | 'video' | 'music' | 'template';
     creation_id: number;
     template: TrendTemplateCard;
     uploads: TrendUpload[];
     locked: Record<string, unknown>;
+    locked_preview?: {
+        kind: 'video' | 'image' | 'audio';
+        url: string;
+        label: string;
+        hint?: string;
+    } | null;
     credits: number;
     /** Completed remakes by this user from this template. Example replaces only when > 1. */
     user_remake_count?: number;
@@ -109,15 +117,22 @@ function isMobileViewport(): boolean {
     return window.matchMedia('(max-width: 767px)').matches;
 }
 
+function creationMediaKind(type: TrendWorkspace['type']): 'image' | 'video' | 'music' {
+    if (type === 'template') return 'video';
+    return type;
+}
+
 function statusUrl(type: TrendWorkspace['type'], id: number): string {
-    if (type === 'image') return `/lab/image/creations/${id}/status`;
-    if (type === 'music') return `/lab/music/creations/${id}/status`;
+    const kind = creationMediaKind(type);
+    if (kind === 'image') return `/lab/image/creations/${id}/status`;
+    if (kind === 'music') return `/lab/music/creations/${id}/status`;
     return `/lab/video/creations/${id}/status`;
 }
 
 function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation | UserTrendLatest): string | null {
-    if (type === 'video') return c.video_url || c.preview_url || null;
-    if (type === 'image') return ('images' in c && c.images?.[0]) || c.preview_url || null;
+    const kind = creationMediaKind(type);
+    if (kind === 'video') return c.video_url || c.preview_url || null;
+    if (kind === 'image') return ('images' in c && c.images?.[0]) || c.preview_url || null;
     return ('cover_url' in c ? c.cover_url : null) || c.preview_url || null;
 }
 
@@ -240,7 +255,11 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         const unsubscribe = subscribeCreationUpdated(props.auth.user.id, (event: CreationUpdatedEvent) => {
             const creationId = activeCreationIdRef.current;
             if (creationId == null) return;
-            if (!matchesCreationEvent(event, creationId, [workspaceTypeRef.current])) return;
+            const kinds =
+                workspaceTypeRef.current === 'template'
+                    ? ['video', 'template']
+                    : [workspaceTypeRef.current];
+            if (!matchesCreationEvent(event, creationId, kinds)) return;
 
             const creation = event.creation;
             if (!creation) return;
@@ -326,29 +345,47 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                 return uploaded.url;
             };
 
+            const isCurated = workspace.type === 'template';
             const form = new FormData();
-            form.append('type', workspace.type);
-            form.append('id', String(workspace.creation_id));
 
-            for (const u of workspace.uploads) {
-                const file = slots[u.key]?.file;
-                if (!file) continue;
-                const url = await uploadOne(file);
-                if (!url) continue;
-                if (u.kind === 'video') form.append('video_urls[]', url);
-                else if (u.kind === 'audio') form.append('audio_urls[]', url);
-                else form.append('image_urls[]', url);
+            if (isCurated) {
+                for (const u of workspace.uploads) {
+                    const file = slots[u.key]?.file;
+                    if (!file) continue;
+                    const url = await uploadOne(file);
+                    if (!url) continue;
+                    form.append(`slot_urls[${u.key}]`, url);
+                    form.append('image_urls[]', url);
+                }
+            } else {
+                form.append('type', workspace.type);
+                form.append('id', String(workspace.creation_id));
+                for (const u of workspace.uploads) {
+                    const file = slots[u.key]?.file;
+                    if (!file) continue;
+                    const url = await uploadOne(file);
+                    if (!url) continue;
+                    if (u.kind === 'video') form.append('video_urls[]', url);
+                    else if (u.kind === 'audio') form.append('audio_urls[]', url);
+                    else form.append('image_urls[]', url);
+                }
             }
+
+            const remakeUrl =
+                isCurated && workspace.generate_url
+                    ? workspace.generate_url
+                    : '/trends/remake';
 
             const data = await apiPostForm<
                 RemakeCreation & { ok?: boolean; type?: string; user_remake_count?: number }
-            >('/trends/remake', form);
+            >(remakeUrl, form);
             const mobile = isMobileViewport();
             const baseCount = data.user_remake_count ?? remakeCountRef.current;
             remakeCountRef.current = baseCount;
             setCompletedRemakeCount(baseCount);
 
-            if (mobile) {
+            // Curated templates stay on-page so sheet → Seedance progress is visible.
+            if (isCurated || mobile) {
                 setJob(data);
                 setModalOpen(true);
                 if (isTerminalCreationStatus(data.status)) {
@@ -384,15 +421,16 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const handleDownloadResult = async () => {
         if (!job || downloading) return;
         const url =
-            workspace.type === 'music'
+            creationMediaKind(workspace.type) === 'music'
                 ? job.audio_url || job.preview_url || null
                 : resultSrc(workspace.type, job);
         if (!url) return;
 
+        const mediaKind = creationMediaKind(workspace.type);
         const filename =
-            workspace.type === 'video'
+            mediaKind === 'video'
                 ? `video-${job.id}.mp4`
-                : workspace.type === 'music'
+                : mediaKind === 'music'
                   ? `music-${job.id}.mp3`
                   : `image-${job.id}.jpg`;
 
@@ -409,7 +447,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const replaceExample = completedRemakeCount > 1 && exampleOverride != null;
     const exampleSrc = replaceExample ? resultSrc(workspace.type, exampleOverride) : null;
     const showVideo = replaceExample
-        ? workspace.type === 'video' && Boolean(exampleSrc)
+        ? creationMediaKind(workspace.type) === 'video' && Boolean(exampleSrc)
         : tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
     const exampleVideoSrc = replaceExample && exampleSrc ? exampleSrc : tmpl.video_url || tmpl.cover;
     const examplePoster =
@@ -435,8 +473,9 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         if (!job || job.status !== 'completed') return null;
         const src = resultSrc(workspace.type, job);
         if (!src && workspace.type !== 'music') return null;
+        const mediaKind = creationMediaKind(workspace.type);
         const method =
-            workspace.type === 'image'
+            mediaKind === 'image'
                 ? 'image-to-image'
                 : (job.mode as ImageLabPreviewItem['method']) || 'image-to-video';
         return {
@@ -450,7 +489,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
             audio: job.audio ?? null,
             modelName: job.model_name ?? null,
             method: method as ImageLabPreviewItem['method'],
-            videoUrl: workspace.type === 'video' ? job.video_url || src || undefined : undefined,
+            videoUrl: mediaKind === 'video' ? job.video_url || src || undefined : undefined,
         };
     })();
 
@@ -494,6 +533,38 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         </div>
                                     </div>
 
+                                    {workspace.locked_preview?.url && (
+                                        <section className="space-y-2">
+                                            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
+                                                {workspace.locked_preview.label}
+                                            </p>
+                                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+                                                {workspace.locked_preview.kind === 'video' ? (
+                                                    <video
+                                                        src={workspace.locked_preview.url}
+                                                        className="max-h-44 w-full object-contain"
+                                                        muted
+                                                        playsInline
+                                                        loop
+                                                        autoPlay
+                                                        controls
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={workspace.locked_preview.url}
+                                                        alt=""
+                                                        className="max-h-44 w-full object-contain"
+                                                    />
+                                                )}
+                                            </div>
+                                            {workspace.locked_preview.hint && (
+                                                <p className="text-[11px] leading-relaxed text-white/35">
+                                                    {workspace.locked_preview.hint}
+                                                </p>
+                                            )}
+                                        </section>
+                                    )}
+
                                     {workspace.uploads.map((upload) => (
                                         <UploadSlot
                                             key={upload.key}
@@ -506,11 +577,12 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                     : upload.label
                                             }
                                             hint={
-                                                upload.kind === 'audio'
+                                                upload.hint ||
+                                                (upload.kind === 'audio'
                                                     ? t('uploadAudioTypes')
                                                     : upload.kind === 'video'
                                                       ? t('uploadVideoTypes')
-                                                      : t('uploadImageTypes')
+                                                      : t('uploadImageTypes'))
                                             }
                                             changeLabel={t('changeFile')}
                                             uploadHint={t('uploadHint')}
@@ -753,7 +825,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                             <p className="mt-1 text-[12px] text-white/45">{t('tapForDetails')}</p>
                                         </div>
                                         <div className="space-y-3">
-                                            {workspace.type === 'video' && doneSrc ? (
+                                            {creationMediaKind(workspace.type) === 'video' && doneSrc ? (
                                                 <div className="aspect-[9/16] max-h-[52vh] w-full overflow-hidden rounded-2xl border border-white/10">
                                                     <LabVideoPlayer
                                                         src={doneSrc}
@@ -803,7 +875,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                 disabled={
                                                     downloading ||
                                                     !(
-                                                        workspace.type === 'music'
+                                                        creationMediaKind(workspace.type) === 'music'
                                                             ? job?.audio_url || job?.preview_url
                                                             : doneSrc
                                                     )

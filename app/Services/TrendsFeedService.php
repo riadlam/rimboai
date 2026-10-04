@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\TrendTemplate;
 use App\Models\User;
 use App\Models\UserImageCreation;
 use App\Models\UserMusicCreation;
@@ -21,7 +22,7 @@ class TrendsFeedService
         $limit = max(1, min(200, $limit));
 
         return \Illuminate\Support\Facades\Cache::remember(
-            "trends.feed.v2.{$limit}",
+            "trends.feed.v3.{$limit}",
             now()->addSeconds(45),
             fn () => $this->buildFeed($limit),
         );
@@ -32,6 +33,18 @@ class TrendsFeedService
      */
     private function buildFeed(int $limit): array
     {
+        $adminTemplates = TrendTemplate::query()
+            ->published()
+            ->orderByDesc('is_featured')
+            ->orderBy('sort_order')
+            ->orderByDesc('uses_count')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->map(fn (TrendTemplate $t) => $this->mapTrendTemplate($t))
+            ->filter()
+            ->values();
+
         $images = $this->publicCompletedQuery(UserImageCreation::class)
             ->limit($limit)
             ->get();
@@ -44,14 +57,14 @@ class TrendsFeedService
             ->limit($limit)
             ->get();
 
-        $items = collect()
+        $community = collect()
             ->merge($images->map(fn (UserImageCreation $c) => $this->mapImage($c)))
             ->merge($videos->map(fn (UserVideoCreation $c) => $this->mapVideo($c)))
             ->merge($music->map(fn (UserMusicCreation $c) => $this->mapMusic($c)))
             ->filter()
             ->values();
 
-        return $items
+        $communitySorted = $community
             ->sort(function (array $a, array $b) {
                 if ((bool) $a['featured'] !== (bool) $b['featured']) {
                     return (bool) $b['featured'] <=> (bool) $a['featured'];
@@ -62,6 +75,11 @@ class TrendsFeedService
 
                 return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
             })
+            ->values();
+
+        // Admin curated templates first (featured/sort), then community Lab remakes.
+        return $adminTemplates
+            ->concat($communitySorted)
             ->take($limit)
             ->values()
             ->all();
@@ -165,6 +183,10 @@ class TrendsFeedService
                 ->where('is_public', true)
                 ->where('status', UserMusicCreation::STATUS_COMPLETED)
                 ->first(),
+            'template' => TrendTemplate::query()
+                ->published()
+                ->whereKey($id)
+                ->first(),
             default => null,
         };
     }
@@ -176,6 +198,10 @@ class TrendsFeedService
      */
     public function workspace(string $type, int $id): ?array
     {
+        if ($type === 'template') {
+            return $this->workspaceForTrendTemplate($id);
+        }
+
         $creation = $this->findPublicCompleted($type, $id);
         if (! $creation) {
             return null;
@@ -320,12 +346,117 @@ class TrendsFeedService
     }
 
     /**
+     * Workspace for curated Filament Trend Templates.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function workspaceForTrendTemplate(int $id): ?array
+    {
+        /** @var TrendTemplate|null $template */
+        $template = TrendTemplate::query()->published()->whereKey($id)->first();
+        if (! $template) {
+            return null;
+        }
+
+        $card = $this->mapTrendTemplate($template);
+        if (! $card) {
+            return null;
+        }
+
+        $uploads = [];
+        foreach ($template->clientSlots() as $slot) {
+            $uploads[] = [
+                'key' => $slot['key'],
+                'kind' => 'image',
+                'label' => $slot['label'],
+                'hint' => $slot['hint'],
+                'accept' => $slot['accept'] ?: 'image/*',
+                'required' => $slot['required'],
+            ];
+        }
+
+        $sketchUrl = $template->motionSketchUrl();
+        $user = auth()->user();
+        $userRemakes = $user
+            ? $this->userRemakesForTrendTemplate((int) $template->id, (int) $user->id)
+            : ['count' => 0, 'latest' => null];
+
+        return [
+            'key' => $template->feedKey(),
+            'type' => 'template',
+            'creation_id' => (int) $template->id,
+            'template' => $card,
+            'uploads' => $uploads,
+            'locked' => [
+                'prompt' => (string) $template->prompt,
+                'endpoint_id' => $template->endpoint_id,
+                'model_name' => $template->model_name,
+                'aspect' => $template->aspect_ratio,
+                'resolution' => $template->resolution,
+                'duration' => $template->duration,
+                'audio' => (bool) $template->generate_audio,
+                'mode' => 'trend_template',
+                'motion_sketch_url' => $sketchUrl,
+                'motion_sketch_label' => 'Motion choreography',
+            ],
+            'locked_preview' => $sketchUrl ? [
+                'kind' => 'video',
+                'url' => $sketchUrl,
+                'label' => 'Motion choreography',
+                'hint' => 'Locked admin sketch — used for movement only, not faces or outfits.',
+            ] : null,
+            'credits' => (int) $template->trend_cost,
+            'user_remake_count' => $userRemakes['count'],
+            'user_latest' => $userRemakes['latest'],
+            'generate_url' => '/trends/templates/'.$template->slug.'/remake',
+            'lab_href' => '/trends/'.$template->feedKey(),
+        ];
+    }
+
+    /**
+     * @return array{count: int, latest: array<string, mixed>|null}
+     */
+    public function userRemakesForTrendTemplate(int $templateId, int $userId): array
+    {
+        $query = UserVideoCreation::query()
+            ->where('user_id', $userId)
+            ->where('status', UserVideoCreation::STATUS_COMPLETED)
+            ->where('settings->from_trend_template_id', $templateId)
+            ->orderByDesc('id');
+
+        $count = (clone $query)->count();
+        if ($count === 0) {
+            return ['count' => 0, 'latest' => null];
+        }
+
+        /** @var UserVideoCreation|null $latest */
+        $latest = $query->first();
+        if (! $latest) {
+            return ['count' => $count, 'latest' => null];
+        }
+
+        return [
+            'count' => $count,
+            'latest' => [
+                'id' => $latest->id,
+                'video_url' => $latest->result_video_url,
+                'preview_url' => $latest->result_preview_url ?: $latest->result_video_url,
+                'thumbnail_url' => $latest->thumbnail_url,
+            ],
+        ];
+    }
+
+    /**
      * Completed remakes the signed-in user made from this Trends template.
      *
      * @return array{count: int, latest: array<string, mixed>|null}
      */
     public function userRemakesForTrend(string $type, int $trendId, int $userId): array
     {
+        if ($type === 'template') {
+            return $this->userRemakesForTrendTemplate($trendId, $userId);
+        }
+
         $modelClass = match ($type) {
             'image' => UserImageCreation::class,
             'video' => UserVideoCreation::class,
@@ -499,6 +630,55 @@ class TrendsFeedService
             'is_public' => (bool) $creation->is_public,
             'is_featured' => (bool) ($creation->is_featured ?? false),
             'trend_cost' => $creation->trend_cost !== null ? (int) round((float) $creation->trend_cost) : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function mapTrendTemplate(TrendTemplate $template): ?array
+    {
+        $sketch = $template->motionSketchUrl();
+        $cover = $template->cover_url ?: $sketch;
+        if (! is_string($cover) || $cover === '') {
+            return null;
+        }
+
+        $uses = (int) $template->uses_count;
+
+        return [
+            'id' => $template->feedKey(),
+            'creation_id' => (int) $template->id,
+            'type' => 'template',
+            'creator' => 'RIMBOAI',
+            'avatar' => $this->fallbackInitialsAvatarUrl('RIMBOAI'),
+            'uses' => $uses,
+            'rating' => null,
+            'credits' => (int) $template->trend_cost,
+            'model' => $template->model_name ?: 'Seedance',
+            'endpoint_id' => $template->endpoint_id,
+            'trend_title' => $template->title,
+            'created_at' => $template->updated_at?->toIso8601String()
+                ?: $template->created_at?->toIso8601String(),
+            'name' => $template->title,
+            'category' => 'Videos',
+            'cover' => $cover,
+            'coverType' => $sketch ? 'video' : 'image',
+            'video_url' => $sketch,
+            'thumbnail_url' => $template->cover_url,
+            'samples' => array_values(array_filter([$cover, $sketch])),
+            'description' => (string) ($template->description ?: 'Official trend template'),
+            'prompt' => (string) $template->prompt,
+            'aspect' => $template->aspect_ratio,
+            'resolution' => $template->resolution,
+            'duration' => $template->duration,
+            'generate_audio' => (bool) $template->generate_audio,
+            'quantity' => 1,
+            'image_mode' => null,
+            'lyrics' => null,
+            'featured' => (bool) $template->is_featured,
+            'hot' => $uses >= 5,
+            'slug' => $template->slug,
         ];
     }
 

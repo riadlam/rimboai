@@ -303,7 +303,8 @@ class FalVideoInputBuilder
                     $input['image_urls'] = array_slice($imageUrls, 0, 10);
                 }
             } elseif ($imageUrls !== []) {
-                $input['image_urls'] = array_slice($imageUrls, 0, 9);
+                $maxImages = (str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5')) ? 30 : 9;
+                $input['image_urls'] = array_slice($imageUrls, 0, $maxImages);
             }
             if (
                 $videoUrls !== []
@@ -311,14 +312,16 @@ class FalVideoInputBuilder
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
                 && ! str_contains($id, 'gemini-omni-flash')
             ) {
-                $input['video_urls'] = array_slice($videoUrls, 0, 3);
+                $maxVideos = (str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5')) ? 10 : 3;
+                $input['video_urls'] = array_slice($videoUrls, 0, $maxVideos);
             }
             if (
                 $audioUrls !== []
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
                 && ! str_contains($id, 'gemini-omni-flash')
             ) {
-                $input['audio_urls'] = array_slice($audioUrls, 0, 3);
+                $maxAudios = (str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5')) ? 10 : 3;
+                $input['audio_urls'] = array_slice($audioUrls, 0, $maxAudios);
             }
         }
 

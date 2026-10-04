@@ -1,0 +1,511 @@
+<?php
+
+namespace App\Filament\Resources\TrendTemplates;
+
+use App\Filament\Resources\TrendTemplates\Pages\ManageTrendTemplates;
+use App\Models\TrendTemplate;
+use App\Services\TrendTemplateCostEstimator;
+use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use UnitEnum;
+
+class TrendTemplateResource extends Resource
+{
+    protected static ?string $model = TrendTemplate::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFire;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Trends';
+
+    protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Trend Templates';
+
+    protected static ?string $modelLabel = 'Trend Template';
+
+    protected static ?string $pluralModelLabel = 'Trend Templates';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextInput::make('title')
+                    ->required()
+                    ->maxLength(255)
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(function (Set $set, ?string $state, Get $get): void {
+                        if (filled($get('slug')) || ! filled($state)) {
+                            return;
+                        }
+                        $set('slug', Str::slug($state));
+                    }),
+                TextInput::make('slug')
+                    ->required()
+                    ->maxLength(255)
+                    ->unique(ignoreRecord: true),
+                Textarea::make('description')
+                    ->rows(2)
+                    ->columnSpanFull(),
+                FileUpload::make('cover_url')
+                    ->label('Cover image')
+                    ->image()
+                    ->disk('public')
+                    ->directory('trend-templates/covers')
+                    ->visibility('public')
+                    ->imageEditor()
+                    ->columnSpanFull(),
+                Toggle::make('is_published')
+                    ->label('Published')
+                    ->default(false),
+                Toggle::make('is_featured')
+                    ->label('Featured')
+                    ->default(true),
+                TextInput::make('sort_order')
+                    ->numeric()
+                    ->default(0)
+                    ->required(),
+                Select::make('endpoint_id')
+                    ->label('Video model (R2V)')
+                    ->options(fn (): array => static::r2vEndpointOptions())
+                    ->default(TrendTemplate::DEFAULT_ENDPOINT)
+                    ->searchable()
+                    ->required()
+                    ->columnSpanFull(),
+                TextInput::make('model_name')
+                    ->label('Display model name')
+                    ->placeholder('Seedance 2.5')
+                    ->maxLength(255),
+                FileUpload::make('motion_sketch')
+                    ->label('Locked motion sketch (video)')
+                    ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime', 'video/*'])
+                    ->disk('public')
+                    ->directory('trend-templates/sketches')
+                    ->visibility('public')
+                    ->required()
+                    ->helperText('Line-drawing / sketch motion reference. Not shown as a client upload.')
+                    ->columnSpanFull(),
+                FileUpload::make('locked_audio')
+                    ->label('Optional audio asset (stored only — not muxed in v1)')
+                    ->acceptedFileTypes(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/*'])
+                    ->disk('public')
+                    ->directory('trend-templates/audio')
+                    ->visibility('public')
+                    ->columnSpanFull(),
+                Repeater::make('slots')
+                    ->label('Client face slots')
+                    ->schema([
+                        TextInput::make('key')
+                            ->required()
+                            ->maxLength(64)
+                            ->default(fn () => 'face_'.Str::lower(Str::random(4))),
+                        TextInput::make('label')
+                            ->required()
+                            ->maxLength(120),
+                        Select::make('role')
+                            ->options([
+                                'body_right' => 'Person on the right (@ImageN)',
+                                'body_left' => 'Person on the left (@ImageN)',
+                                'extra' => 'Extra person',
+                            ])
+                            ->default('extra')
+                            ->required(),
+                        TextInput::make('hint')
+                            ->maxLength(255),
+                        Toggle::make('required')
+                            ->default(true),
+                        TextInput::make('kind')
+                            ->default('image')
+                            ->dehydrated()
+                            ->hidden(),
+                        TextInput::make('accept')
+                            ->default('image/*')
+                            ->dehydrated()
+                            ->hidden(),
+                    ])
+                    ->default(TrendTemplate::defaultSlots())
+                    ->minItems(1)
+                    ->reorderable()
+                    ->collapsible()
+                    ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
+                    ->columnSpanFull(),
+                Textarea::make('prompt')
+                    ->label('Seedance prompt (locked)')
+                    ->rows(12)
+                    ->required()
+                    ->default(TrendTemplate::defaultPromptScaffold())
+                    ->hintAction(
+                        Action::make('insertScaffold')
+                            ->label('Insert role scaffold')
+                            ->action(function (Set $set): void {
+                                $set('prompt', TrendTemplate::defaultPromptScaffold());
+                            }),
+                    )
+                    ->helperText('Must reference @Video1 and @Image1… matching slot order.')
+                    ->columnSpanFull(),
+                Select::make('aspect_ratio')
+                    ->options([
+                        '16:9' => '16:9',
+                        '9:16' => '9:16',
+                        '1:1' => '1:1',
+                        '4:3' => '4:3',
+                        '3:4' => '3:4',
+                    ])
+                    ->default('16:9')
+                    ->required(),
+                Select::make('resolution')
+                    ->options([
+                        '480p' => '480p',
+                        '720p' => '720p',
+                        '1080p' => '1080p',
+                    ])
+                    ->default('720p')
+                    ->required(),
+                TextInput::make('duration')
+                    ->label('Duration (seconds)')
+                    ->default('15')
+                    ->required()
+                    ->helperText('Used for fal cost estimate / Seedance duration.'),
+                Toggle::make('generate_audio')
+                    ->label('Generate audio')
+                    ->default(false),
+                TextInput::make('fal_estimate_usd')
+                    ->label('Fal estimate (USD)')
+                    ->numeric()
+                    ->step(0.000001)
+                    ->readOnly()
+                    ->suffixAction(
+                        Action::make('estimateFalCost')
+                            ->icon(Heroicon::OutlinedCalculator)
+                            ->label('Estimate')
+                            ->action(function (Get $get, Set $set): void {
+                                $estimate = app(TrendTemplateCostEstimator::class)->estimate([
+                                    'endpoint_id' => $get('endpoint_id'),
+                                    'sheet_endpoint_id' => $get('sheet_endpoint_id'),
+                                    'duration' => $get('duration'),
+                                    'resolution' => $get('resolution'),
+                                    'aspect_ratio' => $get('aspect_ratio'),
+                                    'generate_audio' => (bool) $get('generate_audio'),
+                                    'slots' => $get('slots'),
+                                ]);
+                                $set('fal_estimate_usd', $estimate['fal_estimate_usd']);
+                                if ((int) ($get('trend_cost') ?? 0) <= 0 && $estimate['suggested_trend_cost'] > 0) {
+                                    $set('trend_cost', $estimate['suggested_trend_cost']);
+                                }
+                                Notification::make()
+                                    ->title('Estimate ready')
+                                    ->body(sprintf(
+                                        'Fal ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d',
+                                        number_format($estimate['fal_estimate_usd'], 4),
+                                        number_format($estimate['video_usd'], 4),
+                                        number_format($estimate['sheets_usd'], 4),
+                                        $estimate['suggested_trend_cost'],
+                                    ))
+                                    ->success()
+                                    ->send();
+                            }),
+                    ),
+                TextInput::make('trend_cost')
+                    ->label('Tokens charged to users')
+                    ->numeric()
+                    ->minValue(1)
+                    ->required()
+                    ->helperText('Admin override. Estimate suggests a value; you can change it.'),
+                Select::make('sheet_endpoint_id')
+                    ->label('Character sheet model')
+                    ->options([
+                        'fal-ai/nano-banana-pro/edit' => 'Nano Banana Pro Edit',
+                        'fal-ai/nano-banana/edit' => 'Nano Banana Edit',
+                        'fal-ai/nano-banana-2/edit' => 'Nano Banana 2 Edit',
+                    ])
+                    ->default(TrendTemplate::DEFAULT_SHEET_ENDPOINT)
+                    ->required()
+                    ->columnSpanFull(),
+                Textarea::make('sheet_prompt')
+                    ->label('Character sheet prompt')
+                    ->rows(8)
+                    ->default(TrendTemplate::defaultSheetPrompt())
+                    ->required()
+                    ->columnSpanFull(),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                ImageColumn::make('cover_url')
+                    ->label('Cover')
+                    ->disk('public')
+                    ->circular(false)
+                    ->height(48),
+                TextColumn::make('title')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('slug')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('endpoint_id')
+                    ->label('Model')
+                    ->limit(36)
+                    ->toggleable(),
+                TextColumn::make('trend_cost')
+                    ->label('Tokens')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('fal_estimate_usd')
+                    ->label('Fal $')
+                    ->numeric(decimalPlaces: 4)
+                    ->toggleable(),
+                TextColumn::make('uses_count')
+                    ->label('Uses')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('sort_order')
+                    ->sortable(),
+                IconColumn::make('is_featured')
+                    ->boolean()
+                    ->label('Featured'),
+                IconColumn::make('is_published')
+                    ->boolean()
+                    ->label('Published'),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->defaultSort('sort_order')
+            ->recordActions([
+                EditAction::make()
+                    ->mutateRecordDataUsing(fn (array $data): array => static::mutateRecordDataForForm($data))
+                    ->mutateDataUsing(fn (array $data): array => static::mutateFormDataForSave($data)),
+                DeleteAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ManageTrendTemplates::route('/'),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function r2vEndpointOptions(): array
+    {
+        $options = [];
+        foreach (['text_to_video_models', 'image_to_video_models'] as $table) {
+            if (! DbSchema::hasTable($table)) {
+                continue;
+            }
+            $rows = DB::table($table)
+                ->where('status', 'active')
+                ->where(function ($q): void {
+                    $q->where('endpoint_id', 'like', '%reference-to-video%')
+                        ->orWhere('tags', 'like', '%reference-to-video%');
+                })
+                ->orderBy('sort')
+                ->get(['endpoint_id', 'name']);
+            foreach ($rows as $row) {
+                $options[(string) $row->endpoint_id] = (string) ($row->name ?: $row->endpoint_id);
+            }
+        }
+
+        if ($options === []) {
+            $options[TrendTemplate::DEFAULT_ENDPOINT] = 'Seedance 2.5 Reference to Video';
+            $options[TrendTemplate::FALLBACK_ENDPOINT] = 'Seedance 2.0 Reference to Video';
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function mutateRecordDataForForm(array $data): array
+    {
+        $locked = is_array($data['locked_assets'] ?? null) ? $data['locked_assets'] : [];
+        $sketch = null;
+        $audio = null;
+        foreach ($locked as $asset) {
+            if (! is_array($asset)) {
+                continue;
+            }
+            $role = (string) ($asset['role'] ?? '');
+            $kind = (string) ($asset['kind'] ?? '');
+            $path = static::storagePathFromUrl((string) ($asset['url'] ?? ''));
+            if ($role === 'motion_sketch' || $kind === 'video') {
+                $sketch = $path ?? ($asset['url'] ?? null);
+            }
+            if ($role === 'audio' || $kind === 'audio') {
+                $audio = $path ?? ($asset['url'] ?? null);
+            }
+        }
+        $data['motion_sketch'] = $sketch;
+        $data['locked_audio'] = $audio;
+        $data['cover_url'] = static::storagePathFromUrl((string) ($data['cover_url'] ?? ''))
+            ?? ($data['cover_url'] ?? null);
+        if (empty($data['slots'])) {
+            $data['slots'] = TrendTemplate::defaultSlots();
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function mutateFormDataForSave(array $data): array
+    {
+        $sketchUrl = static::publicUrlFromUpload($data['motion_sketch'] ?? null);
+        $audioUrl = static::publicUrlFromUpload($data['locked_audio'] ?? null);
+        $coverUrl = static::publicUrlFromUpload($data['cover_url'] ?? null);
+
+        if (! is_string($sketchUrl) || $sketchUrl === '') {
+            throw ValidationException::withMessages([
+                'motion_sketch' => 'Motion sketch video is required.',
+            ]);
+        }
+
+        $slots = is_array($data['slots'] ?? null) ? array_values($data['slots']) : [];
+        $imageSlots = array_values(array_filter(
+            $slots,
+            fn ($s) => is_array($s) && (string) ($s['kind'] ?? 'image') === 'image',
+        ));
+        if ($imageSlots === []) {
+            throw ValidationException::withMessages([
+                'slots' => 'Add at least one client image slot.',
+            ]);
+        }
+
+        $prompt = trim((string) ($data['prompt'] ?? ''));
+        if (! str_contains($prompt, '@Video1')) {
+            throw ValidationException::withMessages([
+                'prompt' => 'Prompt must reference @Video1 (motion sketch).',
+            ]);
+        }
+        foreach (array_keys($imageSlots) as $i) {
+            $tag = '@Image'.($i + 1);
+            if (! str_contains($prompt, $tag)) {
+                throw ValidationException::withMessages([
+                    'prompt' => "Prompt must reference {$tag} for slot order.",
+                ]);
+            }
+        }
+
+        $locked = [[
+            'key' => 'motion_sketch',
+            'kind' => 'video',
+            'role' => 'motion_sketch',
+            'url' => $sketchUrl,
+        ]];
+        if (is_string($audioUrl) && $audioUrl !== '') {
+            $locked[] = [
+                'key' => 'audio',
+                'kind' => 'audio',
+                'role' => 'audio',
+                'url' => $audioUrl,
+            ];
+        }
+
+        $normalizedSlots = [];
+        foreach ($imageSlots as $index => $slot) {
+            $normalizedSlots[] = [
+                'key' => (string) ($slot['key'] ?? 'face_'.$index),
+                'kind' => 'image',
+                'label' => (string) ($slot['label'] ?? 'Upload photo'),
+                'role' => (string) ($slot['role'] ?? 'extra'),
+                'hint' => (string) ($slot['hint'] ?? ''),
+                'accept' => (string) ($slot['accept'] ?? 'image/*'),
+                'required' => (bool) ($slot['required'] ?? true),
+            ];
+        }
+
+        unset($data['motion_sketch'], $data['locked_audio']);
+        $data['cover_url'] = $coverUrl;
+        $data['locked_assets'] = $locked;
+        $data['slots'] = $normalizedSlots;
+        $data['prompt'] = $prompt;
+        if (! filled($data['sheet_prompt'] ?? null)) {
+            $data['sheet_prompt'] = TrendTemplate::defaultSheetPrompt();
+        }
+        if (! filled($data['endpoint_id'] ?? null)) {
+            $data['endpoint_id'] = TrendTemplate::DEFAULT_ENDPOINT;
+        }
+        if (! filled($data['model_name'] ?? null)) {
+            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'Seedance';
+        }
+
+        return $data;
+    }
+
+    private static function publicUrlFromUpload(mixed $value): ?string
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
+        $path = ltrim($value, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+        if (Storage::disk('public')->exists($path)) {
+            return url('/storage/'.$path);
+        }
+
+        return url('/storage/'.$path);
+    }
+
+    private static function storagePathFromUrl(string $url): ?string
+    {
+        if ($url === '') {
+            return null;
+        }
+        if (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://') && ! str_starts_with($url, '/')) {
+            return ltrim($url, '/');
+        }
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! is_string($path) || $path === '') {
+            return null;
+        }
+        if (str_contains($path, '/storage/')) {
+            return ltrim((string) Str::after($path, '/storage/'), '/');
+        }
+
+        return ltrim($path, '/');
+    }
+}

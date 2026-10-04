@@ -143,6 +143,44 @@ class FalService
     }
 
     /**
+     * Submit without webhook and poll until COMPLETED (for short sync steps like character sheets).
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public function submitAndWait(string $endpointId, array $input, int $timeoutSeconds = 180): array
+    {
+        $submitted = $this->submit($endpointId, $input, '');
+        $statusUrl = is_string($submitted['status_url'] ?? null) ? $submitted['status_url'] : null;
+        $responseUrl = is_string($submitted['response_url'] ?? null) ? $submitted['response_url'] : null;
+
+        if (! $statusUrl || ! $responseUrl) {
+            throw new RuntimeException('fal queue did not return status/response URLs.');
+        }
+
+        $deadline = time() + max(30, $timeoutSeconds);
+        while (time() < $deadline) {
+            $status = $this->statusByUrl($statusUrl);
+            $state = strtoupper((string) ($status['status'] ?? ''));
+
+            if (in_array($state, ['COMPLETED', 'OK'], true)) {
+                return $this->resultByUrl($responseUrl);
+            }
+
+            if (in_array($state, ['FAILED', 'ERROR', 'CANCELLED'], true) || ! empty($status['error'])) {
+                $message = is_string($status['error'] ?? null)
+                    ? $status['error']
+                    : 'Character sheet generation failed.';
+                throw new RuntimeException($message);
+            }
+
+            usleep(1_500_000);
+        }
+
+        throw new RuntimeException('Timed out waiting for fal result.');
+    }
+
+    /**
      * Upload a reference file to fal CDN so inference works on localhost too.
      * Flow: initiate → PUT bytes → return public v3.fal.media URL.
      *

@@ -97,6 +97,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/trends/remake', [TrendsController::class, 'remake'])
         ->middleware('throttle:20,1')
         ->name('trends.remake');
+    Route::post('/trends/templates/{slug}/remake', [TrendsController::class, 'remakeTemplate'])
+        ->middleware('throttle:10,1')
+        ->name('trends.templates.remake');
     Route::post('/trends/visibility', [TrendsController::class, 'setVisibility'])
         ->middleware('throttle:30,1')
         ->name('trends.visibility');

@@ -12,7 +12,7 @@ import type { PageProps } from '@/types';
 export type TrendTemplate = {
     id: string;
     creation_id: number;
-    type: 'image' | 'video' | 'music';
+    type: 'image' | 'video' | 'music' | 'template';
     name: string;
     trend_title?: string | null;
     category: 'Images' | 'Videos' | 'Music' | string;
@@ -41,7 +41,12 @@ export type TrendTemplate = {
     quantity?: number | null;
     image_mode?: string | null;
     created_at?: string | null;
+    slug?: string | null;
 };
+
+function isVideoLike(row: TrendTemplate): boolean {
+    return row.type === 'video' || row.type === 'template';
+}
 
 type PillId = 'all' | 'featured' | 'videos' | 'images' | 'music';
 type SortId = 'popular' | 'newest' | 'creditsAsc' | 'creditsDesc';
@@ -121,7 +126,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
         const featured = filtered.filter((row) => row.featured);
         return {
             featured,
-            videos: filtered.filter((row) => row.type === 'video' && !row.featured),
+            videos: filtered.filter((row) => isVideoLike(row) && !row.featured),
             images: filtered.filter((row) => row.type === 'image' && !row.featured),
             music: filtered.filter((row) => row.type === 'music' && !row.featured),
         };
@@ -160,7 +165,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
     const pillCount = (p: PillId) => {
         if (p === 'all') return filtered.length;
         if (p === 'featured') return groups.featured.length;
-        if (p === 'videos') return filtered.filter((row) => row.type === 'video').length;
+        if (p === 'videos') return filtered.filter((row) => isVideoLike(row)).length;
         if (p === 'images') return filtered.filter((row) => row.type === 'image').length;
         return filtered.filter((row) => row.type === 'music').length;
     };
@@ -177,7 +182,7 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
             : pill === 'featured'
               ? [{ key: 'featured', title: t('sections.featuredTitle'), sub: t('sections.featuredSub'), icon: 'star', items: groups.featured }]
               : pill === 'videos'
-                ? [{ key: 'videos', title: t('sections.videosTitle'), sub: t('sections.videosSub'), icon: 'video', items: filtered.filter((row) => row.type === 'video') }]
+                ? [{ key: 'videos', title: t('sections.videosTitle'), sub: t('sections.videosSub'), icon: 'video', items: filtered.filter((row) => isVideoLike(row)) }]
                 : pill === 'images'
                   ? [{ key: 'images', title: t('sections.imagesTitle'), sub: t('sections.imagesSub'), icon: 'image', items: filtered.filter((row) => row.type === 'image') }]
                   : [{ key: 'music', title: t('sections.musicTitle'), sub: t('sections.musicSub'), icon: 'music', items: filtered.filter((row) => row.type === 'music') }];
@@ -799,7 +804,7 @@ function SectionIcon({ icon }: { icon: 'star' | 'video' | 'image' | 'music' }) {
 }
 
 function TypeIcon({ type }: { type: TrendTemplate['type'] }) {
-    if (type === 'video') return <IconVideo className="h-3 w-3" />;
+    if (type === 'video' || type === 'template') return <IconVideo className="h-3 w-3" />;
     if (type === 'music') return <IconMusic className="h-3 w-3" />;
     return <IconImage className="h-3 w-3" />;
 }

@@ -27,6 +27,20 @@ class VideoReferenceModelSeeder extends Seeder
     /** @var list<array<string, mixed>> */
     private const TEXT_MODELS = [
         [
+            'endpoint_id' => 'bytedance/seedance-2.5/reference-to-video',
+            'name' => 'Seedance 2.5 Reference to Video',
+            'description' => 'Seedance 2.5 multimodal R2V for trend templates: motion video + character sheets. Tag @Video1 / @Image1 / @Image2. Up to 30 images, 10 videos, 10 audios.',
+            'category' => 'Seedance',
+            'sort' => 80,
+            'unit' => 'seconds',
+            'unit_price' => 0.473,
+            'supports_audio' => true,
+            'max_duration' => 30,
+            'enums' => ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '18', '20', '24', '30'],
+            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'audio', 'trends'],
+            'image_url' => '/storage/ai_icons/bytedance-color.svg',
+        ],
+        [
             'endpoint_id' => 'bytedance/seedance-2.0/reference-to-video',
             'name' => 'Seedance 2.0 Reference to Video',
             'description' => 'Multimodal reference-to-video: up to 9 images, 3 videos, and 3 audios. Tag them in the prompt as @Image1 / @Video1 / @Audio1.',

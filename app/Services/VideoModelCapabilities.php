@@ -32,6 +32,7 @@ class VideoModelCapabilities
 
         // Seedance — multimodal R2V + first-frame I2V + optional end frame on I2V
         if (str_contains($id, 'seedance') && str_contains($id, 'reference-to-video')) {
+            $is25 = str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5');
             // Catalog row is already the R2V endpoint — keep submit on this endpoint
             // (don't divert a single image to I2V when the user explicitly picked R2V).
             return $this->caps(
@@ -41,9 +42,9 @@ class VideoModelCapabilities
                 firstFrame: false,
                 lastFrame: false,
                 lastRequired: false,
-                maxImages: 9,
-                maxVideos: 3,
-                maxAudios: 3,
+                maxImages: $is25 ? 30 : 9,
+                maxVideos: $is25 ? 10 : 3,
+                maxAudios: $is25 ? 10 : 3,
                 reference: $id,
                 firstFrameEndpoint: null,
                 firstFrameParam: null,
@@ -54,9 +55,11 @@ class VideoModelCapabilities
 
         if (str_contains($id, 'seedance') && str_contains($id, 'text-to-video')) {
             $fast = str_contains($id, '/fast');
+            $is25 = str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5');
+            $family = $is25 ? 'bytedance/seedance-2.5' : 'bytedance/seedance-2.0';
             $i2v = $fast
-                ? 'bytedance/seedance-2.0/fast/image-to-video'
-                : 'bytedance/seedance-2.0/image-to-video';
+                ? "{$family}/fast/image-to-video"
+                : "{$family}/image-to-video";
 
             return $this->caps(
                 images: true,
@@ -65,12 +68,12 @@ class VideoModelCapabilities
                 firstFrame: true,
                 lastFrame: true,
                 lastRequired: false,
-                maxImages: 9,
-                maxVideos: 3,
-                maxAudios: 3,
+                maxImages: $is25 ? 30 : 9,
+                maxVideos: $is25 ? 10 : 3,
+                maxAudios: $is25 ? 10 : 3,
                 reference: $fast
-                    ? 'bytedance/seedance-2.0/fast/reference-to-video'
-                    : 'bytedance/seedance-2.0/reference-to-video',
+                    ? "{$family}/fast/reference-to-video"
+                    : "{$family}/reference-to-video",
                 firstFrameEndpoint: $i2v,
                 firstFrameParam: 'image_url',
                 firstLastEndpoint: $i2v,

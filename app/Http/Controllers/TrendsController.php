@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientTokensException;
 use App\Exceptions\TrendsRemakeException;
+use App\Models\TrendTemplate;
 use App\Services\ImageReferenceStorage;
 use App\Services\TrendsFeedService;
 use App\Services\TrendsRemakeService;
+use App\Services\TrendTemplateRemakeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -80,6 +82,112 @@ class TrendsController extends Controller
                 'video_urls' => $videoUrls,
                 'audio_urls' => $audioUrls,
             ]);
+        } catch (InsufficientTokensException $e) {
+            return response()->json([
+                'message' => __('messages.not_enough_tokens'),
+                'required_tokens' => $e->required,
+                'available_tokens' => $e->available,
+            ], 402);
+        } catch (TrendsRemakeException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status());
+        }
+
+        return response()->json([
+            'ok' => true,
+            'type' => $result['type'],
+            'user_remake_count' => $result['user_remake_count'] ?? 0,
+            'user_latest' => $result['user_latest'] ?? null,
+            ...$result['creation'],
+        ], 201);
+    }
+
+    public function remakeTemplate(
+        Request $request,
+        string $slug,
+        TrendTemplateRemakeService $remake,
+        ImageReferenceStorage $imageStorage,
+    ): JsonResponse {
+        $template = TrendTemplate::query()->published()->where('slug', $slug)->first();
+        if (! $template) {
+            return response()->json(['message' => 'Template not found or not published.'], 404);
+        }
+
+        $clientSlots = $template->clientSlots();
+        $slotKeys = array_map(fn (array $s) => $s['key'], $clientSlots);
+
+        $data = $request->validate([
+            'slot_urls' => ['nullable', 'array', 'max:8'],
+            'slot_urls.*' => ['nullable', 'string', 'max:2048'],
+            'image_urls' => ['nullable', 'array', 'max:8'],
+            'image_urls.*' => ['string', 'max:2048'],
+            'references' => ['nullable', 'array', 'max:8'],
+            'references.*' => ['file', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:10240'],
+        ]);
+
+        $slotPhotos = [];
+        $named = is_array($data['slot_urls'] ?? null) ? $data['slot_urls'] : [];
+        foreach ($named as $key => $url) {
+            if (is_string($key) && is_string($url) && $url !== '' && in_array($key, $slotKeys, true)) {
+                $slotPhotos[$key] = $url;
+            }
+        }
+
+        // Ordered image_urls[] fallback when client uploads in slot order.
+        if ($slotPhotos === [] && ! empty($data['image_urls'])) {
+            $urls = array_values(array_filter($data['image_urls'], fn ($u) => is_string($u) && $u !== ''));
+            foreach ($clientSlots as $i => $slot) {
+                if (isset($urls[$i])) {
+                    $slotPhotos[$slot['key']] = $urls[$i];
+                }
+            }
+        }
+
+        /** @var array<int, UploadedFile>|UploadedFile|null $rawRefs */
+        $rawRefs = $request->file('references');
+        $uploadedRefs = is_array($rawRefs) ? $rawRefs : ($rawRefs ? [$rawRefs] : []);
+        if ($uploadedRefs !== [] && $slotPhotos === []) {
+            try {
+                $stored = $imageStorage->storeMany($request->user()->id, $uploadedRefs);
+            } catch (\Throwable $e) {
+                report($e);
+
+                return response()->json(['message' => __('messages.upload_failed')], 502);
+            }
+            $i = 0;
+            foreach ($clientSlots as $slot) {
+                $asset = $stored[$i] ?? null;
+                $i++;
+                if (! is_array($asset)) {
+                    continue;
+                }
+                $url = $asset['fal_url'] ?? $asset['url'] ?? null;
+                if (is_string($url) && $url !== '') {
+                    $slotPhotos[$slot['key']] = $url;
+                }
+            }
+        }
+
+        // Also accept slot-keyed file fields: files[body_right], etc.
+        foreach ($clientSlots as $slot) {
+            $file = $request->file('files.'.$slot['key']) ?? $request->file($slot['key']);
+            if (! $file instanceof UploadedFile) {
+                continue;
+            }
+            try {
+                $stored = $imageStorage->storeMany($request->user()->id, [$file]);
+            } catch (\Throwable $e) {
+                report($e);
+
+                return response()->json(['message' => __('messages.upload_failed')], 502);
+            }
+            $url = $stored[0]['fal_url'] ?? $stored[0]['url'] ?? null;
+            if (is_string($url) && $url !== '') {
+                $slotPhotos[$slot['key']] = $url;
+            }
+        }
+
+        try {
+            $result = $remake->remake($request->user(), $template, $slotPhotos);
         } catch (InsufficientTokensException $e) {
             return response()->json([
                 'message' => __('messages.not_enough_tokens'),

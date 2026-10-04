@@ -50,7 +50,7 @@ class DashboardController extends Controller
 
     public function showTrend(string $key, TrendsFeedService $trends, Request $request): Response
     {
-        if (! preg_match('/^(image|video|music)-(\d+)$/', $key, $m)) {
+        if (! preg_match('/^(image|video|music|template)-(\d+)$/', $key, $m)) {
             abort(404);
         }
 
