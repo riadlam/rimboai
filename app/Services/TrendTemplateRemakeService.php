@@ -284,6 +284,8 @@ class TrendTemplateRemakeService
             return;
         }
 
+        $lockedAudioUrl = $template->optionalAudioUrl();
+
         try {
             @set_time_limit(max(120, 90 * count($orderedPhotos) + 60));
             $sheetUrls = [];
