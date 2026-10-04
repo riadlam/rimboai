@@ -46,7 +46,8 @@ return [
     'higgsfield' => [
         // Full "KEY_ID:KEY_SECRET" string for Authorization: Key …
         'key' => env('HIGGSFIELD_KEY'),
-        'base_url' => env('HIGGSFIELD_BASE_URL', 'https://api.higgsfield.ai'),
+        // Docs use both hosts; platform returns status_url/cancel_url for jobs.
+        'base_url' => env('HIGGSFIELD_BASE_URL', 'https://platform.higgsfield.ai'),
         // Optional override; defaults to {APP_URL}/webhooks/higgsfield when APP_URL is https.
         'webhook_url' => env('HIGGSFIELD_WEBHOOK_URL'),
         // Genjutsu Motion Transfer list rates (USD per ceil input-video second).

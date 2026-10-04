@@ -88,6 +88,13 @@ class HiggsfieldWebhookProcessor
             return;
         }
 
+        Log::info('higgsfield.sync.status', [
+            'creation_id' => $creation->getKey(),
+            'request_id' => $requestId,
+            'status' => $status['status'] ?? null,
+            'has_video' => $this->extractVideoUrl($status) !== null,
+        ]);
+
         $state = strtolower((string) ($status['status'] ?? ''));
         $rid = is_string($status['request_id'] ?? null)
             ? $status['request_id']

@@ -84,10 +84,13 @@ class HiggsfieldService
         Log::info('higgsfield.submit', [
             'model' => $modelId,
             'webhook' => $hook ? true : false,
+            'webhook_host' => is_string($hook) ? (parse_url($hook, PHP_URL_HOST) ?: null) : null,
+            'submit_host' => parse_url($url, PHP_URL_HOST) ?: null,
         ]);
 
         $response = Http::withHeaders($this->headers())
             ->timeout(45)
+            ->asJson()
             ->post($url, $input);
 
         $response->throw();

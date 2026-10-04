@@ -16,8 +16,14 @@ Schedule::command('fal:sync-pricing')
     ->withoutOverlapping(5)
     ->runInBackground();
 
-// Drain delayed jobs (wallet cost reconcile, etc.) on shared hosting without a queue daemon.
+// Drain delayed jobs (wallet cost reconcile, Higgsfield poll, etc.) without a queue daemon.
 Schedule::command('queue:work database --stop-when-empty --max-time=50 --tries=1 --sleep=1')
+    ->everyMinute()
+    ->withoutOverlapping(1)
+    ->runInBackground();
+
+// Higgsfield webhooks are often missed — poll active Genjutsu jobs every minute.
+Schedule::command('higgsfield:sync-pending --limit=20')
     ->everyMinute()
     ->withoutOverlapping(1)
     ->runInBackground();

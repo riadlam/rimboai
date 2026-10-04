@@ -16,11 +16,16 @@ class HiggsfieldWebhookController extends Controller
         $started = microtime(true);
 
         /** @var array<string, mixed> $payload */
-        $payload = $request->all();
+        $payload = $request->json()->all();
+        if ($payload === []) {
+            $payload = $request->all();
+        }
 
         Log::info('higgsfield.webhook.received', [
             'request_id' => $payload['request_id'] ?? null,
             'status' => $payload['status'] ?? null,
+            'content_type' => $request->header('Content-Type'),
+            'bytes' => strlen($request->getContent()),
         ]);
 
         try {

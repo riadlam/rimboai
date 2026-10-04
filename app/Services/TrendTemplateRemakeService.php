@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\InsufficientTokensException;
 use App\Exceptions\TrendsRemakeException;
+use App\Jobs\PollHiggsfieldCreationJob;
 use App\Models\TrendTemplate;
 use App\Models\User;
 use App\Models\UserVideoCreation;
@@ -564,6 +565,11 @@ class TrendTemplateRemakeService
             $submit['response_url'] ?? null,
         );
         $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+        // HF webhooks are not reliably delivered; poll via database queue + scheduler.
+        PollHiggsfieldCreationJob::dispatch((int) $creation->id)
+            ->onConnection('database')
+            ->delay(now()->addSeconds(8));
     }
 
     /**

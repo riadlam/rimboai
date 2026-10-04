@@ -42,6 +42,10 @@ class FalWalletCostTracker
      */
     public function recordAfterCompletion(Model $creation): void
     {
+        if ($this->settleNonFalProvider($creation)) {
+            return;
+        }
+
         $this->reconcile($creation);
         $this->scheduleReconcileIfNeeded($creation);
     }
@@ -51,6 +55,10 @@ class FalWalletCostTracker
      */
     public function recordAfterFailure(Model $creation): void
     {
+        if ($this->settleNonFalProvider($creation)) {
+            return;
+        }
+
         $this->reconcile($creation);
         $this->scheduleReconcileIfNeeded($creation);
     }
@@ -84,6 +92,10 @@ class FalWalletCostTracker
      */
     public function billingMayStillArrive(Model $creation): bool
     {
+        if (HiggsfieldWebhookProcessor::isHiggsfieldCreation($creation)) {
+            return false;
+        }
+
         if ($this->wasFalCharged($creation)) {
             return false;
         }
@@ -105,7 +117,42 @@ class FalWalletCostTracker
             return;
         }
 
+        if ($this->settleNonFalProvider($creation)) {
+            return;
+        }
+
         $this->reconcile($creation);
+    }
+
+    /**
+     * Higgsfield (and future non-fal providers) never hit fal billing-events.
+     * Persist the estimate so status polls stop hanging on fal wallet reconcile.
+     */
+    public function settleNonFalProvider(Model $creation): bool
+    {
+        if (! HiggsfieldWebhookProcessor::isHiggsfieldCreation($creation)) {
+            return false;
+        }
+
+        if ($this->isFullyReconciled($creation)) {
+            return true;
+        }
+
+        $settings = $creation->getAttribute('settings');
+        $settings = is_array($settings) ? $settings : [];
+        $estimate = isset($settings['fal_cost_usd']) && is_numeric($settings['fal_cost_usd'])
+            ? (float) $settings['fal_cost_usd']
+            : 0.0;
+
+        $creation->forceFill([
+            'cost_usd' => $estimate,
+            'cost_usd_source' => 'higgsfield_estimate',
+            'cost_usd_is_final' => true,
+            'deducted_amount_from_main_wallet' => 0,
+            'settled_at' => now(),
+        ])->save();
+
+        return true;
     }
 
     /**
@@ -116,6 +163,10 @@ class FalWalletCostTracker
      */
     public function reconcile(Model $creation, bool $finalizeZeroCharge = false): bool
     {
+        if ($this->settleNonFalProvider($creation)) {
+            return true;
+        }
+
         $hadCostUsd = $creation->getAttribute('cost_usd') !== null
             && is_numeric($creation->getAttribute('cost_usd'));
         $source = (string) ($creation->getAttribute('cost_usd_source') ?? '');
@@ -210,7 +261,7 @@ class FalWalletCostTracker
 
     public function scheduleReconcileIfNeeded(Model $creation, int $attempt = 1): void
     {
-        if ($this->isFullyReconciled($creation)) {
+        if ($this->settleNonFalProvider($creation) || $this->isFullyReconciled($creation)) {
             return;
         }
 
