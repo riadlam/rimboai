@@ -14,7 +14,9 @@ class TrendTemplateModelTest extends TestCase
         $this->assertStringContainsString('@Video1', $prompt);
         $this->assertStringContainsString('@Image1', $prompt);
         $this->assertStringContainsString('@Image2', $prompt);
-        $this->assertStringContainsString('burnt-orange', $prompt);
+        $this->assertStringContainsString('burnt-orange studio backdrop', $prompt);
+        $this->assertStringContainsString('silver condenser microphone', $prompt);
+        $this->assertStringContainsString('camera movement', $prompt);
         $this->assertSame('minimax/h3/reference-to-video', TrendTemplate::DEFAULT_ENDPOINT);
     }
 

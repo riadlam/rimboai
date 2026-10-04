@@ -212,23 +212,17 @@ class TrendTemplate extends Model
 
     public static function defaultPromptScaffold(): string
     {
-        // Aligned with Kapwing Hotel Lobby Seedance 2.5 prompt:
+        // Kapwing Hotel Lobby AI Trend prompt (verbatim structure), tags adapted for our pipeline:
         // https://www.kapwing.com/resources/how-to-do-the-hotel-lobby-ai-trend-with-seedance-2-5/
+        // MiniMax H3 rewrites @ImageN/@Video1 → "Image N"/"Video 1" at submit time.
         return <<<'PROMPT'
-Use @Video1 only as the reference for motion, body movement, mouth movement, timing, and camera framing. It is a line drawing; the output is NOT line art. Ignore every piece of clothing, jewelry, face detail, and background color from @Video1.
+Use the input video @Video1 only as the reference for motion, body movement, mouth movement, timing, and camera movement. It is a line drawing; the output is NOT line art. Ignore every piece of clothing and jewelry drawn in @Video1. Ignore all shading, grey tones, black fills, and background color from @Video1 — @Video1 must not influence the set color at all.
 
-@Image1 stands on the RIGHT. Face, hair, body, and outfit exactly as shown in the @Image1 character sheet.
-@Image2 stands on the LEFT. Face, hair, body, and outfit exactly as shown in the @Image2 character sheet.
+Create a photoreal video of the same performance. @Image1 stands on the RIGHT. @Image2 stands on the LEFT. @Image1: face exactly as shown in their character sheet, wearing the outfit exactly as shown in their character sheet. @Image2: face exactly as shown in their character sheet, wearing the outfit exactly as shown in their character sheet. Each person wears only what their character sheet shows: bare hands and bare wrists, with no rings, bracelets, watches, or chains unless their character sheet explicitly includes them. They perform every gesture, hand movement, head turn, body movement, and mouth movement of the two performers in @Video1, frame for frame and perfectly in time.
 
-Create a photoreal video of the same performance. Each person wears only what their character sheet shows: bare hands and bare wrists, with no rings, bracelets, watches, or chains unless their character sheet explicitly includes them.
+The set is a seamless burnt-orange studio backdrop, warm and saturated, filling the entire frame edge to edge, with a silver condenser microphone hanging on a thin cable between them. No hotel lobby, no windows, no furniture, no dark walls, no grey or shadowy background — only bright burnt-orange.
 
-They perform every gesture, hand movement, head turn, body movement, and mouth movement of the two performers in @Video1, frame for frame and perfectly in time.
-
-The set is a seamless burnt-orange studio backdrop, warm and saturated (A COLORS SHOW style), filling the entire background — not a hotel lobby, no windows, no furniture. A silver condenser microphone hangs on a thin cable between them.
-
-Locked-off camera with the same framing as @Video1. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture.
-
-16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes.
+Locked-off camera with the same framing as the input video. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture. 16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes.
 PROMPT;
     }
 
