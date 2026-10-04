@@ -716,13 +716,18 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                     <audio src={exampleAudioSrc} controls autoPlay className="w-full max-w-md" />
                                                 )}
                                             </div>
-                                        ) : (
+                                        ) : exampleImageSrc ? (
                                             <div className="flex aspect-square w-full max-h-[70vh] items-center justify-center bg-black/40 sm:aspect-video">
                                                 <img
                                                     src={exampleImageSrc}
                                                     alt={displayTitle}
                                                     className="max-h-full max-w-full object-contain"
                                                 />
+                                            </div>
+                                        ) : (
+                                            <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#1a1210] via-[#111116] to-[#0c1520] p-8 text-center">
+                                                <span className="text-[15px] font-medium text-white/70">{displayTitle}</span>
+                                                <span className="text-[12px] text-white/40">Upload your photos to remake this trend</span>
                                             </div>
                                         )}
                                         <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent" />

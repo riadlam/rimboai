@@ -363,10 +363,26 @@ function Section({
     );
 }
 
+function TemplatePlaceholder({ name }: { name: string }) {
+    return (
+        <div className="flex size-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#1a1210] via-[#111116] to-[#0c1520] px-4 text-center">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-[#FF8A65]">
+                <IconVideo className="h-5 w-5" />
+            </span>
+            <span className="line-clamp-2 text-[13px] font-medium text-white/70">{name}</span>
+        </div>
+    );
+}
+
 function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTemplate; index: number; onOpen: () => void }) {
     const { t } = useTranslation('trends');
-    const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
-    const showImage = !showVideo && (tmpl.coverType === 'image' || (tmpl.coverType === 'audio' && !isAudioUrl(tmpl.cover)));
+    const [mediaBroken, setMediaBroken] = useState(false);
+    const showVideo = !mediaBroken && tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
+    const showImage =
+        !mediaBroken &&
+        !showVideo &&
+        Boolean(tmpl.cover) &&
+        (tmpl.coverType === 'image' || (tmpl.coverType === 'audio' && !isAudioUrl(tmpl.cover)));
     const videoSrc = tmpl.video_url || tmpl.cover;
     const videoPoster =
         tmpl.thumbnail_url ||
@@ -405,9 +421,12 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
                             alt={tmpl.name}
                             className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                             loading={index < 8 ? 'eager' : 'lazy'}
+                            onError={() => setMediaBroken(true)}
                         />
-                    ) : (
+                    ) : tmpl.type === 'music' ? (
                         <MusicArt name={tmpl.name} />
+                    ) : (
+                        <TemplatePlaceholder name={tmpl.name} />
                     )}
 
                     {/* readability gradient */}
@@ -483,8 +502,8 @@ export function TemplateDetailModal({
     const [isMobile, setIsMobile] = useState(() =>
         typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : true,
     );
-    const samples = tmpl.samples.length ? tmpl.samples : [tmpl.cover];
-    const activeSrc = samples[Math.min(activeSample, samples.length - 1)] || tmpl.cover;
+    const samples = (tmpl.samples.length ? tmpl.samples : [tmpl.cover]).filter((s): s is string => Boolean(s));
+    const activeSrc = samples[Math.min(activeSample, Math.max(samples.length - 1, 0))] || tmpl.cover || '';
     const showVideo = tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
     const videoSrc = tmpl.video_url || tmpl.cover || '';
     const warmKey = showVideo ? trendWarmKey(tmpl.id, videoSrc) : undefined;
@@ -534,8 +553,10 @@ export function TemplateDetailModal({
                     )}
                     {tmpl.audio_url && <audio src={tmpl.audio_url} controls autoPlay className="w-full max-w-md" />}
                 </div>
-            ) : (
+            ) : activeSrc ? (
                 <img src={activeSrc} alt={tmpl.name} className={`size-full ${isMobile ? 'object-contain' : 'object-cover'}`} />
+            ) : (
+                <TemplatePlaceholder name={tmpl.name} />
             )}
         </>
     );

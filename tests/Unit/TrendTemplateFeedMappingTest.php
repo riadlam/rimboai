@@ -51,4 +51,30 @@ class TrendTemplateFeedMappingTest extends TestCase
         $this->assertSame('https://example.com/sketch.mp4', $card['video_url']);
         $this->assertSame('RIMBOAI', $card['creator']);
     }
+
+    public function test_map_trend_template_works_without_cover(): void
+    {
+        $template = new TrendTemplate([
+            'title' => 'No Cover',
+            'slug' => 'no-cover',
+            'is_published' => true,
+            'is_featured' => false,
+            'trend_cost' => 10,
+            'endpoint_id' => TrendTemplate::FALLBACK_ENDPOINT,
+            'prompt' => 'test',
+            'cover_url' => null,
+            'locked_assets' => [],
+        ]);
+        $template->id = 7;
+
+        $service = app(TrendsFeedService::class);
+        $method = new ReflectionMethod(TrendsFeedService::class, 'mapTrendTemplate');
+        $method->setAccessible(true);
+        $card = $method->invoke($service, $template);
+
+        $this->assertIsArray($card);
+        $this->assertSame('template-7', $card['id']);
+        $this->assertSame('', $card['cover']);
+        $this->assertNull($card['video_url']);
+    }
 }

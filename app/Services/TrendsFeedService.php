@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserImageCreation;
 use App\Models\UserMusicCreation;
 use App\Models\UserVideoCreation;
+use App\Support\PublicMediaUrl;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -375,7 +376,7 @@ class TrendsFeedService
             ];
         }
 
-        $sketchUrl = $template->motionSketchUrl();
+        $sketchUrl = $this->normalizeTrendMediaUrl($template->motionSketchUrl());
         $user = auth()->user();
         $userRemakes = $user
             ? $this->userRemakesForTrendTemplate((int) $template->id, (int) $user->id)
@@ -638,12 +639,9 @@ class TrendsFeedService
      */
     private function mapTrendTemplate(TrendTemplate $template): ?array
     {
-        $sketch = $template->motionSketchUrl();
-        $cover = $template->cover_url ?: $sketch;
-        if (! is_string($cover) || $cover === '') {
-            return null;
-        }
-
+        $sketch = $this->normalizeTrendMediaUrl($template->motionSketchUrl());
+        $cover = $this->normalizeTrendMediaUrl($template->cover_url) ?: $sketch;
+        // Missing cover/sketch must not hide or 404 the template workspace.
         $uses = (int) $template->uses_count;
 
         return [
@@ -662,10 +660,10 @@ class TrendsFeedService
                 ?: $template->created_at?->toIso8601String(),
             'name' => $template->title,
             'category' => 'Videos',
-            'cover' => $cover,
+            'cover' => $cover ?: '',
             'coverType' => $sketch ? 'video' : 'image',
             'video_url' => $sketch,
-            'thumbnail_url' => $template->cover_url,
+            'thumbnail_url' => $this->normalizeTrendMediaUrl($template->cover_url),
             'samples' => array_values(array_filter([$cover, $sketch])),
             'description' => (string) ($template->description ?: 'Official trend template'),
             'prompt' => (string) $template->prompt,
@@ -680,6 +678,40 @@ class TrendsFeedService
             'hot' => $uses >= 5,
             'slug' => $template->slug,
         ];
+    }
+
+    /**
+     * Filament FileUpload often stores disk-relative paths (no /storage prefix).
+     */
+    private function normalizeTrendMediaUrl(?string $url): ?string
+    {
+        if (! is_string($url)) {
+            return null;
+        }
+        $url = trim($url);
+        if ($url === '') {
+            return null;
+        }
+
+        if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+            return PublicMediaUrl::normalize($url);
+        }
+
+        $path = ltrim(str_replace('\\', '/', $url), '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        // App-local uploads from Filament public disk.
+        if (
+            str_starts_with($path, 'trend-templates/')
+            || str_contains($path, '/')
+            || preg_match('/\.(jpe?g|png|webp|gif|mp4|webm|mov|mp3|wav)$/i', $path)
+        ) {
+            return PublicMediaUrl::storagePath($path);
+        }
+
+        return PublicMediaUrl::normalize($url);
     }
 
     /**
