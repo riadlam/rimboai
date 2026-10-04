@@ -135,7 +135,11 @@
     "signInToCreate": "Sign in to create",
     "unavailable": "This tool isn’t connected yet. Models will appear after seeding.",
     "maxDurationNotice": "Best results with clips up to {{seconds}}s.",
-    "videoTooLong": "This model supports videos up to {{seconds}}s. Trim your clip and try again.",
+    "videoTooLong": "This tool supports videos up to {{seconds}}s. Trim your clip and try again.",
+    "modelTooShort": "This model supports up to {{seconds}}s — pick another model or trim the clip.",
+    "aiModel": "AI Model",
+    "modelAutoPicked": "Picked {{name}} for this clip length and price.",
+    "modelUpTo": "up to {{seconds}}s",
     "insufficientCredits": "Not enough credits for this estimate.",
     "preview": "Live preview",
     "previewHint": "See what this tool can do",
@@ -161,7 +165,7 @@
       "video-to-anime-ai": "Convert live footage into stylized anime motion.",
       "ai-video-filters": "Apply cinematic looks and creative filters across the timeline.",
       "anime-video-enhancer": "Sharpen anime frames and lift line work without muddy artifacts.",
-      "motion-reference": "Turn an original performance (up to 20s) into a line-drawing motion sketch for Trend Templates.",
+      "motion-reference": "Turn an original performance into a line-drawing motion sketch for Trend Templates (auto-picks a model by length).",
       "motion-control": "Guide camera and subject motion with precise creative control."
     }
   }

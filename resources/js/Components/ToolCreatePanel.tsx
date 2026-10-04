@@ -12,8 +12,53 @@ import {
 } from '@/lib/creationRealtime';
 import { estimateToolCredits, snapBillableDuration } from '@/lib/toolCredits';
 import type { CreditsConfig } from '@/lib/imageCredits';
-import type { PageProps, Tool, ToolControlSpec, ToolUploadSpec, ToolWorkspace } from '@/types';
+import type {
+    PageProps,
+    Tool,
+    ToolControlSpec,
+    ToolModelOption,
+    ToolUploadSpec,
+    ToolWorkspace,
+} from '@/types';
 import ToggleTip from '@/Components/ToggleTip';
+
+function modelSupportsDuration(model: ToolModelOption, duration: number | null): boolean {
+    if (duration == null || !(duration > 0)) return true;
+    const max = model.billing?.max_duration;
+    if (max == null || max <= 0) return true;
+    return duration <= max + 0.05;
+}
+
+/** Cheapest model that can handle this clip length (primary wins ties / unknown duration). */
+function pickAdaptiveToolModel(
+    models: ToolModelOption[],
+    duration: number | null,
+): ToolModelOption | null {
+    if (models.length === 0) return null;
+    const eligible = models.filter((m) => modelSupportsDuration(m, duration));
+    const pool = eligible.length > 0 ? eligible : models;
+    if (duration == null || !(duration > 0)) {
+        return pool.find((m) => m.is_primary) ?? pool[0] ?? null;
+    }
+    return [...pool].sort((a, b) => {
+        const pa = a.billing?.unit_price ?? Number.POSITIVE_INFINITY;
+        const pb = b.billing?.unit_price ?? Number.POSITIVE_INFINITY;
+        if (pa !== pb) return pa - pb;
+        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+        return (b.billing?.max_duration ?? 0) - (a.billing?.max_duration ?? 0);
+    })[0] ?? null;
+}
+
+function toolMaxDurationSeconds(models: ToolModelOption[]): number | null {
+    let max: number | null = null;
+    for (const m of models) {
+        const d = m.billing?.max_duration;
+        if (typeof d === 'number' && d > 0) {
+            max = max == null ? d : Math.max(max, d);
+        }
+    }
+    return max;
+}
 type FileSlot = {
     file: File | null;
     preview: string | null;
@@ -62,6 +107,7 @@ const GROUP_BY_SLUG: Record<string, 'enhance' | 'transform' | 'edit' | 'create'>
     'ai-video-filters': 'edit',
     'animate-a-picture': 'create',
     'motion-control': 'create',
+    'motion-reference': 'transform',
     'ai-sound-effect-generator': 'create',
 };
 
@@ -117,17 +163,19 @@ export default function ToolCreatePanel({
     const onCreationUpdatedRef = useRef(onCreationUpdated);
     onCreationUpdatedRef.current = onCreationUpdated;
 
-    // Always use the primary model — AI Model picker is hidden from the tools UI.
     const modelOptions = workspace.models ?? [];
-    const selectedModel =
-        modelOptions.find((m) => m.id === workspace.model_id) ??
-        modelOptions.find((m) => m.is_primary) ??
-        modelOptions[0] ??
-        null;
-    const activeBilling = selectedModel?.billing ?? workspace.billing;
-    const activeModelId = selectedModel?.id ?? workspace.model_id;
+    const [selectedModelId, setSelectedModelId] = useState<number | null>(
+        () => workspace.model_id ?? modelOptions.find((m) => m.is_primary)?.id ?? modelOptions[0]?.id ?? null,
+    );
+    const userModelLockedRef = useRef(false);
+    const [modelSwitchNotice, setModelSwitchNotice] = useState<string | null>(null);
 
     useEffect(() => {
+        userModelLockedRef.current = false;
+        setSelectedModelId(
+            workspace.model_id ?? modelOptions.find((m) => m.is_primary)?.id ?? modelOptions[0]?.id ?? null,
+        );
+        setModelSwitchNotice(null);
         setValues(initControlValues(workspace.controls));
         setSlots((prev) => {
             Object.values(prev).forEach((s) => {
@@ -137,7 +185,17 @@ export default function ToolCreatePanel({
         });
         setError(null);
         setStatusMessage(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workspace.tool_slug, workspace.model_id]);
+
+    const selectedModel =
+        modelOptions.find((m) => m.id === selectedModelId) ??
+        modelOptions.find((m) => m.is_primary) ??
+        modelOptions[0] ??
+        null;
+    const activeBilling = selectedModel?.billing ?? workspace.billing;
+    const activeModelId = selectedModel?.id ?? workspace.model_id;
+    const longestToolDuration = useMemo(() => toolMaxDurationSeconds(modelOptions), [modelOptions]);
 
     const stopTracking = useCallback(() => {
         activeCreationIdRef.current = null;
@@ -304,6 +362,29 @@ export default function ToolCreatePanel({
 
     const isDurationEstimate = sourceDuration == null;
 
+    // Auto-pick cheapest model that supports the measured clip (unless user locked a choice).
+    useEffect(() => {
+        if (modelOptions.length <= 1) return;
+        if (sourceDuration == null || !(sourceDuration > 0)) return;
+
+        const current = modelOptions.find((m) => m.id === selectedModelId) ?? null;
+        const currentOk = current != null && modelSupportsDuration(current, sourceDuration);
+        if (userModelLockedRef.current && currentOk) return;
+
+        const best = pickAdaptiveToolModel(modelOptions, sourceDuration);
+        if (!best) return;
+        if (best.id === selectedModelId) return;
+
+        setSelectedModelId(best.id);
+        setModelSwitchNotice(t('detail.modelAutoPicked', { name: best.name }));
+    }, [modelOptions, sourceDuration, selectedModelId, t]);
+
+    useEffect(() => {
+        if (!modelSwitchNotice) return;
+        const id = window.setTimeout(() => setModelSwitchNotice(null), 4500);
+        return () => window.clearTimeout(id);
+    }, [modelSwitchNotice]);
+
     const billDuration = useMemo(() => {
         return snapBillableDuration(
             sourceDuration ?? estimatedSourceDuration,
@@ -344,6 +425,47 @@ export default function ToolCreatePanel({
         videoHeight,
     ]);
 
+    const modelCreditPreviews = useMemo(() => {
+        if (!(billDuration > 0) || modelOptions.length <= 1) return new Map<number, number>();
+        const map = new Map<number, number>();
+        for (const model of modelOptions) {
+            const est = estimateToolCredits(
+                model.billing,
+                {
+                    durationSeconds: snapBillableDuration(
+                        sourceDuration ?? estimatedSourceDuration,
+                        model.billing.duration_enums,
+                        model.billing.max_duration,
+                    ),
+                    resolution:
+                        typeof values.resolution === 'string'
+                            ? values.resolution
+                            : typeof values.scale === 'string'
+                              ? undefined
+                              : '720p',
+                    fps: videoFps && videoFps > 0 ? videoFps : undefined,
+                    inputWidth: videoWidth && videoWidth > 0 ? videoWidth : undefined,
+                    inputHeight: videoHeight && videoHeight > 0 ? videoHeight : undefined,
+                    scale: typeof values.scale === 'string' ? values.scale : undefined,
+                },
+                creditsConfig,
+            );
+            map.set(model.id, est.credits);
+        }
+        return map;
+    }, [
+        modelOptions,
+        billDuration,
+        sourceDuration,
+        estimatedSourceDuration,
+        values.resolution,
+        values.scale,
+        creditsConfig,
+        videoFps,
+        videoWidth,
+        videoHeight,
+    ]);
+
     const requiredReady = workspace.uploads.every((u) => {
         if (!u.required) return true;
         return Boolean(slots[u.key]?.file);
@@ -354,19 +476,26 @@ export default function ToolCreatePanel({
         !promptRequired ||
         (typeof values.prompt === 'string' && values.prompt.trim().length > 0);
 
-    // Create only when uploads are ready AND we have a real (non-estimate) duration.
+    // Block only when no model in the tool can handle this clip length.
     const overMaxDuration =
-        activeBilling?.max_duration != null &&
-        activeBilling.max_duration > 0 &&
+        longestToolDuration != null &&
+        longestToolDuration > 0 &&
         sourceDuration != null &&
-        sourceDuration > activeBilling.max_duration + 0.05;
+        sourceDuration > longestToolDuration + 0.05;
+
+    const selectedModelTooShort =
+        !overMaxDuration &&
+        sourceDuration != null &&
+        selectedModel != null &&
+        !modelSupportsDuration(selectedModel, sourceDuration);
 
     const billingReady =
         requiredReady &&
         !isDurationEstimate &&
         billDuration > 0 &&
         creditEstimate.credits > 0 &&
-        !overMaxDuration;
+        !overMaxDuration &&
+        !selectedModelTooShort;
 
     const canCreate =
         workspace.available &&
@@ -559,15 +688,27 @@ export default function ToolCreatePanel({
                         </div>
                     )}
 
-                    {workspace.notices.includes('max_duration') && activeBilling?.max_duration && (
+                    {workspace.notices.includes('max_duration') && longestToolDuration && (
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-white/45">
-                            {t('detail.maxDurationNotice', { seconds: activeBilling.max_duration })}
+                            {t('detail.maxDurationNotice', { seconds: longestToolDuration })}
                         </div>
                     )}
 
-                    {overMaxDuration && activeBilling?.max_duration && (
+                    {overMaxDuration && longestToolDuration && (
                         <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2.5 text-[12px] text-rose-100/90">
-                            {t('detail.videoTooLong', { seconds: activeBilling.max_duration })}
+                            {t('detail.videoTooLong', { seconds: longestToolDuration })}
+                        </div>
+                    )}
+
+                    {selectedModelTooShort && selectedModel?.billing?.max_duration && (
+                        <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2.5 text-[12px] text-rose-100/90">
+                            {t('detail.modelTooShort', { seconds: selectedModel.billing.max_duration })}
+                        </div>
+                    )}
+
+                    {modelSwitchNotice && !overMaxDuration && (
+                        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100/90">
+                            {modelSwitchNotice}
                         </div>
                     )}
 
@@ -583,6 +724,76 @@ export default function ToolCreatePanel({
                             onFile={(file) => void setFile(upload.key, file)}
                         />
                     ))}
+
+                    {modelOptions.length > 1 && (
+                        <section className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-[12px] font-medium text-white/70">{t('detail.aiModel')}</span>
+                                {selectedModel?.billing?.max_duration ? (
+                                    <span className="text-[10px] text-white/35">
+                                        {t('detail.modelUpTo', { seconds: selectedModel.billing.max_duration })}
+                                    </span>
+                                ) : null}
+                            </div>
+                            <div className="space-y-1.5">
+                                {modelOptions.map((model) => {
+                                    const active = model.id === selectedModel?.id;
+                                    const supported = modelSupportsDuration(model, sourceDuration);
+                                    const credits = modelCreditPreviews.get(model.id) ?? 0;
+                                    const max = model.billing?.max_duration;
+                                    return (
+                                        <button
+                                            key={model.id}
+                                            type="button"
+                                            disabled={!supported && sourceDuration != null}
+                                            onClick={() => {
+                                                userModelLockedRef.current = true;
+                                                setSelectedModelId(model.id);
+                                                setModelSwitchNotice(null);
+                                            }}
+                                            className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                                                active
+                                                    ? 'border-orange-400/40 bg-orange-500/10'
+                                                    : supported
+                                                      ? 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
+                                                      : 'cursor-not-allowed border-white/[0.04] bg-white/[0.015] opacity-45'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                                                    active
+                                                        ? 'border-orange-300 bg-orange-400'
+                                                        : 'border-white/25'
+                                                }`}
+                                            >
+                                                {active && (
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                                )}
+                                            </span>
+                                            <span className="min-w-0 flex-1">
+                                                <span className="flex items-center justify-between gap-2">
+                                                    <span className="truncate text-[12px] font-semibold text-white/90">
+                                                        {model.name}
+                                                    </span>
+                                                    <span className="shrink-0 text-[11px] text-white/55">
+                                                        {credits > 0
+                                                            ? `${isDurationEstimate ? '~' : ''}${credits}`
+                                                            : '—'}{' '}
+                                                        <span className="text-white/30">{t('detail.credits')}</span>
+                                                    </span>
+                                                </span>
+                                                <span className="mt-0.5 block text-[11px] leading-snug text-white/40">
+                                                    {max
+                                                        ? t('detail.modelUpTo', { seconds: max })
+                                                        : model.description}
+                                                </span>
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    )}
 
                     {mainControls.map((control) => (
                         <ControlField

@@ -486,9 +486,9 @@ class ToolWorkspaceBuilder
         }
 
         // Only when `enums` holds resolutions (not durations), e.g. video-to-anime 720p/1080p.
+        // Motion Reference bills continuously (ceil seconds) up to each model's max_duration.
         $known = match ($toolSlug) {
             'video-to-anime-ai' => [5, 10],
-            'motion-reference' => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
             default => [],
         };
         if ($known !== []) {

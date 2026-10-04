@@ -683,20 +683,21 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── Motion Reference (original → line-drawing sketch for Trends) ─
-            // Lucy Restyle: up to 30 min on fal — we expose 20s for trend clips ($0.01/s).
+            // Lucy Restyle: up to ~30 min on fal — expose 120s for trend/long takes ($0.01/s).
             // Kling O3 edit: sharper short sketches (3–15s). Wan edit: 2–10s fallback.
+            // Client auto-picks the cheapest model that supports the uploaded clip length.
             [
                 'sort' => 274,
                 'tool_slug' => 'motion-reference',
                 'tool_name' => 'Motion Reference',
                 'endpoint_id' => 'decart/lucy-restyle',
                 'name' => 'Lucy Restyle Motion Sketch',
-                'description' => 'Long-clip line-drawing motion reference for Trend Templates (up to 20s).',
+                'description' => 'Long-clip line-drawing motion reference for Trend Templates (up to 120s).',
                 'unit' => 'seconds',
                 'unit_price' => 0.01,
                 'ref_cost_usd' => 0.01 * $s,
                 'ref_duration_seconds' => 5,
-                'max_duration' => 20,
+                'max_duration' => 120,
                 'enums' => ['720p'],
                 'is_primary' => true,
                 'defaults' => [

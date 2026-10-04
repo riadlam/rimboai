@@ -135,7 +135,11 @@
     "signInToCreate": "Connectez-vous pour créer",
     "unavailable": "Cet outil n'est pas encore connecté. Les modèles apparaîtront après le seed.",
     "maxDurationNotice": "Meilleurs résultats avec des clips jusqu'à {{seconds}}s.",
-    "videoTooLong": "Ce modèle accepte des vidéos jusqu'à {{seconds}}s. Raccourcissez votre clip et réessayez.",
+    "videoTooLong": "Cet outil accepte des vidéos jusqu'à {{seconds}}s. Raccourcissez votre clip et réessayez.",
+    "modelTooShort": "Ce modèle accepte jusqu'à {{seconds}}s — choisissez un autre modèle ou raccourcissez le clip.",
+    "aiModel": "Modèle IA",
+    "modelAutoPicked": "{{name}} sélectionné pour cette durée et ce prix.",
+    "modelUpTo": "jusqu'à {{seconds}}s",
     "insufficientCredits": "Crédits insuffisants pour cette estimation.",
     "preview": "Aperçu en direct",
     "previewHint": "Voyez ce que cet outil peut faire",
@@ -161,7 +165,7 @@
       "video-to-anime-ai": "Convertissez des rushes live en mouvement anime stylisé.",
       "ai-video-filters": "Appliquez des looks cinéma et filtres créatifs sur la timeline.",
       "anime-video-enhancer": "Affinez les frames anime et les traits sans artefacts.",
-      "motion-reference": "Transformez une perf originale (jusqu'à 20 s) en croquis linéaire pour les Trend Templates.",
+      "motion-reference": "Transformez une perf originale en croquis linéaire pour les Trend Templates (modèle auto selon la durée).",
       "motion-control": "Guidez caméra et sujet avec un contrôle créatif précis."
     }
   }
