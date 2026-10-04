@@ -10,13 +10,16 @@ use Illuminate\Support\Str;
 class TrendTemplate extends Model
 {
     /**
-     * Kapwing Hotel Lobby path: Seedance 2.5 R2V (image sheets + motion video).
-     * No song/audio refs — avoids copyright filters. Up to ~30s.
+     * Default Trends R2V path: Higgsfield Genjutsu Motion Transfer
+     * (fal character sheets + Genjutsu motion transfer).
      */
-    public const DEFAULT_ENDPOINT = 'bytedance/seedance-2.5/reference-to-video';
+    public const DEFAULT_ENDPOINT = 'higgsfield/genjutsu/motion-transfer/v1.0';
 
-    /** Fallback if Seedance catalog row is missing / face-blocked. */
-    public const FALLBACK_ENDPOINT = 'minimax/h3/reference-to-video';
+    /** Fal Seedance fallback (catalog-backed). */
+    public const FALLBACK_ENDPOINT = 'bytedance/seedance-2.5/reference-to-video';
+
+    /** Secondary fal fallback if Seedance catalog row is missing. */
+    public const SECONDARY_FALLBACK_ENDPOINT = 'minimax/h3/reference-to-video';
 
     public const DEFAULT_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 

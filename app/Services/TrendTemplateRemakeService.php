@@ -13,12 +13,13 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Curated Trend Template remake: face photos → character sheets → Seedance R2V.
+ * Curated Trend Template remake: face photos → fal character sheets → video (fal R2V or Higgsfield Genjutsu).
  */
 class TrendTemplateRemakeService
 {
     public function __construct(
         private FalService $fal,
+        private HiggsfieldService $higgsfield,
         private FalVideoInputBuilder $videoInput,
         private FalImageInputBuilder $imageInput,
         private FalPricingService $pricing,
@@ -100,21 +101,34 @@ class TrendTemplateRemakeService
         }
 
         $prompt = trim((string) $template->prompt);
-        if ($prompt === '' || ! str_contains($prompt, '@Video1')) {
+        $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
+        $isHiggsfield = HiggsfieldService::isHiggsfieldEndpoint($endpointId);
+
+        if ($isHiggsfield) {
+            if (! $this->higgsfield->configured()) {
+                throw new TrendsRemakeException('Higgsfield is not configured.', 503);
+            }
+            if ($prompt === '') {
+                throw new TrendsRemakeException('Template prompt is invalid.', 422);
+            }
+        } elseif ($prompt === '' || ! str_contains($prompt, '@Video1')) {
             throw new TrendsRemakeException('Template prompt is invalid.', 422);
         }
 
-        $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
         $model = $this->resolveVideoModel($endpointId);
-        if (! $model) {
-            // Fall back to MiniMax H3 if Seedance catalog row is missing.
+        if (! $model && ! $isHiggsfield) {
             $endpointId = TrendTemplate::FALLBACK_ENDPOINT;
+            $model = $this->resolveVideoModel($endpointId);
+        }
+        if (! $model && ! $isHiggsfield) {
+            $endpointId = TrendTemplate::SECONDARY_FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
         }
         if (! $model) {
             throw new TrendsRemakeException(__('messages.model_unavailable'), 422);
         }
         $submitEndpoint = (string) $model->endpoint_id;
+        $isHiggsfield = HiggsfieldService::isHiggsfieldEndpoint($submitEndpoint);
 
         $credits = (int) $template->trend_cost;
         if ($credits <= 0) {
@@ -162,7 +176,8 @@ class TrendTemplateRemakeService
                     'user_id' => $user->id,
                     'mode' => 'trend_template',
                     'endpoint_id' => $submitEndpoint,
-                    'model_name' => $template->model_name ?: ($model->name ?? 'Seedance 2.5'),
+                    'provider' => $isHiggsfield ? 'higgsfield' : 'fal',
+                    'model_name' => $template->model_name ?: ($model->name ?? 'Trend Video'),
                     'prompt' => $prompt,
                     'input_assets' => $inputAssets,
                     'settings' => [
@@ -170,8 +185,10 @@ class TrendTemplateRemakeService
                         'resolution' => $resolution,
                         'duration' => $duration,
                         'audio' => false,
+                        'provider' => $isHiggsfield ? 'higgsfield' : 'fal',
                         'catalog_endpoint' => $submitEndpoint,
-                        'fal_endpoint' => $submitEndpoint,
+                        'fal_endpoint' => $isHiggsfield ? null : $submitEndpoint,
+                        'higgsfield_model' => $isHiggsfield ? $submitEndpoint : null,
                         'credits' => $credits,
                         'credits_source' => 'trend_cost',
                         'from_trend_template_id' => $template->id,
@@ -323,6 +340,49 @@ class TrendTemplateRemakeService
         }
 
         $prompt = $this->withoutAudioReferencePrompt($prompt);
+        $sheetUrls = array_values(array_slice($sheetUrls, 0, 8));
+
+        $sheetMeta = [];
+        foreach ($orderedPhotos as $i => $photo) {
+            $sheetMeta[] = [
+                'slot_key' => $photo['key'],
+                'role' => $photo['role'],
+                'photo_url' => $photo['photo_url'],
+                'sheet_url' => $sheetUrls[$i] ?? null,
+                'image_tag' => '@Image'.($i + 1),
+            ];
+        }
+
+        $mergedAssets = array_merge($inputAssets, array_map(
+            fn (string $url, int $i) => [
+                'url' => $url,
+                'fal_url' => $url,
+                'type' => 'image',
+                'role' => 'character_sheet',
+                'slot_key' => $orderedPhotos[$i]['key'] ?? null,
+            ],
+            $sheetUrls,
+            array_keys($sheetUrls),
+        ));
+
+        if (HiggsfieldService::isHiggsfieldEndpoint($submitEndpoint)) {
+            $this->submitHiggsfieldGenjutsu(
+                creation: $creation,
+                user: $user,
+                template: $template,
+                submitEndpoint: $submitEndpoint,
+                prompt: $prompt,
+                aspect: $aspect,
+                resolution: $resolution,
+                duration: $duration,
+                sketchUrl: $sketchUrl,
+                sheetUrls: $sheetUrls,
+                sheetMeta: $sheetMeta,
+                mergedAssets: $mergedAssets,
+            );
+
+            return;
+        }
 
         $built = $this->videoInput->build($submitEndpoint, [
             'prompt' => $prompt,
@@ -357,23 +417,13 @@ class TrendTemplateRemakeService
                 'breakdown' => ['mode' => 'template_estimate_fallback'],
             ];
 
-        $sheetMeta = [];
-        foreach ($orderedPhotos as $i => $photo) {
-            $sheetMeta[] = [
-                'slot_key' => $photo['key'],
-                'role' => $photo['role'],
-                'photo_url' => $photo['photo_url'],
-                'sheet_url' => $sheetUrls[$i] ?? null,
-                'image_tag' => '@Image'.($i + 1),
-            ];
-        }
-
         $settings = is_array($creation->settings) ? $creation->settings : [];
         $settings = array_merge($settings, [
             'aspect' => $built['aspect_ratio'],
             'resolution' => $built['resolution'],
             'duration' => $duration ?? $built['duration_value'],
             'audio' => false,
+            'provider' => 'fal',
             'fal_input' => $falInput,
             'fal_endpoint' => $submitEndpoint,
             'billing_endpoint' => $billing['endpoint_id'] ?? $submitEndpoint,
@@ -390,19 +440,8 @@ class TrendTemplateRemakeService
             ],
         ]);
 
-        $mergedAssets = array_merge($inputAssets, array_map(
-            fn (string $url, int $i) => [
-                'url' => $url,
-                'fal_url' => $url,
-                'type' => 'image',
-                'role' => 'character_sheet',
-                'slot_key' => $orderedPhotos[$i]['key'] ?? null,
-            ],
-            $sheetUrls,
-            array_keys($sheetUrls),
-        ));
-
         $creation->forceFill([
+            'provider' => 'fal',
             'input_assets' => $mergedAssets,
             'settings' => $settings,
             'duration_value' => $built['duration_value'],
@@ -434,6 +473,96 @@ class TrendTemplateRemakeService
         if (isset($submit['queue_position'])) {
             $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
         }
+        $this->processor->broadcastSnapshot('video', $creation->fresh());
+    }
+
+    /**
+     * @param  list<string>  $sheetUrls
+     * @param  list<array<string, mixed>>  $sheetMeta
+     * @param  list<array<string, mixed>>  $mergedAssets
+     */
+    private function submitHiggsfieldGenjutsu(
+        UserVideoCreation $creation,
+        User $user,
+        TrendTemplate $template,
+        string $submitEndpoint,
+        string $prompt,
+        string $aspect,
+        string $resolution,
+        mixed $duration,
+        string $sketchUrl,
+        array $sheetUrls,
+        array $sheetMeta,
+        array $mergedAssets,
+    ): void {
+        $durationSeconds = is_numeric($duration) ? max(1, (int) round((float) $duration)) : 15;
+        $cost = HiggsfieldService::estimateGenjutsuUsd($durationSeconds, $resolution);
+
+        $hfInput = [
+            'video_url' => $sketchUrl,
+            'image_urls' => $sheetUrls,
+            'resolution' => in_array(strtolower($resolution), ['480p', '720p', '1080p'], true)
+                ? strtolower($resolution)
+                : '720p',
+        ];
+        $cleanPrompt = trim($prompt);
+        if ($cleanPrompt !== '') {
+            $hfInput['prompt'] = $cleanPrompt;
+        }
+
+        $settings = is_array($creation->settings) ? $creation->settings : [];
+        $settings = array_merge($settings, [
+            'aspect' => $aspect,
+            'resolution' => $hfInput['resolution'],
+            'duration' => $duration,
+            'audio' => false,
+            'provider' => 'higgsfield',
+            'higgsfield_model' => $submitEndpoint,
+            'higgsfield_input' => $hfInput,
+            'billing_endpoint' => $submitEndpoint,
+            'billing_source' => 'higgsfield_list',
+            'billing_unit' => $cost['unit'],
+            'billing_unit_price' => $cost['unit_price'],
+            'fal_cost_usd' => $cost['fal_cost_usd'],
+            'cost_breakdown' => $cost['breakdown'],
+            'character_sheets' => $sheetMeta,
+            'media_counts' => [
+                'images' => count($sheetUrls),
+                'videos' => 1,
+                'audios' => 0,
+            ],
+        ]);
+
+        $creation->forceFill([
+            'provider' => 'higgsfield',
+            'endpoint_id' => $submitEndpoint,
+            'input_assets' => $mergedAssets,
+            'settings' => $settings,
+            'duration_value' => is_numeric($duration) ? (string) $duration : (string) $durationSeconds,
+            'duration_seconds' => $durationSeconds,
+            'aspect_ratio' => $aspect,
+            'resolution' => $hfInput['resolution'],
+            'with_audio' => false,
+            'progress_message' => 'Starting video generation…',
+        ])->save();
+        $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+        try {
+            $submit = $this->higgsfield->submit($submitEndpoint, $hfInput);
+        } catch (Throwable $e) {
+            report($e);
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
+            $this->tokens->refund($user, $creation, 'video', 'higgsfield_submit_failed');
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            return;
+        }
+
+        $creation->markQueued(
+            $submit['request_id'] ?? null,
+            $submit['status_url'] ?? null,
+            $submit['response_url'] ?? null,
+        );
         $this->processor->broadcastSnapshot('video', $creation->fresh());
     }
 
@@ -558,6 +687,17 @@ class TrendTemplateRemakeService
 
     private function resolveVideoModel(string $endpointId): ?object
     {
+        if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
+            return (object) [
+                'endpoint_id' => $endpointId,
+                'name' => $endpointId === HiggsfieldService::GENJUTSU_MOTION_TRANSFER
+                    ? 'Higgsfield Genjutsu Motion Transfer'
+                    : 'Higgsfield',
+                'status' => 'active',
+                'enums' => null,
+            ];
+        }
+
         foreach (['text_to_video_models', 'image_to_video_models'] as $table) {
             $row = DB::table($table)
                 ->where('status', 'active')

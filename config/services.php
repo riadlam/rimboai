@@ -43,6 +43,20 @@ return [
         'webhook_url' => env('FAL_WEBHOOK_URL'),
     ],
 
+    'higgsfield' => [
+        // Full "KEY_ID:KEY_SECRET" string for Authorization: Key …
+        'key' => env('HIGGSFIELD_KEY'),
+        'base_url' => env('HIGGSFIELD_BASE_URL', 'https://api.higgsfield.ai'),
+        // Optional override; defaults to {APP_URL}/webhooks/higgsfield when APP_URL is https.
+        'webhook_url' => env('HIGGSFIELD_WEBHOOK_URL'),
+        // Genjutsu Motion Transfer list rates (USD per ceil input-video second).
+        'genjutsu_motion_transfer' => [
+            '480p' => (float) env('HIGGSFIELD_GENJUTSU_USD_480P', 0.318),
+            '720p' => (float) env('HIGGSFIELD_GENJUTSU_USD_720P', 0.681),
+            '1080p' => (float) env('HIGGSFIELD_GENJUTSU_USD_1080P', 1.632),
+        ],
+    ],
+
     /** Optional absolute path to ffmpeg for "Continue from last frame". */
     'ffmpeg_path' => env('FFMPEG_PATH'),
 

@@ -55,18 +55,36 @@ class TrendTemplateCostEstimator
         $durationSeconds = $this->durationSeconds($data['duration'] ?? null, $data['reference_video_seconds'] ?? null);
         $slotCount = $this->imageSlotCount($data['slots'] ?? null);
 
-        $videoBilling = $this->resolveBilling($endpointId);
-        $video = $this->videoCost->estimate([
-            'endpoint_id' => $endpointId,
-            'unit' => $videoBilling['unit'] ?? 'seconds',
-            'unit_price' => $videoBilling['unit_price'] ?? 0,
-            'duration_seconds' => $durationSeconds,
-            'audio' => $audio,
-            'resolution' => $resolution,
-            'aspect' => $aspect,
-            'reference_video_seconds' => $durationSeconds,
-            'reference_image_count' => $slotCount,
-        ]);
+        if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
+            $quoted = HiggsfieldService::estimateGenjutsuUsd($durationSeconds, $resolution);
+            $video = [
+                'fal_cost_usd' => $quoted['fal_cost_usd'],
+                'credits' => 0,
+                'billable_units' => $quoted['billable_units'],
+                'unit' => $quoted['unit'],
+                'unit_price' => $quoted['unit_price'],
+                'breakdown' => $quoted['breakdown'],
+            ];
+            $videoBilling = [
+                'endpoint_id' => $endpointId,
+                'unit' => $quoted['unit'],
+                'unit_price' => $quoted['unit_price'],
+                'source' => 'higgsfield_list',
+            ];
+        } else {
+            $videoBilling = $this->resolveBilling($endpointId);
+            $video = $this->videoCost->estimate([
+                'endpoint_id' => $endpointId,
+                'unit' => $videoBilling['unit'] ?? 'seconds',
+                'unit_price' => $videoBilling['unit_price'] ?? 0,
+                'duration_seconds' => $durationSeconds,
+                'audio' => $audio,
+                'resolution' => $resolution,
+                'aspect' => $aspect,
+                'reference_video_seconds' => $durationSeconds,
+                'reference_image_count' => $slotCount,
+            ]);
+        }
 
         $sheetBase = preg_replace('#/edit$#', '', $sheetEndpoint) ?: $sheetEndpoint;
         $sheetSubmit = str_ends_with($sheetEndpoint, '/edit')

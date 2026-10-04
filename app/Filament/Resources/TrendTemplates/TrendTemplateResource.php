@@ -201,7 +201,7 @@ class TrendTemplateResource extends Resource
                     ->helperText('Off for trends (lighter, no song IP). Users add the track in TikTok/Reels.')
                     ->default(false),
                 TextInput::make('fal_estimate_usd')
-                    ->label('Fal estimate (USD)')
+                    ->label('Provider estimate (USD)')
                     ->numeric()
                     ->step(0.000001)
                     ->readOnly()
@@ -226,7 +226,7 @@ class TrendTemplateResource extends Resource
                                 Notification::make()
                                     ->title('Estimate ready')
                                     ->body(sprintf(
-                                        'Fal ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d',
+                                        'Provider ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d',
                                         number_format($estimate['fal_estimate_usd'], 4),
                                         number_format($estimate['video_usd'], 4),
                                         number_format($estimate['sheets_usd'], 4),
@@ -542,10 +542,10 @@ class TrendTemplateResource extends Resource
      */
     public static function r2vEndpointOptions(): array
     {
-        // Kapwing Hotel Lobby uses Seedance 2.5 (best motion/lip follow). No audio refs = no song IP.
         $options = [
-            TrendTemplate::DEFAULT_ENDPOINT => 'Seedance 2.5 Reference to Video (Kapwing-style — recommended)',
-            TrendTemplate::FALLBACK_ENDPOINT => 'MiniMax H3 Reference to Video (faces OK, weaker lips, max 15s)',
+            TrendTemplate::DEFAULT_ENDPOINT => 'Higgsfield Genjutsu Motion Transfer (recommended)',
+            TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.5 Reference to Video (fal)',
+            TrendTemplate::SECONDARY_FALLBACK_ENDPOINT => 'MiniMax H3 Reference to Video (faces OK, max 15s)',
             'fal-ai/kling-video/o3/pro/reference-to-video' => 'Kling O3 Pro Reference to Video',
             'fal-ai/kling-video/o3/standard/reference-to-video' => 'Kling O3 Standard Reference to Video',
             'fal-ai/wan/v2.7/reference-to-video' => 'Wan 2.7 Reference to Video (output max 10s)',
@@ -570,6 +570,7 @@ class TrendTemplateResource extends Resource
         $preferredKeys = [
             TrendTemplate::DEFAULT_ENDPOINT,
             TrendTemplate::FALLBACK_ENDPOINT,
+            TrendTemplate::SECONDARY_FALLBACK_ENDPOINT,
             'fal-ai/kling-video/o3/pro/reference-to-video',
             'fal-ai/kling-video/o3/standard/reference-to-video',
             'fal-ai/wan/v2.7/reference-to-video',
@@ -702,7 +703,7 @@ class TrendTemplateResource extends Resource
             $data['endpoint_id'] = TrendTemplate::DEFAULT_ENDPOINT;
         }
         if (! filled($data['model_name'] ?? null)) {
-            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'MiniMax H3';
+            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'Higgsfield Genjutsu Motion Transfer';
         }
 
         return $data;

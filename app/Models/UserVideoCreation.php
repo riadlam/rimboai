@@ -15,6 +15,7 @@ class UserVideoCreation extends Model
         'user_id',
         'mode',
         'endpoint_id',
+        'provider',
         'model_name',
         'prompt',
         'negative_prompt',

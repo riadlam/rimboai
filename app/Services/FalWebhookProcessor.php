@@ -42,6 +42,12 @@ class FalWebhookProcessor
             return;
         }
 
+        if ($type === 'video' && HiggsfieldWebhookProcessor::isHiggsfieldCreation($creation)) {
+            app(HiggsfieldWebhookProcessor::class)->sync($creation);
+
+            return;
+        }
+
         $statusUrl = $creation->getAttribute('fal_status_url');
         if (! is_string($statusUrl) || $statusUrl === '') {
             return;
