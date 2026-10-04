@@ -540,30 +540,37 @@ class TrendTemplateResource extends Resource
      */
     public static function r2vEndpointOptions(): array
     {
-        $options = [];
+        // Always offer Seedance defaults first — Filament Select rejects values missing from options
+        // (common on VPS before VideoReferenceModelSeeder has run for 2.5).
+        $options = [
+            TrendTemplate::DEFAULT_ENDPOINT => 'Seedance 2.5 Reference to Video',
+            TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.0 Reference to Video',
+        ];
+
         foreach (['text_to_video_models', 'image_to_video_models'] as $table) {
             if (! DbSchema::hasTable($table)) {
                 continue;
             }
             $rows = DB::table($table)
                 ->where('status', 'active')
-                ->where(function ($q): void {
-                    $q->where('endpoint_id', 'like', '%reference-to-video%')
-                        ->orWhere('tags', 'like', '%reference-to-video%');
-                })
+                ->where('endpoint_id', 'like', '%reference-to-video%')
                 ->orderBy('sort')
                 ->get(['endpoint_id', 'name']);
             foreach ($rows as $row) {
-                $options[(string) $row->endpoint_id] = (string) ($row->name ?: $row->endpoint_id);
+                $id = (string) $row->endpoint_id;
+                $options[$id] = (string) ($row->name ?: $id);
             }
         }
 
-        if ($options === []) {
-            $options[TrendTemplate::DEFAULT_ENDPOINT] = 'Seedance 2.5 Reference to Video';
-            $options[TrendTemplate::FALLBACK_ENDPOINT] = 'Seedance 2.0 Reference to Video';
-        }
+        // Keep Seedance labels at the top of the list.
+        $seedance = [
+            TrendTemplate::DEFAULT_ENDPOINT => $options[TrendTemplate::DEFAULT_ENDPOINT],
+            TrendTemplate::FALLBACK_ENDPOINT => $options[TrendTemplate::FALLBACK_ENDPOINT]
+                ?? 'Seedance 2.0 Reference to Video',
+        ];
+        unset($options[TrendTemplate::DEFAULT_ENDPOINT], $options[TrendTemplate::FALLBACK_ENDPOINT]);
 
-        return $options;
+        return $seedance + $options;
     }
 
     /**
