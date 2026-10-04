@@ -683,23 +683,44 @@ class VideoToolsModelsSeeder extends Seeder
             ],
 
             // ── Motion Reference (original → line-drawing sketch for Trends) ─
-            // Kling O3 edit supports 3–15s (Hotel Lobby length). Wan edit max 10s.
+            // Lucy Restyle: up to 30 min on fal — we expose 20s for trend clips ($0.01/s).
+            // Kling O3 edit: sharper short sketches (3–15s). Wan edit: 2–10s fallback.
+            [
+                'sort' => 274,
+                'tool_slug' => 'motion-reference',
+                'tool_name' => 'Motion Reference',
+                'endpoint_id' => 'decart/lucy-restyle',
+                'name' => 'Lucy Restyle Motion Sketch',
+                'description' => 'Long-clip line-drawing motion reference for Trend Templates (up to 20s).',
+                'unit' => 'seconds',
+                'unit_price' => 0.01,
+                'ref_cost_usd' => 0.01 * $s,
+                'ref_duration_seconds' => 5,
+                'max_duration' => 20,
+                'enums' => ['720p'],
+                'is_primary' => true,
+                'defaults' => [
+                    'resolution' => '720p',
+                    'enhance_prompt' => false,
+                ],
+                'tags' => ['motion-reference', 'sketch', 'trends', 'lucy', 'primary', 'long'],
+            ],
             [
                 'sort' => 275,
                 'tool_slug' => 'motion-reference',
                 'tool_name' => 'Motion Reference',
                 'endpoint_id' => 'fal-ai/kling-video/o3/standard/video-to-video/edit',
                 'name' => 'Kling O3 Motion Sketch',
-                'description' => 'Turn an original performance into a clean line-drawing motion reference for Trend Templates (3–15s).',
+                'description' => 'Higher-detail short sketches for Trend Templates (3–15s).',
                 'unit' => 'seconds',
                 'unit_price' => 0.126,
                 'ref_cost_usd' => 0.126 * $s,
                 'ref_duration_seconds' => 5,
                 'max_duration' => 15,
                 'enums' => null,
-                'is_primary' => true,
+                'is_primary' => false,
                 'defaults' => ['keep_audio' => false],
-                'tags' => ['motion-reference', 'sketch', 'trends', 'kling', 'primary'],
+                'tags' => ['motion-reference', 'sketch', 'trends', 'kling', 'fallback'],
             ],
             [
                 'sort' => 276,

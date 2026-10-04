@@ -565,16 +565,40 @@ class FalToolInputBuilder
     private function buildMotionReference(string $endpointId, array $defaults, array $settings, string $videoUrl): array
     {
         $detail = trim((string) ($settings['prompt'] ?? ''));
-        $klingPrompt = 'Restyle @Video1 into a clean black-and-white line drawing motion reference for AI video trends. '
+        $lineArtPrompt = 'Restyle this video into a clean black-and-white line drawing motion reference for AI video trends. '
             .'Simple continuous outlines of body silhouettes, limbs, hands, head turns, and mouth shapes only. '
             .'Plain light/white background. No photoreal faces, no clothing texture, no jewelry, no color, no heavy shading, no filled black masses. '
-            .'Preserve exact motion, gestures, timing, and camera framing from @Video1 frame for frame.';
+            .'Preserve exact motion, gestures, timing, and camera framing frame for frame — only change the visual style to line art.';
         if ($detail !== '') {
-            $klingPrompt .= ' '.$detail;
+            $lineArtPrompt .= ' '.$detail;
         }
 
-        // Kling O3 edit — supports 3–15s trend clips; prompt must cite @Video1.
+        // Lucy Restyle — long-form V2V (up to ~30 min on fal; we expose ≤20s). No @Video1 tags.
+        if (str_contains($endpointId, 'lucy-restyle') || str_contains($endpointId, 'decart/lucy')) {
+            $resolution = (string) ($settings['resolution'] ?? $defaults['resolution'] ?? '720p');
+            if (! in_array($resolution, ['720p', '1080p'], true)) {
+                $resolution = '720p';
+            }
+
+            return $this->onlyKeys([
+                'video_url' => $videoUrl,
+                'prompt' => $lineArtPrompt,
+                // Keep our sketch prompt literal — Lucy's enhancer often drifts toward color/style.
+                'enhance_prompt' => (bool) ($settings['enhance_prompt'] ?? $defaults['enhance_prompt'] ?? false),
+                'resolution' => $resolution,
+            ], ['video_url', 'prompt', 'enhance_prompt', 'resolution', 'seed']);
+        }
+
+        // Kling O3 edit — supports 3–15s; prompt must cite @Video1.
         if (str_contains($endpointId, 'kling-video') && str_contains($endpointId, 'video-to-video/edit')) {
+            $klingPrompt = 'Restyle @Video1 into a clean black-and-white line drawing motion reference for AI video trends. '
+                .'Simple continuous outlines of body silhouettes, limbs, hands, head turns, and mouth shapes only. '
+                .'Plain light/white background. No photoreal faces, no clothing texture, no jewelry, no color, no heavy shading, no filled black masses. '
+                .'Preserve exact motion, gestures, timing, and camera framing from @Video1 frame for frame.';
+            if ($detail !== '') {
+                $klingPrompt .= ' '.$detail;
+            }
+
             return $this->onlyKeys([
                 'video_url' => $videoUrl,
                 'prompt' => $klingPrompt,
@@ -584,15 +608,7 @@ class FalToolInputBuilder
 
         // Wan 2.7 edit-video — shorter clips (2–10s); no @Video1 tags.
         if (str_contains($endpointId, 'wan/v2.7/edit-video')) {
-            $wanPrompt = 'Transform the video into a clean black-and-white line drawing motion reference. '
-                .'Simple continuous outlines of body silhouettes, limbs, hands, head turns, and mouth shapes only. '
-                .'Plain light/white background. No photoreal faces, no clothing texture, no jewelry, no color, no heavy shading. '
-                .'Keep the exact motion, gestures, timing, and camera framing — only change the visual style to line art.';
-            if ($detail !== '') {
-                $wanPrompt .= ' '.$detail;
-            }
-
-            return $this->buildWan27Edit($defaults, $settings, $videoUrl, $wanPrompt);
+            return $this->buildWan27Edit($defaults, $settings, $videoUrl, $lineArtPrompt);
         }
 
         throw new \InvalidArgumentException('Motion Reference model is not supported for this endpoint.');
