@@ -199,6 +199,33 @@ class ToolGenerationController extends Controller
             }
         }
 
+        // Partner models often fail on raw phone/Windows MP4s (moov-at-end) even when
+        // the file already lives on fal CDN. Rehost a normalized copy for every tool job.
+        try {
+            if (! empty($urls['video']) && is_string($urls['video'])) {
+                $prepared = $fal->ensureInferenceVideoUrl($urls['video'], 'tool-video.mp4');
+                $urls['video'] = $prepared;
+                foreach ($inputAssets as $i => $asset) {
+                    if (($asset['type'] ?? null) === 'video') {
+                        $inputAssets[$i]['fal_url'] = $prepared;
+                        $inputAssets[$i]['url'] = $prepared;
+                        $inputAssets[$i]['normalized'] = true;
+                    }
+                }
+            }
+            foreach (['image', 'audio'] as $kind) {
+                if (! empty($urls[$kind]) && is_string($urls[$kind]) && ! $fal->isFalCdnUrl($urls[$kind])) {
+                    $urls[$kind] = $fal->ensureCdnUrl($urls[$kind]);
+                }
+            }
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Could not prepare the media file for AI processing. Try re-uploading as MP4.',
+            ], 422);
+        }
+
         $probed = null;
         $videoFile = $request->file('video');
         if ($videoFile instanceof UploadedFile) {

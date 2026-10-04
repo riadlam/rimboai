@@ -298,15 +298,15 @@ class TrendTemplateRemakeService
             return;
         }
 
-        // MiniMax (and some partner models) cannot fetch rimboai.com /storage URLs.
-        // Sheets usually already live on fal CDN; always rehost the motion sketch.
+        // Partner models often reject rimboai /storage URLs and moov-at-end MP4s.
+        // Always rehost sheets + a normalized faststart motion sketch to fal CDN.
         try {
             $creation->forceFill([
                 'progress_message' => 'Uploading motion reference…',
             ])->save();
             $this->processor->broadcastSnapshot('video', $creation->fresh());
 
-            $sketchUrl = $this->fal->ensureCdnUrl($sketchUrl, 'motion-sketch.mp4');
+            $sketchUrl = $this->fal->ensureInferenceVideoUrl($sketchUrl, 'motion-sketch.mp4');
             $sheetUrls = array_map(
                 fn (string $url): string => $this->fal->ensureCdnUrl($url),
                 $sheetUrls,

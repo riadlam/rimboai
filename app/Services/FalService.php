@@ -22,9 +22,10 @@ class FalService
 
     private string $queueBase = 'https://queue.fal.run';
 
-    public function __construct()
+    public function __construct(private ?MediaNormalizeService $normalize = null)
     {
         $this->key = (string) config('services.fal.key', '');
+        $this->normalize ??= app(MediaNormalizeService::class);
     }
 
     public function configured(): bool
@@ -199,6 +200,12 @@ class FalService
             throw new RuntimeException('Uploaded file is not readable on the server.');
         }
 
+        // Partner models (Decart/Lucy, MiniMax, …) reject many raw phone/Windows MP4s
+        // even when hosted on fal CDN — normalize to faststart H.264 first.
+        if ($this->normalize->looksLikeVideo($filename, $contentType)) {
+            return $this->uploadNormalizedVideoPath($path, $file->getClientOriginalName() ?: $filename);
+        }
+
         $bytes = @file_get_contents($path);
         if ($bytes === false || $bytes === '') {
             throw new RuntimeException('Could not read the uploaded file from disk.');
@@ -233,6 +240,65 @@ class FalService
             return $url;
         }
 
+        return $this->downloadAndUploadToCdn($url, $filenameHint, normalizeVideo: true);
+    }
+
+    /**
+     * Ensure a video URL is partner-ready (faststart H.264 on fal CDN).
+     * Skips re-upload when the URL is already on fal CDN and the file is fine.
+     *
+     * @throws RequestException|RuntimeException
+     */
+    public function ensureInferenceVideoUrl(string $url, ?string $filenameHint = 'video.mp4'): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            throw new InvalidArgumentException('Media URL is empty.');
+        }
+
+        $response = Http::timeout(120)
+            ->withHeaders(['User-Agent' => 'rimboai-fal-rehost/1.0'])
+            ->get($url);
+
+        if (! $response->successful()) {
+            Log::warning('fal inference video download failed', [
+                'url' => $url,
+                'status' => $response->status(),
+            ]);
+            throw new RuntimeException('Could not download video for inference prep (HTTP '.$response->status().').');
+        }
+
+        $bytes = $response->body();
+        if ($bytes === '') {
+            throw new RuntimeException('Downloaded video was empty.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'rimboai-vidchk-');
+        if ($tmp === false) {
+            throw new RuntimeException('Could not create temp file for video prep.');
+        }
+        file_put_contents($tmp, $bytes);
+
+        try {
+            if ($this->isFalCdnUrl($url) && ! $this->normalize->needsInferenceRemux($tmp)) {
+                return $url;
+            }
+
+            return $this->uploadNormalizedVideoPath($tmp, $filenameHint ?: 'video.mp4');
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    /**
+     * @throws RequestException|RuntimeException
+     */
+    private function downloadAndUploadToCdn(
+        string $url,
+        ?string $filenameHint = null,
+        bool $normalizeVideo = false,
+        bool $forceVideo = false,
+    ): string {
         $response = Http::timeout(120)
             ->withHeaders(['User-Agent' => 'rimboai-fal-rehost/1.0'])
             ->get($url);
@@ -260,7 +326,45 @@ class FalService
             $contentType = null;
         }
 
+        $isVideo = $forceVideo || $this->normalize->looksLikeVideo($basename, $contentType);
+        if ($normalizeVideo && $isVideo) {
+            $tmp = tempnam(sys_get_temp_dir(), 'rimboai-dl-');
+            if ($tmp === false) {
+                throw new RuntimeException('Could not create temp file for media rehost.');
+            }
+            file_put_contents($tmp, $bytes);
+            try {
+                return $this->uploadNormalizedVideoPath($tmp, $basename);
+            } finally {
+                @unlink($tmp);
+            }
+        }
+
         return $this->uploadBytesToCdn($bytes, $basename, $contentType);
+    }
+
+    /**
+     * @throws RequestException|RuntimeException
+     */
+    private function uploadNormalizedVideoPath(string $sourcePath, ?string $filenameHint = null): string
+    {
+        $normalized = $this->normalize->normalizeVideoFile($sourcePath, $filenameHint);
+        try {
+            $bytes = @file_get_contents($normalized['path']);
+            if ($bytes === false || $bytes === '') {
+                throw new RuntimeException('Normalized video was empty.');
+            }
+
+            return $this->uploadBytesToCdn(
+                $bytes,
+                $normalized['filename'],
+                $normalized['content_type'],
+            );
+        } finally {
+            if ($normalized['cleanup'] && is_file($normalized['path'])) {
+                @unlink($normalized['path']);
+            }
+        }
     }
 
     /**

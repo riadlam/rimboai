@@ -217,6 +217,33 @@ class VideoGenerationController extends Controller
             };
         }
 
+        // Normalize videos for partner downloaders (moov-at-end phone/Windows MP4s).
+        try {
+            $videoUrls = array_values(array_map(
+                fn (string $url): string => $fal->ensureInferenceVideoUrl($url, 'lab-video.mp4'),
+                $videoUrls,
+            ));
+            $videoIndex = 0;
+            foreach ($inputAssets as $i => $asset) {
+                if (($asset['type'] ?? null) !== 'video') {
+                    continue;
+                }
+                if (! isset($videoUrls[$videoIndex])) {
+                    break;
+                }
+                $inputAssets[$i]['fal_url'] = $videoUrls[$videoIndex];
+                $inputAssets[$i]['url'] = $videoUrls[$videoIndex];
+                $inputAssets[$i]['normalized'] = true;
+                $videoIndex++;
+            }
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Could not prepare the video for AI processing. Try re-uploading as MP4.',
+            ], 422);
+        }
+
         $allowedDurations = null;
         if (! empty($model->enums)) {
             $decoded = is_string($model->enums) ? json_decode($model->enums, true) : $model->enums;
