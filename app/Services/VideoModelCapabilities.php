@@ -183,6 +183,26 @@ class VideoModelCapabilities
             );
         }
 
+        // MiniMax H3 — Kapwing-style multimodal R2V (images + motion videos up to 15s).
+        if (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video')) {
+            return $this->caps(
+                images: true,
+                videos: true,
+                audio: true,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 9,
+                maxVideos: 3,
+                maxAudios: 3,
+                reference: 'minimax/h3/reference-to-video',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+
         // Kling O3 Pro/Standard R2V — character elements + one motion-video element (trends).
         if (
             str_contains($id, 'kling-video/o3/')

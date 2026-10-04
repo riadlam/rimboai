@@ -10,13 +10,13 @@ use Illuminate\Support\Str;
 class TrendTemplate extends Model
 {
     /**
-     * Kling O3 Pro R2V — 3–15s, multi-character elements + motion video element.
-     * Seedance on fal blocks recognizable faces; Wan 2.7 R2V caps at 10s.
+     * MiniMax H3 R2V — Kapwing-style match: Image 1/2 + Video 1 (2–15s motion),
+     * output 5–15s. Seedance blocks real faces; Kling element videos max ~10s.
      */
-    public const DEFAULT_ENDPOINT = 'fal-ai/kling-video/o3/pro/reference-to-video';
+    public const DEFAULT_ENDPOINT = 'minimax/h3/reference-to-video';
 
-    /** Cheaper Kling O3 tier with the same 15s / element capabilities. */
-    public const FALLBACK_ENDPOINT = 'fal-ai/kling-video/o3/standard/reference-to-video';
+    /** Fallback if H3 catalog row is missing. */
+    public const FALLBACK_ENDPOINT = 'fal-ai/kling-video/o3/pro/reference-to-video';
 
     public const DEFAULT_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 

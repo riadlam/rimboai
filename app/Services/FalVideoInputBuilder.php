@@ -95,6 +95,12 @@ class FalVideoInputBuilder
             'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
             'resolution' => true,
         ],
+        // MiniMax H3 — Image N / Video N refs, motion clips 2–15s, output 5–15s.
+        'minimax/h3/reference-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['adaptive', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+            'resolution' => true,
+        ],
         'fal-ai/pixverse/c1/reference-to-video' => [
             'duration_format' => 'int',
             'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
@@ -293,6 +299,21 @@ class FalVideoInputBuilder
                 if ($videoUrls !== []) {
                     $input['reference_video_urls'] = array_slice($videoUrls, 0, 5);
                 }
+            } elseif (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video')) {
+                // Kapwing/Seedance-style: @ImageN / @Video1 → "Image N" / "Video 1".
+                if ($imageUrls !== []) {
+                    $input['reference_image_urls'] = array_slice($imageUrls, 0, 9);
+                }
+                if ($videoUrls !== []) {
+                    $input['reference_video_urls'] = array_slice($videoUrls, 0, 3);
+                }
+                if ($audioUrls !== []) {
+                    $input['reference_audio_urls'] = array_slice($audioUrls, 0, 3);
+                }
+                $input['prompt'] = $this->normalizeMiniMaxH3Prompt($prompt);
+                $input['prompt_expansion_mode'] = (string) ($options['prompt_expansion_mode'] ?? 'disabled');
+                $input['enable_safety_checker'] = (bool) ($options['enable_safety_checker'] ?? true);
+                unset($input['image_urls'], $input['video_urls'], $input['audio_urls'], $input['generate_audio']);
             } elseif (str_contains($id, 'pixverse/c1/reference-to-video')) {
                 $references = $this->buildPixVerseReferences(array_slice($imageUrls, 0, 5));
                 if ($references !== []) {
@@ -317,6 +338,7 @@ class FalVideoInputBuilder
             if (
                 $videoUrls !== []
                 && ! str_contains($id, 'wan/v2.7/reference-to-video')
+                && ! (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video'))
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'reference-to-video'))
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
                 && ! str_contains($id, 'gemini-omni-flash')
@@ -326,6 +348,7 @@ class FalVideoInputBuilder
             }
             if (
                 $audioUrls !== []
+                && ! (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video'))
                 && ! (str_contains($id, 'kling-video') && str_contains($id, 'video-to-video/edit'))
                 && ! str_contains($id, 'gemini-omni-flash')
             ) {
@@ -521,6 +544,11 @@ class FalVideoInputBuilder
             return max(3, min(15, $seconds));
         }
 
+        // MiniMax H3 R2V: output duration 5–15 (motion refs also 2–15s).
+        if (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video')) {
+            return max(5, min(15, $seconds));
+        }
+
         return $seconds;
     }
 
@@ -593,6 +621,16 @@ class FalVideoInputBuilder
     private function mapResolutionForFal(string $resolution, string $endpointId): string
     {
         $id = strtolower($endpointId);
+
+        // MiniMax H3: 480P / 768P / 2K / 4K (uppercase P on fal).
+        if (str_contains($id, 'minimax/h3')) {
+            return match (strtolower($resolution)) {
+                '480p', '480P' => '480P',
+                '1080p', '2k', '2K' => '2K',
+                '4k', '4K' => '4K',
+                default => '768P', // Lab 720p → native 768P
+            };
+        }
 
         // Grok Imagine Video only accepts 480p / 720p.
         if (str_contains($id, 'grok-imagine-video')) {
@@ -727,6 +765,19 @@ class FalVideoInputBuilder
         if ($elementCount > 0 && ! preg_match('/@Element\d+\b/i', $prompt)) {
             $prompt = 'Replace the person in the video with @Element1. '.$prompt;
         }
+
+        return $prompt;
+    }
+
+    /**
+     * MiniMax H3 cites refs as "Image 1" / "Video 1" (not @Image1 / @Video1).
+     */
+    private function normalizeMiniMaxH3Prompt(string $prompt): string
+    {
+        $prompt = trim($prompt);
+        $prompt = preg_replace('/@Image(\d+)\b/i', 'Image $1', $prompt) ?? $prompt;
+        $prompt = preg_replace('/@Video(\d+)\b/i', 'Video $1', $prompt) ?? $prompt;
+        $prompt = preg_replace('/@Audio(\d+)\b/i', 'Audio $1', $prompt) ?? $prompt;
 
         return $prompt;
     }

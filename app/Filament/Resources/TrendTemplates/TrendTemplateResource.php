@@ -103,7 +103,7 @@ class TrendTemplateResource extends Resource
                     ->columnSpanFull(),
                 TextInput::make('model_name')
                     ->label('Display model name')
-                    ->placeholder('Kling O3 Pro')
+                    ->placeholder('MiniMax H3')
                     ->maxLength(255),
                 FileUpload::make('motion_sketch')
                     ->label('Locked motion sketch (video)')
@@ -540,12 +540,12 @@ class TrendTemplateResource extends Resource
      */
     public static function r2vEndpointOptions(): array
     {
-        // Prefer Kling O3 — 15s + faces. Seedance blocks real faces; Wan R2V maxes at 10s.
-        // Always include defaults so Filament Select accepts values before seeder sync.
+        // Prefer MiniMax H3 — full 15s motion + faces. Kling element-video max ~10s; Seedance bans faces.
         $options = [
-            TrendTemplate::DEFAULT_ENDPOINT => 'Kling O3 Pro Reference to Video (15s, faces OK — recommended)',
-            TrendTemplate::FALLBACK_ENDPOINT => 'Kling O3 Standard Reference to Video (15s, faces OK)',
-            'fal-ai/wan/v2.7/reference-to-video' => 'Wan 2.7 Reference to Video (max 10s)',
+            TrendTemplate::DEFAULT_ENDPOINT => 'MiniMax H3 Reference to Video (15s motion + faces — recommended)',
+            TrendTemplate::FALLBACK_ENDPOINT => 'Kling O3 Pro Reference to Video (motion video max ~10s)',
+            'fal-ai/kling-video/o3/standard/reference-to-video' => 'Kling O3 Standard Reference to Video',
+            'fal-ai/wan/v2.7/reference-to-video' => 'Wan 2.7 Reference to Video (output max 10s)',
             'bytedance/seedance-2.5/reference-to-video' => 'Seedance 2.5 Reference to Video (blocks real faces on fal)',
             'bytedance/seedance-2.0/reference-to-video' => 'Seedance 2.0 Reference to Video (blocks real faces on fal)',
         ];
@@ -568,6 +568,7 @@ class TrendTemplateResource extends Resource
         $preferredKeys = [
             TrendTemplate::DEFAULT_ENDPOINT,
             TrendTemplate::FALLBACK_ENDPOINT,
+            'fal-ai/kling-video/o3/standard/reference-to-video',
             'fal-ai/wan/v2.7/reference-to-video',
             'bytedance/seedance-2.5/reference-to-video',
             'bytedance/seedance-2.0/reference-to-video',
@@ -699,7 +700,7 @@ class TrendTemplateResource extends Resource
             $data['endpoint_id'] = TrendTemplate::DEFAULT_ENDPOINT;
         }
         if (! filled($data['model_name'] ?? null)) {
-            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'Kling O3 Pro';
+            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'MiniMax H3';
         }
 
         return $data;
