@@ -152,6 +152,16 @@ class TrendTemplateRemakeService
             'role' => 'motion_sketch',
         ];
 
+        $lockedAudioUrl = $template->optionalAudioUrl();
+        if (is_string($lockedAudioUrl) && $lockedAudioUrl !== '') {
+            $inputAssets[] = [
+                'url' => $lockedAudioUrl,
+                'fal_url' => $lockedAudioUrl,
+                'type' => 'audio',
+                'role' => 'audio',
+            ];
+        }
+
         try {
             /** @var UserVideoCreation $creation */
             $creation = $this->tokens->reserve(
@@ -311,6 +321,9 @@ class TrendTemplateRemakeService
                 fn (string $url): string => $this->fal->ensureCdnUrl($url),
                 $sheetUrls,
             );
+            if (is_string($lockedAudioUrl) && $lockedAudioUrl !== '') {
+                $lockedAudioUrl = $this->fal->ensureCdnUrl($lockedAudioUrl, 'trend-audio.mp3');
+            }
         } catch (Throwable $e) {
             report($e);
             $creation->markFailed(
@@ -323,17 +336,22 @@ class TrendTemplateRemakeService
             return;
         }
 
+        $audioUrls = (is_string($lockedAudioUrl) && $lockedAudioUrl !== '')
+            ? [$lockedAudioUrl]
+            : [];
+        $prompt = $this->withLockedAudioPrompt($prompt, $audioUrls !== []);
+
         $built = $this->videoInput->build($submitEndpoint, [
             'prompt' => $prompt,
             'aspect' => $aspect,
             'resolution' => $resolution,
             'duration' => $duration,
-            'audio' => $audio,
+            'audio' => $audio || $audioUrls !== [],
             'allowed_durations' => $allowedDurations,
             'mode' => 'reference-to-video',
             'image_urls' => $sheetUrls,
             'video_urls' => [$sketchUrl],
-            'audio_urls' => [],
+            'audio_urls' => $audioUrls,
             'enable_prompt_expansion' => false,
         ]);
 
@@ -385,29 +403,40 @@ class TrendTemplateRemakeService
             'media_counts' => [
                 'images' => count($sheetUrls),
                 'videos' => 1,
-                'audios' => 0,
+                'audios' => count($audioUrls),
             ],
+            'locked_audio_url' => $audioUrls[0] ?? null,
         ]);
 
+        $mergedAssets = array_merge($inputAssets, array_map(
+            fn (string $url, int $i) => [
+                'url' => $url,
+                'fal_url' => $url,
+                'type' => 'image',
+                'role' => 'character_sheet',
+                'slot_key' => $orderedPhotos[$i]['key'] ?? null,
+            ],
+            $sheetUrls,
+            array_keys($sheetUrls),
+        ));
+        if ($audioUrls !== []) {
+            $mergedAssets[] = [
+                'url' => $audioUrls[0],
+                'fal_url' => $audioUrls[0],
+                'type' => 'audio',
+                'role' => 'audio',
+            ];
+        }
+
         $creation->forceFill([
-            'input_assets' => array_merge($inputAssets, array_map(
-                fn (string $url, int $i) => [
-                    'url' => $url,
-                    'fal_url' => $url,
-                    'type' => 'image',
-                    'role' => 'character_sheet',
-                    'slot_key' => $orderedPhotos[$i]['key'] ?? null,
-                ],
-                $sheetUrls,
-                array_keys($sheetUrls),
-            )),
+            'input_assets' => $mergedAssets,
             'settings' => $settings,
             'duration_value' => $built['duration_value'],
             'duration_seconds' => $built['duration_seconds'],
             'aspect_ratio' => $built['aspect_ratio'],
             'resolution' => $built['resolution'],
-            'with_audio' => $built['with_audio'],
-            'progress_message' => 'Starting Seedance…',
+            'with_audio' => $built['with_audio'] || $audioUrls !== [],
+            'progress_message' => 'Starting video generation…',
         ])->save();
         $this->processor->broadcastSnapshot('video', $creation->fresh());
 
@@ -432,6 +461,27 @@ class TrendTemplateRemakeService
             $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
         }
         $this->processor->broadcastSnapshot('video', $creation->fresh());
+    }
+
+    /**
+     * MiniMax H3 invents voices unless Audio 1 is cited. Append when locked audio is present.
+     */
+    private function withLockedAudioPrompt(string $prompt, bool $hasAudio): string
+    {
+        $prompt = trim($prompt);
+        if (! $hasAudio) {
+            return $prompt;
+        }
+
+        if (preg_match('/@Audio1\b|Audio\s*1\b/i', $prompt) === 1) {
+            return $prompt;
+        }
+
+        $audioClause = <<<'TXT'
+Use @Audio1 as the only performance soundtrack — dialogue, singing, and timing must match @Audio1 exactly with accurate lip sync. Do not invent new voices, lyrics, or alternate vocals; keep the original vocal timbre and words from @Audio1. Motion and mouth shapes from @Video1 must stay locked to @Audio1.
+TXT;
+
+        return $prompt === '' ? $audioClause : ($prompt."\n\n".$audioClause);
     }
 
     private function resolveTemplate(TrendTemplate|string|int $template): TrendTemplate

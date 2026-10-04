@@ -115,11 +115,12 @@ class TrendTemplateResource extends Resource
                     ->helperText('Line-drawing / sketch motion reference. Not shown as a client upload.')
                     ->columnSpanFull(),
                 FileUpload::make('locked_audio')
-                    ->label('Optional audio asset (stored only — not muxed in v1)')
+                    ->label('Locked performance audio (voice / song)')
                     ->acceptedFileTypes(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/*'])
                     ->disk('public')
                     ->directory('trend-templates/audio')
                     ->visibility('public')
+                    ->helperText('Sent to MiniMax H3 as Audio 1 for voice clone + lip sync (2–15s). Extract the original vocals/song from the source trend clip. Without this, H3 invents new voices.')
                     ->columnSpanFull(),
                 Repeater::make('slots')
                     ->label('Client face slots')
@@ -197,7 +198,8 @@ class TrendTemplateResource extends Resource
                     ->helperText('Used for fal cost estimate / Seedance duration.'),
                 Toggle::make('generate_audio')
                     ->label('Generate audio')
-                    ->default(false),
+                    ->helperText('For MiniMax H3, native audio is always returned. Upload Locked performance audio above so the model clones that voice instead of inventing one.')
+                    ->default(true),
                 TextInput::make('fal_estimate_usd')
                     ->label('Fal estimate (USD)')
                     ->numeric()

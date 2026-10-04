@@ -366,9 +366,11 @@ class FalVideoInputBuilder
             'duration_value' => is_string($durationValue) ? $durationValue : (string) $durationValue,
             'aspect_ratio' => $input['aspect_ratio'] ?? $aspect,
             'resolution' => $input['resolution'] ?? $resolution,
-            // Omni Flash always returns synced audio (no generate_audio toggle on Fal).
+            // Omni Flash / MiniMax H3 always return native audio (no generate_audio toggle on Fal).
             'with_audio' => (bool) (($input['generate_audio'] ?? false) || ($input['generate_audio_switch'] ?? false))
-                || str_contains(strtolower($endpointId), 'gemini-omni-flash'),
+                || str_contains(strtolower($endpointId), 'gemini-omni-flash')
+                || (str_contains(strtolower($endpointId), 'minimax/h3') && ! empty($input['reference_audio_urls']))
+                || (str_contains(strtolower($endpointId), 'minimax/h3') && str_contains(strtolower($endpointId), 'reference-to-video')),
         ];
     }
 
