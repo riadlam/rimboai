@@ -502,6 +502,11 @@ class FalVideoInputBuilder
             return max(3, min(10, $seconds));
         }
 
+        // Wan 2.7 R2V only accepts 2–10 (I2V/T2V go to 15 — do not confuse them).
+        if (str_contains($id, 'wan/v2.7/reference-to-video')) {
+            return max(2, min(10, $seconds));
+        }
+
         return $seconds;
     }
 
