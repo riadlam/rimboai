@@ -298,6 +298,31 @@ class TrendTemplateRemakeService
             return;
         }
 
+        // MiniMax (and some partner models) cannot fetch rimboai.com /storage URLs.
+        // Sheets usually already live on fal CDN; always rehost the motion sketch.
+        try {
+            $creation->forceFill([
+                'progress_message' => 'Uploading motion reference…',
+            ])->save();
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            $sketchUrl = $this->fal->ensureCdnUrl($sketchUrl, 'motion-sketch.mp4');
+            $sheetUrls = array_map(
+                fn (string $url): string => $this->fal->ensureCdnUrl($url),
+                $sheetUrls,
+            );
+        } catch (Throwable $e) {
+            report($e);
+            $creation->markFailed(
+                $e->getMessage() !== '' ? $e->getMessage() : 'Failed to prepare media for generation.',
+                'media_rehost_error',
+            );
+            $this->tokens->refund($user, $creation, 'video', 'media_rehost_failed');
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            return;
+        }
+
         $built = $this->videoInput->build($submitEndpoint, [
             'prompt' => $prompt,
             'aspect' => $aspect,

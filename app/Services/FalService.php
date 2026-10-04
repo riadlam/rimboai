@@ -207,6 +207,62 @@ class FalService
         return $this->uploadBytesToCdn($bytes, $filename, $contentType);
     }
 
+    public function isFalCdnUrl(string $url): bool
+    {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?: ''));
+
+        return $host === 'fal.media'
+            || str_ends_with($host, '.fal.media')
+            || $host === 'v3.fal.media'
+            || $host === 'v3b.fal.media';
+    }
+
+    /**
+     * Rehost any non-fal URL onto fal CDN so MiniMax/other providers can download it.
+     * fal-native models often fetch rimboai.com fine; partner models often cannot.
+     *
+     * @throws RequestException|RuntimeException
+     */
+    public function ensureCdnUrl(string $url, ?string $filenameHint = null): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            throw new InvalidArgumentException('Media URL is empty.');
+        }
+        if ($this->isFalCdnUrl($url)) {
+            return $url;
+        }
+
+        $response = Http::timeout(120)
+            ->withHeaders(['User-Agent' => 'rimboai-fal-rehost/1.0'])
+            ->get($url);
+
+        if (! $response->successful()) {
+            Log::warning('fal CDN rehost download failed', [
+                'url' => $url,
+                'status' => $response->status(),
+            ]);
+            throw new RuntimeException('Could not download media for fal CDN upload (HTTP '.$response->status().').');
+        }
+
+        $bytes = $response->body();
+        if ($bytes === '') {
+            throw new RuntimeException('Downloaded media was empty.');
+        }
+
+        $path = (string) (parse_url($url, PHP_URL_PATH) ?: '');
+        $basename = $filenameHint ?: (basename($path) ?: 'media.bin');
+        $contentType = $response->header('Content-Type');
+        if (is_string($contentType) && str_contains($contentType, ';')) {
+            $contentType = trim(explode(';', $contentType, 2)[0]);
+        }
+        if (! is_string($contentType) || $contentType === '' || $contentType === 'application/octet-stream') {
+            $contentType = null;
+        }
+
+        return $this->uploadBytesToCdn($bytes, $basename, $contentType);
+    }
+
     /**
      * Upload raw bytes to fal CDN (used for base64 audio that bypasses PHP multipart).
      *
