@@ -106,15 +106,18 @@ class MediaNormalizeService
      * Return a filesystem path to an inference-ready MP4.
      * Caller must delete the returned path when it differs from $sourcePath.
      *
+     * @param  bool  $partnerSafe  When true, always re-encode to a Decart/Lucy-safe
+     *                             1280×720 baseline H.264 (odd phone sizes like 956×530
+     *                             intermittently 422 "Failed to load the video file").
      * @return array{path: string, cleanup: bool, content_type: string, filename: string}
      */
-    public function normalizeVideoFile(string $sourcePath, ?string $filenameHint = null): array
+    public function normalizeVideoFile(string $sourcePath, ?string $filenameHint = null, bool $partnerSafe = false): array
     {
         if (! is_file($sourcePath) || ! is_readable($sourcePath)) {
             throw new RuntimeException('Video file is not readable for normalization.');
         }
 
-        if (! $this->needsInferenceRemux($sourcePath)) {
+        if (! $partnerSafe && ! $this->needsInferenceRemux($sourcePath)) {
             return [
                 'path' => $sourcePath,
                 'cleanup' => false,
@@ -141,6 +144,34 @@ class MediaNormalizeService
         }
         @unlink($out);
         $outMp4 = $out.'.mp4';
+
+        // Partner-safe path: standard 720p canvas, CFR 30, baseline H.264, no audio.
+        if ($partnerSafe) {
+            if ($this->runFfmpeg($ffmpeg, [
+                '-y',
+                '-i', $sourcePath,
+                '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30',
+                '-c:v', 'libx264',
+                '-preset', 'veryfast',
+                '-crf', '20',
+                '-pix_fmt', 'yuv420p',
+                '-profile:v', 'baseline',
+                '-level', '3.1',
+                '-an',
+                '-movflags', '+faststart',
+                '-f', 'mp4',
+                $outMp4,
+            ])) {
+                return [
+                    'path' => $outMp4,
+                    'cleanup' => true,
+                    'content_type' => 'video/mp4',
+                    'filename' => $this->mp4Name($filenameHint),
+                ];
+            }
+            @unlink($outMp4);
+            Log::warning('media.normalize.partner_safe_failed', ['source' => basename($sourcePath)]);
+        }
 
         // Fast path: remux + faststart (fixes moov-at-end without re-encode).
         if ($this->runFfmpeg($ffmpeg, [

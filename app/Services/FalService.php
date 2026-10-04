@@ -346,9 +346,9 @@ class FalService
     /**
      * @throws RequestException|RuntimeException
      */
-    private function uploadNormalizedVideoPath(string $sourcePath, ?string $filenameHint = null): string
+    private function uploadNormalizedVideoPath(string $sourcePath, ?string $filenameHint = null, bool $partnerSafe = true): string
     {
-        $normalized = $this->normalize->normalizeVideoFile($sourcePath, $filenameHint);
+        $normalized = $this->normalize->normalizeVideoFile($sourcePath, $filenameHint, $partnerSafe);
         try {
             $bytes = @file_get_contents($normalized['path']);
             if ($bytes === false || $bytes === '') {
