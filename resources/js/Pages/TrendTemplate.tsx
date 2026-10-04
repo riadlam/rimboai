@@ -55,37 +55,6 @@ type UserTrendLatest = {
     cover_url?: string | null;
 };
 
-type TrendWorkspace = {
-    key: string;
-    type: 'image' | 'video' | 'music' | 'template';
-    creation_id: number;
-    template: TrendTemplateCard;
-    uploads: TrendUpload[];
-    locked: Record<string, unknown>;
-    locked_preview?: {
-        kind: 'video' | 'image' | 'audio';
-        url: string;
-        label: string;
-        hint?: string;
-    } | null;
-    credits: number;
-    /** Completed remakes by this user from this template. Example replaces only when > 1. */
-    user_remake_count?: number;
-    user_latest?: UserTrendLatest | null;
-    generate_url: string;
-    lab_href: string;
-};
-
-type Props = {
-    workspace: TrendWorkspace;
-    tokenBalance: number;
-};
-
-type FileSlot = {
-    file: File | null;
-    preview: string | null;
-};
-
 type RemakeCreation = {
     id: number;
     status: string;
@@ -106,6 +75,39 @@ type RemakeCreation = {
     mode?: string | null;
     error?: string | null;
     created_at?: string | null;
+};
+
+type TrendWorkspace = {
+    key: string;
+    type: 'image' | 'video' | 'music' | 'template';
+    creation_id: number;
+    template: TrendTemplateCard;
+    uploads: TrendUpload[];
+    locked: Record<string, unknown>;
+    locked_preview?: {
+        kind: 'video' | 'image' | 'audio';
+        url: string;
+        label: string;
+        hint?: string;
+    } | null;
+    credits: number;
+    /** Completed remakes by this user from this template. Example replaces only when > 1. */
+    user_remake_count?: number;
+    user_latest?: UserTrendLatest | null;
+    /** In-flight remake restored from the server after reload. */
+    active_remake?: RemakeCreation | null;
+    generate_url: string;
+    lab_href: string;
+};
+
+type Props = {
+    workspace: TrendWorkspace;
+    tokenBalance: number;
+};
+
+type FileSlot = {
+    file: File | null;
+    preview: string | null;
 };
 
 function isAudioUrl(url?: string | null): boolean {
@@ -146,11 +148,15 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])),
     );
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
-    const [creating, setCreating] = useState(false);
+    const initialActive =
+        workspace.active_remake && !isTerminalCreationStatus(workspace.active_remake.status)
+            ? workspace.active_remake
+            : null;
+    const [creating, setCreating] = useState(Boolean(initialActive));
     const [error, setError] = useState<string | null>(null);
 
-    const [modalOpen, setModalOpen] = useState(false);
-    const [job, setJob] = useState<RemakeCreation | null>(null);
+    const [modalOpen, setModalOpen] = useState(() => Boolean(initialActive && isMobileViewport()));
+    const [job, setJob] = useState<RemakeCreation | null>(initialActive);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [completedRemakeCount, setCompletedRemakeCount] = useState(workspace.user_remake_count ?? 0);
     const [exampleOverride, setExampleOverride] = useState<RemakeCreation | UserTrendLatest | null>(
@@ -162,20 +168,6 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const remakeCountRef = useRef(workspace.user_remake_count ?? 0);
     const workspaceTypeRef = useRef(workspace.type);
     workspaceTypeRef.current = workspace.type;
-
-    useEffect(() => {
-        setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
-        setError(null);
-        setCreating(false);
-        setModalOpen(false);
-        setJob(null);
-        setDetailsOpen(false);
-        const count = workspace.user_remake_count ?? 0;
-        remakeCountRef.current = count;
-        setCompletedRemakeCount(count);
-        setExampleOverride(count > 1 ? (workspace.user_latest ?? null) : null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workspace.key]);
 
     const stopTracking = useCallback(() => {
         activeCreationIdRef.current = null;
@@ -248,6 +240,30 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         [startSafetyNet],
     );
 
+    useEffect(() => {
+        setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
+        setError(null);
+        setDetailsOpen(false);
+        const count = workspace.user_remake_count ?? 0;
+        remakeCountRef.current = count;
+        setCompletedRemakeCount(count);
+        setExampleOverride(count > 1 ? (workspace.user_latest ?? null) : null);
+
+        const active = workspace.active_remake ?? null;
+        if (active && !isTerminalCreationStatus(active.status)) {
+            setJob(active);
+            setCreating(true);
+            setModalOpen(isMobileViewport());
+            trackCreation(active.id);
+        } else {
+            setJob(null);
+            setCreating(false);
+            setModalOpen(false);
+            stopTracking();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workspace.key]);
+
     // Pusher primary (fal webhook → CreationUpdated); safety-net covers misses.
     useEffect(() => {
         if (isGuest || !props.auth.user?.id) return;
@@ -300,7 +316,8 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         workspace.uploads.every((u) => !u.required || Boolean(slots[u.key]?.file));
 
     const credits = workspace.credits > 0 ? workspace.credits : tmpl.credits;
-    const canCreate = requiredReady && !creating && !isGuest;
+    const jobInFlight = Boolean(job && !isTerminalCreationStatus(job.status));
+    const canCreate = requiredReady && !creating && !jobInFlight && !isGuest;
 
     const assignFile = (key: string, file?: File) => {
         if (!file) return;
@@ -384,10 +401,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
             remakeCountRef.current = baseCount;
             setCompletedRemakeCount(baseCount);
 
-            // Curated templates stay on-page so sheet → Seedance progress is visible.
+            // Curated templates stay on-page so sheet → video progress survives reload.
             if (isCurated || mobile) {
                 setJob(data);
-                setModalOpen(true);
+                setModalOpen(mobile);
                 if (isTerminalCreationStatus(data.status)) {
                     applyRemakeStatus(data);
                 } else {
@@ -411,11 +428,18 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     };
 
     const closeModal = () => {
+        // Keep server-side job tracking if still running — reload can resume the UI.
+        if (job && !isTerminalCreationStatus(job.status)) {
+            setModalOpen(false);
+            setDetailsOpen(false);
+            return;
+        }
         stopTracking();
         setModalOpen(false);
         setCreating(false);
         setDetailsOpen(false);
         setDownloading(false);
+        setJob(null);
     };
 
     const handleDownloadResult = async () => {
@@ -467,6 +491,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const progress = Math.max(5, Math.min(99, job?.progress_percent ?? 12));
     const jobDone = job?.status === 'completed';
     const jobFailed = job?.status === 'failed' || job?.status === 'cancelled';
+    const showDesktopProgress = Boolean(job) && (creating || jobInFlight || jobDone || jobFailed);
     const doneSrc = job ? resultSrc(workspace.type, job) : null;
 
     const previewItem: ImageLabPreviewItem | null = (() => {
@@ -635,10 +660,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         {!creating && (
                                             <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-full" />
                                         )}
-                                        {creating ? (
+                                        {creating || jobInFlight ? (
                                             <>
                                                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                                                <span>{t('creating')}</span>
+                                                <span>{job?.progress_message || t('creating')}</span>
                                             </>
                                         ) : (
                                             <>
@@ -732,6 +757,110 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         )}
                                         <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent" />
                                         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+
+                                        <AnimatePresence>
+                                            {showDesktopProgress && (
+                                                <motion.div
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="absolute inset-0 z-20 hidden flex-col items-center justify-center bg-black/75 p-6 backdrop-blur-md md:flex"
+                                                >
+                                                    {!jobDone && !jobFailed && (
+                                                        <div className="w-full max-w-md space-y-5 text-center">
+                                                            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                                                                <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#FF5733]" />
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="font-[family-name:Outfit,sans-serif] text-xl font-semibold text-white">
+                                                                    {t('generatingTitle')}
+                                                                </h3>
+                                                                <p className="mt-2 text-[13px] leading-relaxed text-white/50">
+                                                                    {t('generatingBody')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center justify-between text-[11px] text-white/45">
+                                                                    <span>{job?.progress_message || t('creating')}</span>
+                                                                    <span>{progress}%</span>
+                                                                </div>
+                                                                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                                                                    <motion.div
+                                                                        className="h-full rounded-full bg-gradient-to-r from-[#FF6A45] to-[#FF5733]"
+                                                                        initial={{ width: '8%' }}
+                                                                        animate={{ width: `${progress}%` }}
+                                                                        transition={{ duration: 0.4 }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-[11px] text-white/35">
+                                                                Safe to reload — generation continues on the server.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {jobFailed && (
+                                                        <div className="w-full max-w-md space-y-4 text-center">
+                                                            <h3 className="text-lg font-semibold text-rose-100">{t('createFailed')}</h3>
+                                                            <p className="text-[13px] text-rose-100/70">{job?.error || error}</p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={closeModal}
+                                                                className="h-11 w-full rounded-xl bg-white/10 text-sm font-medium text-white"
+                                                            >
+                                                                {t('close')}
+                                                            </button>
+                                                        </div>
+                                                    )}
+
+                                                    {jobDone && (
+                                                        <div className="flex w-full max-w-3xl flex-col gap-4">
+                                                            <div className="text-center">
+                                                                <h3 className="font-[family-name:Outfit,sans-serif] text-xl font-semibold text-white">
+                                                                    {t('resultReady')}
+                                                                </h3>
+                                                            </div>
+                                                            {creationMediaKind(workspace.type) === 'video' && doneSrc ? (
+                                                                <div className="aspect-video w-full overflow-hidden rounded-2xl border border-white/10">
+                                                                    <LabVideoPlayer
+                                                                        src={doneSrc}
+                                                                        poster={job?.thumbnail_url || undefined}
+                                                                        loop
+                                                                        autoPlay
+                                                                        objectFit="contain"
+                                                                        className="!rounded-none"
+                                                                    />
+                                                                </div>
+                                                            ) : null}
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setDetailsOpen(true)}
+                                                                    className="h-11 rounded-xl bg-gradient-to-b from-[#FF6A45] via-[#FF5733] to-[#D63A18] text-sm font-semibold text-white"
+                                                                >
+                                                                    {t('viewDetails')}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => void handleDownloadResult()}
+                                                                    disabled={downloading || !doneSrc}
+                                                                    className="h-11 rounded-xl border border-orange-400/35 bg-orange-500/15 text-sm font-semibold text-orange-100 disabled:opacity-50"
+                                                                >
+                                                                    {downloading ? t('downloading') : t('download')}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={closeModal}
+                                                                    className="h-11 rounded-xl border border-white/12 bg-white/[0.04] text-sm font-medium text-white/85"
+                                                                >
+                                                                    {t('close')}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
                                 </motion.div>
                             </div>

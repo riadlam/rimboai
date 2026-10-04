@@ -9,9 +9,11 @@ use Illuminate\Support\Str;
 
 class TrendTemplate extends Model
 {
-    public const DEFAULT_ENDPOINT = 'bytedance/seedance-2.5/reference-to-video';
+    /** Wan 2.7 R2V — character refs + motion video; Seedance on fal blocks recognizable faces. */
+    public const DEFAULT_ENDPOINT = 'fal-ai/wan/v2.7/reference-to-video';
 
-    public const FALLBACK_ENDPOINT = 'bytedance/seedance-2.0/reference-to-video';
+    /** Legacy Seedance catalog row (real-face trends usually fail content policy). */
+    public const FALLBACK_ENDPOINT = 'bytedance/seedance-2.5/reference-to-video';
 
     public const DEFAULT_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 

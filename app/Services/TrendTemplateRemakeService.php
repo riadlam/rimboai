@@ -44,6 +44,27 @@ class TrendTemplateRemakeService
             throw new TrendsRemakeException('Template not found or not published.', 404);
         }
 
+        $active = UserVideoCreation::query()
+            ->where('user_id', $user->id)
+            ->where('settings->from_trend_template_id', $template->id)
+            ->whereIn('status', [
+                UserVideoCreation::STATUS_PENDING,
+                UserVideoCreation::STATUS_QUEUED,
+                UserVideoCreation::STATUS_IN_PROGRESS,
+            ])
+            ->orderByDesc('id')
+            ->first();
+        if ($active) {
+            $remakes = $this->trends->userRemakesForTrendTemplate((int) $template->id, (int) $user->id);
+
+            return [
+                'type' => 'video',
+                'creation' => $this->presentVideo($active),
+                'user_remake_count' => $remakes['count'],
+                'user_latest' => $remakes['latest'],
+            ];
+        }
+
         $sketchUrl = $template->motionSketchUrl();
         if (! is_string($sketchUrl) || $sketchUrl === '') {
             throw new TrendsRemakeException('Template is missing a motion sketch.', 422);
@@ -86,7 +107,7 @@ class TrendTemplateRemakeService
         $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
         $model = $this->resolveVideoModel($endpointId);
         if (! $model) {
-            // Fall back to Seedance 2.0 catalog row if 2.5 is not synced yet.
+            // Fall back to Seedance 2.5 catalog row if Wan is not seeded yet.
             $endpointId = TrendTemplate::FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
         }
@@ -141,7 +162,7 @@ class TrendTemplateRemakeService
                     'user_id' => $user->id,
                     'mode' => 'trend_template',
                     'endpoint_id' => $submitEndpoint,
-                    'model_name' => $template->model_name ?: ($model->name ?? 'Seedance'),
+                    'model_name' => $template->model_name ?: ($model->name ?? 'Wan 2.7'),
                     'prompt' => $prompt,
                     'input_assets' => $inputAssets,
                     'settings' => [

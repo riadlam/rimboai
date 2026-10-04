@@ -14,7 +14,8 @@ class TrendTemplateModelTest extends TestCase
         $this->assertStringContainsString('@Video1', $prompt);
         $this->assertStringContainsString('@Image1', $prompt);
         $this->assertStringContainsString('@Image2', $prompt);
-        $this->assertStringContainsString('motion reference only', $prompt);
+        $this->assertStringContainsString('burnt-orange', $prompt);
+        $this->assertSame('fal-ai/wan/v2.7/reference-to-video', TrendTemplate::DEFAULT_ENDPOINT);
     }
 
     public function test_client_slots_are_image_only_in_order(): void

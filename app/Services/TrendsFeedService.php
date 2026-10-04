@@ -381,6 +381,9 @@ class TrendsFeedService
         $userRemakes = $user
             ? $this->userRemakesForTrendTemplate((int) $template->id, (int) $user->id)
             : ['count' => 0, 'latest' => null];
+        $activeRemake = $user
+            ? $this->activeRemakeForTrendTemplate((int) $template->id, (int) $user->id)
+            : null;
 
         return [
             'key' => $template->feedKey(),
@@ -409,8 +412,56 @@ class TrendsFeedService
             'credits' => (int) $template->trend_cost,
             'user_remake_count' => $userRemakes['count'],
             'user_latest' => $userRemakes['latest'],
+            'active_remake' => $activeRemake,
             'generate_url' => '/trends/templates/'.$template->slug.'/remake',
             'lab_href' => '/trends/'.$template->feedKey(),
+        ];
+    }
+
+    /**
+     * In-flight remake for this template so reload can restore the loading UI.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function activeRemakeForTrendTemplate(int $templateId, int $userId): ?array
+    {
+        /** @var UserVideoCreation|null $creation */
+        $creation = UserVideoCreation::query()
+            ->where('user_id', $userId)
+            ->where('settings->from_trend_template_id', $templateId)
+            ->whereIn('status', [
+                UserVideoCreation::STATUS_PENDING,
+                UserVideoCreation::STATUS_QUEUED,
+                UserVideoCreation::STATUS_IN_PROGRESS,
+            ])
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $creation) {
+            return null;
+        }
+
+        $settings = is_array($creation->settings) ? $creation->settings : [];
+
+        return [
+            'id' => $creation->id,
+            'status' => $creation->status,
+            'queue_position' => $creation->queue_position,
+            'progress_message' => $creation->progress_message,
+            'progress_percent' => LabCreationPresenter::progressPercent($creation),
+            'prompt' => $creation->prompt,
+            'model_name' => $creation->model_name,
+            'video_url' => $creation->result_video_url,
+            'thumbnail_url' => $creation->thumbnail_url,
+            'preview_url' => $creation->result_preview_url ?: $creation->result_video_url,
+            'aspect' => $creation->aspect_ratio,
+            'resolution' => $creation->resolution,
+            'duration' => $creation->duration_value,
+            'audio' => (bool) $creation->with_audio,
+            'error' => $creation->error_message,
+            'mode' => $creation->mode,
+            'created_at' => optional($creation->created_at)->toIso8601String(),
+            'credits' => $settings['credits'] ?? $creation->credits_charged,
         ];
     }
 

@@ -103,7 +103,7 @@ class TrendTemplateResource extends Resource
                     ->columnSpanFull(),
                 TextInput::make('model_name')
                     ->label('Display model name')
-                    ->placeholder('Seedance 2.5')
+                    ->placeholder('Wan 2.7')
                     ->maxLength(255),
                 FileUpload::make('motion_sketch')
                     ->label('Locked motion sketch (video)')
@@ -540,11 +540,12 @@ class TrendTemplateResource extends Resource
      */
     public static function r2vEndpointOptions(): array
     {
-        // Always offer Seedance defaults first — Filament Select rejects values missing from options
-        // (common on VPS before VideoReferenceModelSeeder has run for 2.5).
+        // Prefer Wan 2.7 — Seedance on fal blocks recognizable real faces (content_policy_violation).
+        // Always include defaults so Filament Select accepts values before seeder sync.
         $options = [
-            TrendTemplate::DEFAULT_ENDPOINT => 'Seedance 2.5 Reference to Video',
-            TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.0 Reference to Video',
+            TrendTemplate::DEFAULT_ENDPOINT => 'Wan 2.7 Reference to Video (recommended for face trends)',
+            TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.5 Reference to Video (blocks real faces on fal)',
+            'bytedance/seedance-2.0/reference-to-video' => 'Seedance 2.0 Reference to Video (blocks real faces on fal)',
         ];
 
         foreach (['text_to_video_models', 'image_to_video_models'] as $table) {
@@ -562,15 +563,18 @@ class TrendTemplateResource extends Resource
             }
         }
 
-        // Keep Seedance labels at the top of the list.
-        $seedance = [
+        $preferred = [
             TrendTemplate::DEFAULT_ENDPOINT => $options[TrendTemplate::DEFAULT_ENDPOINT],
-            TrendTemplate::FALLBACK_ENDPOINT => $options[TrendTemplate::FALLBACK_ENDPOINT]
-                ?? 'Seedance 2.0 Reference to Video',
+            TrendTemplate::FALLBACK_ENDPOINT => $options[TrendTemplate::FALLBACK_ENDPOINT],
+            'bytedance/seedance-2.0/reference-to-video' => $options['bytedance/seedance-2.0/reference-to-video'],
         ];
-        unset($options[TrendTemplate::DEFAULT_ENDPOINT], $options[TrendTemplate::FALLBACK_ENDPOINT]);
+        unset(
+            $options[TrendTemplate::DEFAULT_ENDPOINT],
+            $options[TrendTemplate::FALLBACK_ENDPOINT],
+            $options['bytedance/seedance-2.0/reference-to-video'],
+        );
 
-        return $seedance + $options;
+        return $preferred + $options;
     }
 
     /**
@@ -689,7 +693,7 @@ class TrendTemplateResource extends Resource
             $data['endpoint_id'] = TrendTemplate::DEFAULT_ENDPOINT;
         }
         if (! filled($data['model_name'] ?? null)) {
-            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'Seedance';
+            $data['model_name'] = static::r2vEndpointOptions()[(string) $data['endpoint_id']] ?? 'Wan 2.7';
         }
 
         return $data;
