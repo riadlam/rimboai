@@ -207,21 +207,23 @@ class TrendTemplate extends Model
 
     public static function defaultPromptScaffold(): string
     {
+        // Aligned with Kapwing Hotel Lobby Seedance 2.5 prompt:
+        // https://www.kapwing.com/resources/how-to-do-the-hotel-lobby-ai-trend-with-seedance-2-5/
         return <<<'PROMPT'
-@Video1 is a line-drawing motion reference only: use its body movement, hand gestures, head turns, mouth timing, and camera framing. Do NOT copy faces, clothing, jewelry, color, or identity from @Video1. @Video1 has no real background color — ignore any white/black sketch backdrop.
+Use @Video1 only as the reference for motion, body movement, mouth movement, timing, and camera framing. It is a line drawing; the output is NOT line art. Ignore every piece of clothing, jewelry, face detail, and background color from @Video1.
 
-@Image1 is the character sheet for the person on the RIGHT: preserve exact face, hair, body proportions, and outfit from @Image1.
-@Image2 is the character sheet for the person on the LEFT: preserve exact face, hair, body proportions, and outfit from @Image2.
+@Image1 stands on the RIGHT. Face, hair, body, and outfit exactly as shown in the @Image1 character sheet.
+@Image2 stands on the LEFT. Face, hair, body, and outfit exactly as shown in the @Image2 character sheet.
 
-Create a photoreal video of the same performance. Each person wears only what their character sheet shows (bare hands/wrists unless the sheet includes accessories).
+Create a photoreal video of the same performance. Each person wears only what their character sheet shows: bare hands and bare wrists, with no rings, bracelets, watches, or chains unless their character sheet explicitly includes them.
 
-They perform every gesture, hand movement, head turn, body movement, and mouth movement from @Video1, frame for frame and perfectly in time.
+They perform every gesture, hand movement, head turn, body movement, and mouth movement of the two performers in @Video1, frame for frame and perfectly in time.
 
-Environment (from the prompt, NOT from @Video1): solid vivid orange studio backdrop like an A COLORS SHOW stage — flat saturated orange wall filling the entire background, no hotel lobby furniture, no windows, no props behind them. Soft even stage lighting on the performers; keep the orange wall clean and uniform.
+The set is a seamless burnt-orange studio backdrop, warm and saturated (A COLORS SHOW style), filling the entire background — not a hotel lobby, no windows, no furniture. A silver condenser microphone hangs on a thin cable between them.
 
-Locked-off camera with the same framing as @Video1. Photoreal, sharp faces, natural skin texture.
+Locked-off camera with the same framing as @Video1. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture.
 
-16:9 landscape. Same duration as @Video1. One continuous video with no separate scenes.
+16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes.
 PROMPT;
     }
 
