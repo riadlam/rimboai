@@ -350,6 +350,18 @@ class ToolWorkspaceBuilder
                 $this->resolutionControl($enums, $defaults, ['720p', '1080p']),
             ],
 
+            // Motion Reference — original clip → line-drawing sketch for Trend Templates
+            'motion-reference' => [
+                [
+                    'type' => 'textarea',
+                    'key' => 'prompt',
+                    'label_key' => 'motionReferenceDetailPrompt',
+                    'placeholder_key' => 'motionReferenceDetailPlaceholder',
+                    'default' => '',
+                    'required' => false,
+                ],
+            ],
+
             // AI Video Filters — Wan 2.7 edit: filter preset + res/aspect (prompt-driven)
             'ai-video-filters' => [
                 [
@@ -476,6 +488,7 @@ class ToolWorkspaceBuilder
         // Only when `enums` holds resolutions (not durations), e.g. video-to-anime 720p/1080p.
         $known = match ($toolSlug) {
             'video-to-anime-ai' => [5, 10],
+            'motion-reference' => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
             default => [],
         };
         if ($known !== []) {

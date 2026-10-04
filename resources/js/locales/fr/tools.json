@@ -97,6 +97,8 @@
     "negativePromptPlaceholder": "À éviter — flou, basse qualité, texte, filigrane…",
     "animeDetailPrompt": "Détails de style (facultatif)",
     "animeDetailPlaceholder": "Détails de style anime supplémentaires…",
+    "motionReferenceDetailPrompt": "Notes de croquis (facultatif)",
+    "motionReferenceDetailPlaceholder": "ex. accentuer les gestes des mains, garder les formes de bouche",
     "soundPrompt": "Décrivez le son",
     "soundPromptPlaceholder": "ex. pas sur le gravier, pluie, whoosh cinématique…",
     "filter": "Filtre",
@@ -159,6 +161,7 @@
       "video-to-anime-ai": "Convertissez des rushes live en mouvement anime stylisé.",
       "ai-video-filters": "Appliquez des looks cinéma et filtres créatifs sur la timeline.",
       "anime-video-enhancer": "Affinez les frames anime et les traits sans artefacts.",
+      "motion-reference": "Transformez une perf originale en croquis linéaire pour les Trend Templates.",
       "motion-control": "Guidez caméra et sujet avec un contrôle créatif précis."
     }
   }

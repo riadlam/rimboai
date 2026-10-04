@@ -682,6 +682,46 @@ class VideoToolsModelsSeeder extends Seeder
                 'tags' => ['filters', 'v2v', 'kling', 'fallback'],
             ],
 
+            // ── Motion Reference (original → line-drawing sketch for Trends) ─
+            // Kling O3 edit supports 3–15s (Hotel Lobby length). Wan edit max 10s.
+            [
+                'sort' => 275,
+                'tool_slug' => 'motion-reference',
+                'tool_name' => 'Motion Reference',
+                'endpoint_id' => 'fal-ai/kling-video/o3/standard/video-to-video/edit',
+                'name' => 'Kling O3 Motion Sketch',
+                'description' => 'Turn an original performance into a clean line-drawing motion reference for Trend Templates (3–15s).',
+                'unit' => 'seconds',
+                'unit_price' => 0.126,
+                'ref_cost_usd' => 0.126 * $s,
+                'ref_duration_seconds' => 5,
+                'max_duration' => 15,
+                'enums' => null,
+                'is_primary' => true,
+                'defaults' => ['keep_audio' => false],
+                'tags' => ['motion-reference', 'sketch', 'trends', 'kling', 'primary'],
+            ],
+            [
+                'sort' => 276,
+                'tool_slug' => 'motion-reference',
+                'tool_name' => 'Motion Reference',
+                'endpoint_id' => 'fal-ai/wan/v2.7/edit-video',
+                'name' => 'Wan 2.7 Motion Sketch',
+                'description' => 'Shorter-clip fallback (2–10s) for line-drawing motion references.',
+                'unit' => 'seconds',
+                'unit_price' => 0.10,
+                'ref_cost_usd' => 0.10 * $s,
+                'ref_duration_seconds' => 5,
+                'max_duration' => 10,
+                'enums' => ['720p', '1080p'],
+                'is_primary' => false,
+                'defaults' => [
+                    'resolution' => '720p',
+                    'audio_setting' => 'origin',
+                ],
+                'tags' => ['motion-reference', 'sketch', 'trends', 'wan27', 'fallback'],
+            ],
+
             // ── Motion Control ──────────────────────────────────────────────
             [
                 'sort' => 280,

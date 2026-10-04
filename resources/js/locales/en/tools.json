@@ -97,6 +97,8 @@
     "negativePromptPlaceholder": "What to avoid — blurry, low quality, text, watermark…",
     "animeDetailPrompt": "Style details (optional)",
     "animeDetailPlaceholder": "e.g. Ghibli look, 90s shonen — face & character stay the same",
+    "motionReferenceDetailPrompt": "Sketch notes (optional)",
+    "motionReferenceDetailPlaceholder": "e.g. emphasize hand gestures, keep mouth shapes clear",
     "soundPrompt": "Describe the sound",
     "soundPromptPlaceholder": "e.g. footsteps on gravel, rain, cinematic whoosh…",
     "filter": "Filter",
@@ -159,6 +161,7 @@
       "video-to-anime-ai": "Convert live footage into stylized anime motion.",
       "ai-video-filters": "Apply cinematic looks and creative filters across the timeline.",
       "anime-video-enhancer": "Sharpen anime frames and lift line work without muddy artifacts.",
+      "motion-reference": "Turn an original performance into a line-drawing motion sketch for Trend Templates.",
       "motion-control": "Guide camera and subject motion with precise creative control."
     }
   }

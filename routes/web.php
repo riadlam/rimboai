@@ -178,7 +178,7 @@ $toolRoutes = [
     'video-background-remover', 'remove-subtitles-from-video', 'ai-video-extender',
     'ai-video-editor', 'video-to-video', 'animate-a-picture', 'ai-sound-effect-generator',
     'denoise-video', 'ai-dance-generator', 'video-to-anime-ai', 'ai-video-filters',
-    'anime-video-enhancer', 'motion-control',
+    'anime-video-enhancer', 'motion-reference', 'motion-control',
 ];
 
 foreach ($toolRoutes as $slug) {

@@ -33,6 +33,7 @@ const GROUPS: ToolGroupDef[] = [
             'tools.face-swap-video',
             'tools.video-to-anime-ai',
             'tools.ai-video-filters',
+            'tools.motion-reference',
             'tools.ai-dance-generator',
             'tools.motion-control',
         ],

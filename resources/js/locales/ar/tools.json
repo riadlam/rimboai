@@ -97,6 +97,8 @@
     "negativePromptPlaceholder": "ما يجب تجنبه — ضبابي، جودة منخفضة، نص، علامة مائية…",
     "animeDetailPrompt": "تفاصيل الأسلوب (اختياري)",
     "animeDetailPlaceholder": "تفاصيل إضافية لأسلوب الأنمي…",
+    "motionReferenceDetailPrompt": "ملاحظات الرسم (اختياري)",
+    "motionReferenceDetailPlaceholder": "مثال: ركّز على إيماءات اليد، حافظ على أشكال الفم",
     "soundPrompt": "صف الصوت",
     "soundPromptPlaceholder": "مثال: وقع أقدام على الحصى، مطر، صوت اندفاع سينمائي…",
     "filter": "الفلتر",
@@ -159,6 +161,7 @@
       "video-to-anime-ai": "حوّل اللقطات الحية إلى حركة أنمي بأسلوب فني.",
       "ai-video-filters": "طبّق إطلالات سينمائية وفلاتر إبداعية عبر الخط الزمني.",
       "anime-video-enhancer": "حدّد إطارات الأنمي وارفع الخطوط دون تشويش.",
+      "motion-reference": "حوّل أداءً أصلياً إلى رسم خطي كمرجع حركة لقوالب الترند.",
       "motion-control": "وجّه حركة الكاميرا والعنصر بتحكم إبداعي دقيق."
     }
   }

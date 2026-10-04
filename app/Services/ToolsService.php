@@ -23,6 +23,7 @@ class ToolsService
             ['name' => 'Video to Anime', 'poster' => 'https://pollo.ai/cms/video_to_anime_converter_01_2_9b5741838a.jpg', 'video' => 'https://cdn.pollo.ai/prod/public/video/pollo-tool-1/video-to-anime.mp4', 'route' => 'tools.video-to-anime-ai'],
             ['name' => 'AI Video Filters', 'poster' => 'https://pollo.ai/cms/ai_video_filters_01_c3bfa28158.jpg', 'video' => 'https://cdn.pollo.ai/prod/public/video/pollo-tool-1/video-filters.mp4', 'route' => 'tools.ai-video-filters'],
             ['name' => 'Anime Video Enhancer', 'poster' => 'https://pollo.ai/cms/anime_video_enhancer_01_1d51d236ed.jpg', 'video' => 'https://cdn.pollo.ai/prod/public/video/pollo-tool-1/anime-video-enhancer.mp4', 'route' => 'tools.anime-video-enhancer'],
+            ['name' => 'Motion Reference', 'poster' => 'https://pollo.ai/cms/video_to_anime_converter_01_2_9b5741838a.jpg', 'video' => 'https://cdn.pollo.ai/prod/public/video/pollo-tool-1/video-to-anime.mp4', 'route' => 'tools.motion-reference', 'badge' => 'New'],
             ['name' => 'Motion Control', 'poster' => 'https://videocdn.pollo.ai/web-cdn/pollo/test/cm49hysvo0007ojfqoopf6ev5/image/1773909211531-186ecd5d-e5c3-4ddf-9162-bd9b039c4519.jpeg', 'video' => 'https://videocdn.pollo.ai/web-cdn/pollo/test/cm49hysvo0007ojfqoopf6ev5/video/1773909213843-47da5e3b-8b97-4b8b-857c-71c47115cf77.mp4', 'route' => 'tools.motion-control'],
         ];
     }
