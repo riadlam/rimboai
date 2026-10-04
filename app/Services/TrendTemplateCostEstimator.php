@@ -86,6 +86,32 @@ class TrendTemplateCostEstimator
             ]);
         }
 
+        // Higgsfield Genjutsu uses slot photos directly — no fal character-sheet step.
+        if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
+            $videoUsd = (float) $video['fal_cost_usd'];
+            $suggested = $videoUsd > 0
+                ? max(1, $this->credits->applyFloor($this->credits->fromFalUsd($videoUsd), 'video'))
+                : 0;
+
+            return [
+                'fal_estimate_usd' => $videoUsd,
+                'suggested_trend_cost' => $suggested,
+                'video_usd' => $videoUsd,
+                'sheets_usd' => 0.0,
+                'breakdown' => [
+                    'endpoint_id' => $endpointId,
+                    'sheet_endpoint_id' => null,
+                    'sheets_in_pipeline' => false,
+                    'duration_seconds' => $durationSeconds,
+                    'slot_count' => $slotCount,
+                    'video' => $video['breakdown'],
+                    'sheet_one' => ['mode' => 'skipped_for_higgsfield'],
+                    'billing_video' => $videoBilling,
+                    'billing_sheet' => null,
+                ],
+            ];
+        }
+
         $sheetBase = preg_replace('#/edit$#', '', $sheetEndpoint) ?: $sheetEndpoint;
         $sheetSubmit = str_ends_with($sheetEndpoint, '/edit')
             ? $sheetEndpoint

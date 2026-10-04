@@ -226,11 +226,14 @@ class TrendTemplateResource extends Resource
                                 Notification::make()
                                     ->title('Estimate ready')
                                     ->body(sprintf(
-                                        'Provider ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d',
+                                        (float) $estimate['sheets_usd'] > 0
+                                            ? 'Provider ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d'
+                                            : 'Provider ≈ $%s (video $%s, no sheets in pipeline). Suggested tokens: %d',
                                         number_format($estimate['fal_estimate_usd'], 4),
                                         number_format($estimate['video_usd'], 4),
-                                        number_format($estimate['sheets_usd'], 4),
-                                        $estimate['suggested_trend_cost'],
+                                        ...((float) $estimate['sheets_usd'] > 0
+                                            ? [number_format($estimate['sheets_usd'], 4), $estimate['suggested_trend_cost']]
+                                            : [$estimate['suggested_trend_cost']]),
                                     ))
                                     ->success()
                                     ->send();
@@ -244,6 +247,7 @@ class TrendTemplateResource extends Resource
                     ->helperText('Admin override. Estimate suggests a value; you can change it.'),
                 Select::make('sheet_endpoint_id')
                     ->label('Character sheet model')
+                    ->helperText('Used only for fal R2V templates. Higgsfield Genjutsu skips sheets and uses slot photos directly.')
                     ->options([
                         'fal-ai/nano-banana-pro/edit' => 'Nano Banana Pro Edit',
                         'fal-ai/nano-banana/edit' => 'Nano Banana Edit',
