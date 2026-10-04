@@ -10,13 +10,13 @@ use Illuminate\Support\Str;
 class TrendTemplate extends Model
 {
     /**
-     * MiniMax H3 R2V — Kapwing-style match: Image 1/2 + Video 1 (2–15s motion),
-     * output 5–15s. Seedance blocks real faces; Kling element videos max ~10s.
+     * Kapwing Hotel Lobby path: Seedance 2.5 R2V (image sheets + motion video).
+     * No song/audio refs — avoids copyright filters. Up to ~30s.
      */
-    public const DEFAULT_ENDPOINT = 'minimax/h3/reference-to-video';
+    public const DEFAULT_ENDPOINT = 'bytedance/seedance-2.5/reference-to-video';
 
-    /** Fallback if H3 catalog row is missing. */
-    public const FALLBACK_ENDPOINT = 'fal-ai/kling-video/o3/pro/reference-to-video';
+    /** Fallback if Seedance catalog row is missing / face-blocked. */
+    public const FALLBACK_ENDPOINT = 'minimax/h3/reference-to-video';
 
     public const DEFAULT_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 
@@ -222,7 +222,9 @@ Create a photoreal video of the same performance. @Image1 stands on the RIGHT. @
 
 The set is a seamless burnt-orange studio backdrop, warm and saturated, filling the entire frame edge to edge, with a silver condenser microphone hanging on a thin cable between them. No hotel lobby, no windows, no furniture, no dark walls, no grey or shadowy background — only bright burnt-orange.
 
-Locked-off camera with the same framing as the input video. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture. 16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes. Do not invent a soundtrack — mouth movement comes only from @Video1; the real song is added after generation.
+Only the performer who is mouthing / speaking in @Video1 should move their lips; the other keeps a closed or reacting mouth matching @Video1. Do not make both people lip-sync at once unless @Video1 shows both singing together.
+
+Locked-off camera with the same framing as the input video. Warm studio lighting. Photoreal, sharp, clearly detailed faces, natural skin texture. 16:9 landscape. Same duration as @Video1. Generate as one continuous video with no separate scenes.
 PROMPT;
     }
 

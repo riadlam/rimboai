@@ -95,6 +95,21 @@ class FalVideoInputBuilder
             'aspects' => ['16:9', '9:16', '1:1', '4:5', '3:4'],
             'resolution' => true,
         ],
+        // Seedance 2.5 — Kapwing Hotel Lobby R2V: images + video (+ optional audio), up to 30s.
+        'bytedance/seedance-2.5/reference-to-video' => [
+            'duration_format' => 'string',
+            'aspects' => ['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+            'resolution' => true,
+            'audio' => true,
+            'audio_field' => 'generate_audio',
+        ],
+        'bytedance/seedance-2.5/us/reference-to-video' => [
+            'duration_format' => 'string',
+            'aspects' => ['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+            'resolution' => true,
+            'audio' => true,
+            'audio_field' => 'generate_audio',
+        ],
         // MiniMax H3 — Image N / Video N refs, motion clips 2–15s, output 5–15s.
         'minimax/h3/reference-to-video' => [
             'duration_format' => 'int',
@@ -549,6 +564,12 @@ class FalVideoInputBuilder
         // MiniMax H3 R2V: output duration 5–15 (motion refs also 2–15s).
         if (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video')) {
             return max(5, min(15, $seconds));
+        }
+
+        // Seedance 2.5 R2V: 4–30 seconds.
+        if ((str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5'))
+            && str_contains($id, 'reference-to-video')) {
+            return max(4, min(30, $seconds));
         }
 
         return $seconds;

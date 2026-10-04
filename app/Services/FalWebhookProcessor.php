@@ -24,7 +24,6 @@ class FalWebhookProcessor
         private readonly FalWalletCostTracker $walletCost,
         private readonly FalFailureRefundDecider $failureRefund,
         private readonly FalService $fal,
-        private readonly MediaMuxService $mux,
     ) {}
 
     /**
@@ -586,46 +585,6 @@ class FalWebhookProcessor
             return;
         }
 
-        $settings = is_array($creation->getAttribute('settings'))
-            ? $creation->getAttribute('settings')
-            : [];
-        $muxAudioUrl = $settings['mux_audio_url'] ?? null;
-        $shouldMux = (bool) ($settings['mux_audio_after'] ?? false)
-            && is_string($muxAudioUrl)
-            && $muxAudioUrl !== ''
-            && is_string($video['url'] ?? null)
-            && $video['url'] !== '';
-
-        if ($shouldMux) {
-            try {
-                $creation->forceFill([
-                    'progress_message' => 'Adding performance audio…',
-                ])->save();
-                $this->broadcast('video', $creation->fresh() ?? $creation);
-
-                $muxed = $this->mux->muxToPublicStorage(
-                    (string) $video['url'],
-                    $muxAudioUrl,
-                    'trend-remakes/'.((int) $creation->getAttribute('user_id')),
-                    'creation-'.$creation->getKey().'-muxed.mp4',
-                );
-                $video['url'] = $muxed['url'];
-                $video['content_type'] = $muxed['content_type'];
-                $video['muxed'] = true;
-                $video['source_fal_url'] = $result['video']['url'] ?? ($settings['fal_video_url'] ?? null);
-                $settings['muxed_video_url'] = $muxed['url'];
-                $settings['muxed_storage_path'] = $muxed['path'];
-                $creation->forceFill(['settings' => $settings])->save();
-            } catch (\Throwable $e) {
-                report($e);
-                Log::warning('fal.webhook.mux_failed', [
-                    'creation_id' => $creation->getKey(),
-                    'error' => $e->getMessage(),
-                ]);
-                // Still complete with fal video rather than failing a successful render.
-            }
-        }
-
         $creation->forceFill([
             'status' => UserVideoCreation::STATUS_COMPLETED,
             'result_assets' => [$video],
@@ -637,14 +596,12 @@ class FalWebhookProcessor
             'completed_at' => now(),
             'error_message' => null,
             'error_type' => null,
-            'with_audio' => $shouldMux || (bool) $creation->getAttribute('with_audio'),
         ])->save();
 
         Log::info('fal.webhook.completed', [
             'type' => 'video',
             'creation_id' => $creation->getKey(),
             'request_id' => $creation->getAttribute('fal_request_id'),
-            'muxed' => (bool) ($video['muxed'] ?? false),
         ]);
     }
 

@@ -27,7 +27,6 @@ class TrendTemplateRemakeService
         private FalWalletCostTracker $walletCost,
         private FalWebhookProcessor $processor,
         private TrendsFeedService $trends,
-        private MediaMuxService $mux,
     ) {}
 
     /**
@@ -108,7 +107,7 @@ class TrendTemplateRemakeService
         $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
         $model = $this->resolveVideoModel($endpointId);
         if (! $model) {
-            // Fall back to Kling O3 Pro if MiniMax H3 catalog row is missing.
+            // Fall back to MiniMax H3 if Seedance catalog row is missing.
             $endpointId = TrendTemplate::FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
         }
@@ -153,17 +152,6 @@ class TrendTemplateRemakeService
             'role' => 'motion_sketch',
         ];
 
-        // Kapwing-style: keep locked song for post-mux only — never send it to the model.
-        $muxAudioUrl = $template->optionalAudioUrl();
-        if (is_string($muxAudioUrl) && $muxAudioUrl !== '') {
-            $inputAssets[] = [
-                'url' => $muxAudioUrl,
-                'fal_url' => $muxAudioUrl,
-                'type' => 'audio',
-                'role' => 'mux_audio',
-            ];
-        }
-
         try {
             /** @var UserVideoCreation $creation */
             $creation = $this->tokens->reserve(
@@ -174,7 +162,7 @@ class TrendTemplateRemakeService
                     'user_id' => $user->id,
                     'mode' => 'trend_template',
                     'endpoint_id' => $submitEndpoint,
-                    'model_name' => $template->model_name ?: ($model->name ?? 'MiniMax H3'),
+                    'model_name' => $template->model_name ?: ($model->name ?? 'Seedance 2.5'),
                     'prompt' => $prompt,
                     'input_assets' => $inputAssets,
                     'settings' => [
@@ -182,8 +170,6 @@ class TrendTemplateRemakeService
                         'resolution' => $resolution,
                         'duration' => $duration,
                         'audio' => false,
-                        'mux_audio_after' => is_string($muxAudioUrl) && $muxAudioUrl !== '',
-                        'mux_audio_url' => (is_string($muxAudioUrl) && $muxAudioUrl !== '') ? $muxAudioUrl : null,
                         'catalog_endpoint' => $submitEndpoint,
                         'fal_endpoint' => $submitEndpoint,
                         'credits' => $credits,
@@ -197,7 +183,7 @@ class TrendTemplateRemakeService
                     'duration_seconds' => is_numeric($duration) ? (int) $duration : null,
                     'aspect_ratio' => $aspect,
                     'resolution' => $resolution,
-                    'with_audio' => is_string($muxAudioUrl) && $muxAudioUrl !== '',
+                    'with_audio' => false,
                     'credits_charged' => $credits,
                     'status' => UserVideoCreation::STATUS_PENDING,
                     'progress_message' => 'Generating character sheets…',
@@ -288,10 +274,6 @@ class TrendTemplateRemakeService
             return;
         }
 
-        $settingsEarly = is_array($creation->settings) ? $creation->settings : [];
-        $muxAudioUrl = $settingsEarly['mux_audio_url'] ?? $template->optionalAudioUrl();
-        $muxAudioUrl = is_string($muxAudioUrl) && $muxAudioUrl !== '' ? $muxAudioUrl : null;
-
         try {
             @set_time_limit(max(120, 90 * count($orderedPhotos) + 60));
             $sheetUrls = [];
@@ -316,86 +298,14 @@ class TrendTemplateRemakeService
             return;
         }
 
-        // Partner models often reject rimboai /storage URLs and moov-at-end MP4s.
-        // Always rehost sheets + a normalized faststart motion sketch to fal CDN.
-        // H3 hard-caps reference video at 15s — trim sketch (+ mux audio) from the start if longer.
+        // Light path: rehost sheets + motion sketch only (no audio download / mux / trim).
         try {
-            $creation->forceFill([
-                'progress_message' => 'Preparing motion reference…',
-            ])->save();
-            $this->processor->broadcastSnapshot('video', $creation->fresh());
-
-            // Stay under fal's hard 15.0s ceiling; CDN re-encode can add ~0.1s.
-            $maxRefSeconds = 14.5;
-            $trimDir = 'trend-remakes/'.((int) $user->id).'/trim';
-            if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
-                $sketchTrim = $this->mux->ensureMaxDurationPublicUrl(
-                    $sketchUrl,
-                    $maxRefSeconds,
-                    $trimDir,
-                    'creation-'.$creation->id.'-sketch-15s.mp4',
-                    'video',
-                );
-                $sketchUrl = $sketchTrim['url'];
-                if ($sketchTrim['trimmed']) {
-                    $settingsEarly['motion_sketch_trimmed'] = true;
-                    $settingsEarly['motion_sketch_original_seconds'] = $sketchTrim['original_seconds'];
-                    $creation->forceFill([
-                        'progress_message' => 'Trimmed motion sketch to 15s…',
-                        'settings' => $settingsEarly,
-                    ])->save();
-                    $this->processor->broadcastSnapshot('video', $creation->fresh());
-                }
-
-                if ($muxAudioUrl !== null) {
-                    $audioTrim = $this->mux->ensureMaxDurationPublicUrl(
-                        $muxAudioUrl,
-                        $maxRefSeconds,
-                        $trimDir,
-                        'creation-'.$creation->id.'-audio-15s.mp3',
-                        'audio',
-                    );
-                    $muxAudioUrl = $audioTrim['url'];
-                    $settingsEarly['mux_audio_url'] = $muxAudioUrl;
-                    $settingsEarly['mux_audio_after'] = true;
-                    if ($audioTrim['trimmed']) {
-                        $settingsEarly['mux_audio_trimmed'] = true;
-                        $settingsEarly['mux_audio_original_seconds'] = $audioTrim['original_seconds'];
-                    }
-                    $creation->forceFill(['settings' => $settingsEarly])->save();
-                }
-
-                // Output duration must match the (possibly trimmed) reference window.
-                if (is_numeric($duration) && (float) $duration > 15) {
-                    $duration = '15';
-                }
-            }
-
             $creation->forceFill([
                 'progress_message' => 'Uploading motion reference…',
             ])->save();
             $this->processor->broadcastSnapshot('video', $creation->fresh());
 
             $sketchUrl = $this->fal->ensureInferenceVideoUrl($sketchUrl, 'motion-sketch.mp4');
-
-            // Partner-safe re-encode can nudge duration over 15.0 — trim the CDN file if needed.
-            if (str_contains(strtolower($submitEndpoint), 'minimax/h3')) {
-                $cdnSeconds = $this->mux->probeUrlDurationSeconds($sketchUrl);
-                if ($cdnSeconds !== null && $cdnSeconds > 15.0) {
-                    $cdnTrim = $this->mux->ensureMaxDurationPublicUrl(
-                        $sketchUrl,
-                        $maxRefSeconds,
-                        $trimDir,
-                        'creation-'.$creation->id.'-sketch-cdn-15s.mp4',
-                        'video',
-                    );
-                    $sketchUrl = $this->fal->ensureInferenceVideoUrl($cdnTrim['url'], 'motion-sketch.mp4');
-                    $settingsEarly['motion_sketch_cdn_retried'] = true;
-                    $settingsEarly['motion_sketch_cdn_seconds_before'] = $cdnSeconds;
-                    $creation->forceFill(['settings' => $settingsEarly])->save();
-                }
-            }
-
             $sheetUrls = array_map(
                 fn (string $url): string => $this->fal->ensureCdnUrl($url),
                 $sheetUrls,
@@ -412,7 +322,6 @@ class TrendTemplateRemakeService
             return;
         }
 
-        // Kapwing-style: video-only to the model; song is muxed after webhook success.
         $prompt = $this->withoutAudioReferencePrompt($prompt);
 
         $built = $this->videoInput->build($submitEndpoint, [
@@ -465,8 +374,6 @@ class TrendTemplateRemakeService
             'resolution' => $built['resolution'],
             'duration' => $duration ?? $built['duration_value'],
             'audio' => false,
-            'mux_audio_after' => $muxAudioUrl !== null,
-            'mux_audio_url' => $muxAudioUrl,
             'fal_input' => $falInput,
             'fal_endpoint' => $submitEndpoint,
             'billing_endpoint' => $billing['endpoint_id'] ?? $submitEndpoint,
@@ -502,7 +409,7 @@ class TrendTemplateRemakeService
             'duration_seconds' => $built['duration_seconds'],
             'aspect_ratio' => $built['aspect_ratio'],
             'resolution' => $built['resolution'],
-            'with_audio' => $muxAudioUrl !== null,
+            'with_audio' => false,
             'progress_message' => 'Starting video generation…',
         ])->save();
         $this->processor->broadcastSnapshot('video', $creation->fresh());

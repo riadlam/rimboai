@@ -103,7 +103,7 @@ class TrendTemplateResource extends Resource
                     ->columnSpanFull(),
                 TextInput::make('model_name')
                     ->label('Display model name')
-                    ->placeholder('MiniMax H3')
+                    ->placeholder('Seedance 2.5')
                     ->maxLength(255),
                 FileUpload::make('motion_sketch')
                     ->label('Locked motion sketch (video)')
@@ -112,15 +112,15 @@ class TrendTemplateResource extends Resource
                     ->directory('trend-templates/sketches')
                     ->visibility('public')
                     ->required()
-                    ->helperText('Line-drawing / sketch motion reference. MiniMax H3 max is 15s — longer clips are auto-trimmed from the start before generate. Not shown as a client upload.')
+                    ->helperText('Line-drawing motion reference with clear mouth shapes (Kapwing-style). Seedance 2.5 accepts up to ~30s. Not shown as a client upload.')
                     ->columnSpanFull(),
                 FileUpload::make('locked_audio')
-                    ->label('Locked performance audio (muxed after generate)')
+                    ->label('Optional audio (unused — not sent to model)')
                     ->acceptedFileTypes(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/*'])
                     ->disk('public')
                     ->directory('trend-templates/audio')
                     ->visibility('public')
-                    ->helperText('Kapwing-style: NOT sent to the AI model. Muxed onto the finished video. If longer than 15s it is auto-trimmed from the start to match the motion sketch window.')
+                    ->helperText('Stored only. Trends do not mux or upload audio to fal (keeps generate light; avoids copyright flags).')
                     ->columnSpanFull(),
                 Repeater::make('slots')
                     ->label('Client face slots')
@@ -197,8 +197,8 @@ class TrendTemplateResource extends Resource
                     ->required()
                     ->helperText('Used for fal cost estimate / Seedance duration.'),
                 Toggle::make('generate_audio')
-                    ->label('Generate audio (unused for trends)')
-                    ->helperText('Trend remakes ignore this: AI video is generated without the song, then locked audio is muxed on afterwards.')
+                    ->label('Generate audio')
+                    ->helperText('Off for trends (lighter, no song IP). Users add the track in TikTok/Reels.')
                     ->default(false),
                 TextInput::make('fal_estimate_usd')
                     ->label('Fal estimate (USD)')
@@ -542,14 +542,14 @@ class TrendTemplateResource extends Resource
      */
     public static function r2vEndpointOptions(): array
     {
-        // Prefer MiniMax H3 — full 15s motion + faces. Kling element-video max ~10s; Seedance bans faces.
+        // Kapwing Hotel Lobby uses Seedance 2.5 (best motion/lip follow). No audio refs = no song IP.
         $options = [
-            TrendTemplate::DEFAULT_ENDPOINT => 'MiniMax H3 Reference to Video (15s motion + faces — recommended)',
-            TrendTemplate::FALLBACK_ENDPOINT => 'Kling O3 Pro Reference to Video (motion video max ~10s)',
+            TrendTemplate::DEFAULT_ENDPOINT => 'Seedance 2.5 Reference to Video (Kapwing-style — recommended)',
+            TrendTemplate::FALLBACK_ENDPOINT => 'MiniMax H3 Reference to Video (faces OK, weaker lips, max 15s)',
+            'fal-ai/kling-video/o3/pro/reference-to-video' => 'Kling O3 Pro Reference to Video',
             'fal-ai/kling-video/o3/standard/reference-to-video' => 'Kling O3 Standard Reference to Video',
             'fal-ai/wan/v2.7/reference-to-video' => 'Wan 2.7 Reference to Video (output max 10s)',
-            'bytedance/seedance-2.5/reference-to-video' => 'Seedance 2.5 Reference to Video (blocks real faces on fal)',
-            'bytedance/seedance-2.0/reference-to-video' => 'Seedance 2.0 Reference to Video (blocks real faces on fal)',
+            'bytedance/seedance-2.0/reference-to-video' => 'Seedance 2.0 Reference to Video',
         ];
 
         foreach (['text_to_video_models', 'image_to_video_models'] as $table) {
@@ -570,9 +570,9 @@ class TrendTemplateResource extends Resource
         $preferredKeys = [
             TrendTemplate::DEFAULT_ENDPOINT,
             TrendTemplate::FALLBACK_ENDPOINT,
+            'fal-ai/kling-video/o3/pro/reference-to-video',
             'fal-ai/kling-video/o3/standard/reference-to-video',
             'fal-ai/wan/v2.7/reference-to-video',
-            'bytedance/seedance-2.5/reference-to-video',
             'bytedance/seedance-2.0/reference-to-video',
         ];
         $preferred = [];
