@@ -4,7 +4,9 @@ namespace App\Filament\Resources\TrendTemplates;
 
 use App\Filament\Resources\TrendTemplates\Pages\ManageTrendTemplates;
 use App\Models\TrendTemplate;
+use App\Services\FalService;
 use App\Services\TrendTemplateCostEstimator;
+use App\Services\TrendTemplateRemakeService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -30,8 +32,11 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Throwable;
 use UnitEnum;
 
 class TrendTemplateResource extends Resource
@@ -250,6 +255,8 @@ class TrendTemplateResource extends Resource
                     ->rows(8)
                     ->default(TrendTemplate::defaultSheetPrompt())
                     ->required()
+                    ->hintAction(static::testSheetFormAction())
+                    ->helperText('Use “Test sheet” to run only the character-sheet step (no Seedance / no user tokens).')
                     ->columnSpanFull(),
             ]);
     }
@@ -299,6 +306,7 @@ class TrendTemplateResource extends Resource
             ])
             ->defaultSort('sort_order')
             ->recordActions([
+                static::testSheetRecordAction(),
                 EditAction::make()
                     ->mutateRecordDataUsing(fn (array $data): array => static::mutateRecordDataForForm($data))
                     ->mutateDataUsing(fn (array $data): array => static::mutateFormDataForSave($data)),
@@ -316,6 +324,215 @@ class TrendTemplateResource extends Resource
         return [
             'index' => ManageTrendTemplates::route('/'),
         ];
+    }
+
+    /**
+     * Test sheet from the create/edit form (uses current prompt + endpoint fields).
+     */
+    public static function testSheetFormAction(): Action
+    {
+        return Action::make('testSheetFromForm')
+            ->label('Test sheet')
+            ->icon(Heroicon::OutlinedBeaker)
+            ->modalHeading('Test character sheet')
+            ->modalDescription('Runs only the sheet model so you can tune the prompt. No video, no user charge.')
+            ->modalSubmitActionLabel('Generate sheet')
+            ->modalWidth('3xl')
+            ->form([
+                FileUpload::make('photo')
+                    ->label('Test face photo')
+                    ->image()
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+                    ->disk('public')
+                    ->directory('trend-templates/sheet-tests')
+                    ->visibility('public')
+                    ->required(),
+                Select::make('sheet_endpoint_id')
+                    ->label('Sheet model')
+                    ->options([
+                        'fal-ai/nano-banana-pro/edit' => 'Nano Banana Pro Edit',
+                        'fal-ai/nano-banana/edit' => 'Nano Banana Edit',
+                        'fal-ai/nano-banana-2/edit' => 'Nano Banana 2 Edit',
+                    ])
+                    ->required(),
+                Textarea::make('sheet_prompt')
+                    ->label('Sheet prompt for this test')
+                    ->rows(8)
+                    ->required(),
+            ])
+            ->fillForm(function (Get $get): array {
+                return [
+                    'sheet_endpoint_id' => $get('sheet_endpoint_id') ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT,
+                    'sheet_prompt' => $get('sheet_prompt') ?: TrendTemplate::defaultSheetPrompt(),
+                ];
+            })
+            ->action(function (array $data, Get $get, Set $set): void {
+                $result = static::runSheetTest(
+                    photo: $data['photo'] ?? null,
+                    sheetEndpoint: (string) ($data['sheet_endpoint_id'] ?? $get('sheet_endpoint_id')),
+                    sheetPrompt: (string) ($data['sheet_prompt'] ?? $get('sheet_prompt')),
+                );
+
+                // Keep the prompt that worked in the main form for easy save.
+                if (filled($data['sheet_prompt'] ?? null)) {
+                    $set('sheet_prompt', $data['sheet_prompt']);
+                }
+                if (filled($data['sheet_endpoint_id'] ?? null)) {
+                    $set('sheet_endpoint_id', $data['sheet_endpoint_id']);
+                }
+
+                static::notifySheetTestResult($result);
+            });
+    }
+
+    /**
+     * Test sheet from a saved template row (table action).
+     */
+    public static function testSheetRecordAction(): Action
+    {
+        return Action::make('testSheet')
+            ->label('Test sheet')
+            ->icon(Heroicon::OutlinedBeaker)
+            ->color('gray')
+            ->modalHeading(fn (TrendTemplate $record): string => 'Test sheet · '.$record->title)
+            ->modalDescription('Runs only the character-sheet step. No Seedance video, no user tokens.')
+            ->modalSubmitActionLabel('Generate sheet')
+            ->modalWidth('3xl')
+            ->form([
+                FileUpload::make('photo')
+                    ->label('Test face photo')
+                    ->image()
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+                    ->disk('public')
+                    ->directory('trend-templates/sheet-tests')
+                    ->visibility('public')
+                    ->required(),
+                Select::make('sheet_endpoint_id')
+                    ->label('Sheet model')
+                    ->options([
+                        'fal-ai/nano-banana-pro/edit' => 'Nano Banana Pro Edit',
+                        'fal-ai/nano-banana/edit' => 'Nano Banana Edit',
+                        'fal-ai/nano-banana-2/edit' => 'Nano Banana 2 Edit',
+                    ])
+                    ->required(),
+                Textarea::make('sheet_prompt')
+                    ->label('Sheet prompt for this test')
+                    ->rows(8)
+                    ->required()
+                    ->helperText('Edits here are for this test only unless you copy them back into Edit.'),
+            ])
+            ->fillForm(fn (TrendTemplate $record): array => [
+                'sheet_endpoint_id' => $record->sheet_endpoint_id ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT,
+                'sheet_prompt' => $record->sheet_prompt ?: TrendTemplate::defaultSheetPrompt(),
+            ])
+            ->action(function (array $data, TrendTemplate $record): void {
+                $result = static::runSheetTest(
+                    photo: $data['photo'] ?? null,
+                    sheetEndpoint: (string) ($data['sheet_endpoint_id'] ?? $record->sheet_endpoint_id),
+                    sheetPrompt: (string) ($data['sheet_prompt'] ?? $record->sheet_prompt),
+                );
+
+                static::notifySheetTestResult($result);
+            });
+    }
+
+    /**
+     * @return array{sheet_url: string, endpoint_id: string, prompt: string, photo_url: string}
+     */
+    public static function runSheetTest(mixed $photo, ?string $sheetEndpoint, ?string $sheetPrompt): array
+    {
+        $fal = app(FalService::class);
+        if (! $fal->configured()) {
+            throw ValidationException::withMessages([
+                'photo' => 'FAL_KEY is not configured.',
+            ]);
+        }
+
+        try {
+            $photoUrl = static::resolveTestPhotoUrl($photo, $fal);
+            return app(TrendTemplateRemakeService::class)->buildCharacterSheet(
+                $photoUrl,
+                $sheetEndpoint,
+                $sheetPrompt,
+            );
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            report($e);
+            throw ValidationException::withMessages([
+                'photo' => $e->getMessage() !== '' ? $e->getMessage() : 'Sheet test failed.',
+            ]);
+        }
+    }
+
+    /**
+     * @param  array{sheet_url: string, endpoint_id: string, prompt: string, photo_url: string}  $result
+     */
+    public static function notifySheetTestResult(array $result): void
+    {
+        Notification::make()
+            ->title('Character sheet ready')
+            ->success()
+            ->persistent()
+            ->body(new HtmlString(
+                view('filament.trend-templates.sheet-test-result', [
+                    'sheetUrl' => $result['sheet_url'],
+                    'photoUrl' => $result['photo_url'],
+                    'endpointId' => $result['endpoint_id'],
+                ])->render()
+            ))
+            ->actions([
+                Action::make('openSheet')
+                    ->label('Open sheet')
+                    ->url($result['sheet_url'])
+                    ->openUrlInNewTab()
+                    ->button(),
+            ])
+            ->send();
+    }
+
+    private static function resolveTestPhotoUrl(mixed $photo, FalService $fal): string
+    {
+        if ($photo instanceof TemporaryUploadedFile) {
+            return $fal->uploadToCdn($photo);
+        }
+
+        if (is_array($photo)) {
+            $photo = $photo[0] ?? null;
+        }
+
+        if (! is_string($photo) || $photo === '') {
+            throw ValidationException::withMessages([
+                'photo' => 'Upload a face photo to test.',
+            ]);
+        }
+
+        if (str_starts_with($photo, 'http://') || str_starts_with($photo, 'https://')) {
+            return $photo;
+        }
+
+        $path = ltrim($photo, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        if (! Storage::disk('public')->exists($path)) {
+            throw ValidationException::withMessages([
+                'photo' => 'Uploaded photo was not found on disk.',
+            ]);
+        }
+
+        $absolute = Storage::disk('public')->path($path);
+        $bytes = file_get_contents($absolute);
+        if ($bytes === false || $bytes === '') {
+            throw ValidationException::withMessages([
+                'photo' => 'Could not read the uploaded photo.',
+            ]);
+        }
+
+        $mime = mime_content_type($absolute) ?: 'image/jpeg';
+
+        return $fal->uploadBytesToCdn($bytes, basename($path), $mime);
     }
 
     /**

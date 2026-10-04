@@ -409,14 +409,39 @@ class TrendTemplateRemakeService
 
     private function generateCharacterSheet(TrendTemplate $template, string $photoUrl): string
     {
-        $sheetEndpoint = trim((string) $template->sheet_endpoint_id) ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT;
+        $built = $this->buildCharacterSheet(
+            $photoUrl,
+            (string) ($template->sheet_endpoint_id ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT),
+            (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt()),
+        );
+
+        return $built['sheet_url'];
+    }
+
+    /**
+     * Admin / remake shared path: face photo → character sheet (no video, no billing).
+     *
+     * @return array{sheet_url: string, endpoint_id: string, prompt: string, photo_url: string}
+     */
+    public function buildCharacterSheet(
+        string $photoUrl,
+        ?string $sheetEndpoint = null,
+        ?string $sheetPrompt = null,
+    ): array {
+        $sheetEndpoint = trim((string) ($sheetEndpoint ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT))
+            ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT;
+        $prompt = trim((string) ($sheetPrompt ?: TrendTemplate::defaultSheetPrompt()));
+        if ($prompt === '') {
+            $prompt = TrendTemplate::defaultSheetPrompt();
+        }
+
         $base = preg_replace('#/edit$#', '', $sheetEndpoint) ?: $sheetEndpoint;
         $submitEndpoint = str_ends_with($sheetEndpoint, '/edit')
             ? $sheetEndpoint
             : $this->imageInput->resolveEndpoint($base, [$photoUrl]);
 
         $input = $this->imageInput->build($base, [
-            'prompt' => (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt()),
+            'prompt' => $prompt,
             'aspect' => '16:9',
             'resolution' => '1K',
             'quantity' => 1,
@@ -428,13 +453,19 @@ class TrendTemplateRemakeService
             $input['image_urls'] = [$photoUrl];
         }
 
+        @set_time_limit(200);
         $result = $this->fal->submitAndWait($submitEndpoint, $input, 180);
         $url = $this->firstImageUrl($result);
         if (! is_string($url) || $url === '') {
             throw new TrendsRemakeException('Character sheet model returned no image.', 502);
         }
 
-        return $url;
+        return [
+            'sheet_url' => $url,
+            'endpoint_id' => $submitEndpoint,
+            'prompt' => $prompt,
+            'photo_url' => $photoUrl,
+        ];
     }
 
     /**
