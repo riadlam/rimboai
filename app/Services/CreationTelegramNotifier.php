@@ -10,10 +10,12 @@ use App\Models\UserVoiceCreation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
  * Telegram alerts for Lab / Tools / Trends creations.
+ * One Telegram message per creation (edit via telegram_message_id).
  * Failures are logged and never break generation.
  */
 class CreationTelegramNotifier
@@ -95,22 +97,26 @@ class CreationTelegramNotifier
             $credits = $creation->getAttribute('credits_charged') ?? ($settings['credits'] ?? null);
             $mode = (string) ($creation->getAttribute('mode') ?? '');
             $toolSlug = str_starts_with($mode, 'tool:') ? substr($mode, 5) : null;
+            $markup = (float) config('credits.markup', 1.25);
+            $usdPer = (float) config('credits.usd_per_credit', 0.01);
+            $chargedRevenue = is_numeric($credits) ? round((float) $credits * $usdPer, 6) : null;
 
             $typeEmoji = $this->typeEmoji($creationType);
             $status = (string) ($creation->getAttribute('status') ?? '');
 
             $lines = [
                 $typeEmoji.' <b>New '.$this->e($creationType).' is cooking</b>',
-                '<i>'.$this->e($this->surfaceBlurb($mode, $toolSlug)).'</i>',
+                '<i>'.$this->e($this->surfaceBlurb($mode, $toolSlug)).' · pending fal cost</i>',
                 $this->hr(),
                 '📦 Type · <b>'.$this->e($creationType).'</b>',
                 '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
                 $this->statusLine($status),
                 '👤 User · '.$this->e((string) ($user->email ?? '')).' <code>#'.(int) $user->getKey().'</code>',
                 '🪙 Balance · <b>'.number_format((int) $user->tokens).'</b> tokens',
-                '⚡️ Charged · <b>'.$this->fmtNum($credits).'</b>',
+                '📐 Markup · ×'.$this->fmtMarkup($markup),
+                '⚡️ Charged · <b>'.$this->fmtNum($credits).'</b> → '.$this->fmtUsd($chargedRevenue),
                 '🔮 Est. fal · '.$this->fmtUsd($estimatedUsd),
-                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+                '💸 Actual fal · <i>waiting…</i>',
                 '🎛️ Mode · '.$this->e($mode !== '' ? $mode : '—'),
             ];
 
@@ -144,7 +150,7 @@ class CreationTelegramNotifier
                 $lines[] = '<i>'.$this->e($this->truncate($prompt, 500)).'</i>';
             }
 
-            $this->telegram->send(implode("\n", $lines));
+            $this->upsertMessage($creation, implode("\n", $lines));
         } catch (Throwable $e) {
             report($e);
             Log::warning('CreationTelegramNotifier notifyStarted failed', [
@@ -174,6 +180,7 @@ class CreationTelegramNotifier
             $user = User::query()->find($creation->getAttribute('user_id'));
             $mode = (string) ($creation->getAttribute('mode') ?? '');
             $pnl = app(CreationProfitCalculator::class)->compute($creation, $creationType);
+            $markup = (float) config('credits.markup', 1.25);
 
             $title = $pnl['negative_nominal'] || $pnl['variance_alert']
                 ? '😬 <b>Cost settled — peek at this one</b>'
@@ -184,13 +191,15 @@ class CreationTelegramNotifier
 
             $lines = [
                 $title,
-                '<i>'.$this->e($pnl['surface']).' · '.$this->e($creationType).'</i>',
+                '<i>'.$this->e($pnl['surface']).' · '.$this->e($creationType).' · #'.(int) $creation->getKey().'</i>',
                 $this->hr(),
                 '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
                 $this->statusLine((string) ($creation->getAttribute('status') ?? '')),
                 '👤 User · '.$this->e((string) ($user?->email ?? '—')).' <code>#'.(int) ($creation->getAttribute('user_id') ?? 0).'</code>',
                 '🪙 Balance · <b>'.number_format((int) ($user?->tokens ?? 0)).'</b> tokens',
-                '⚡️ Charged · '.$this->fmtNum($pnl['tokens_charged']).($pnl['refunded'] ? ' <i>(refunded)</i>' : ''),
+                '📐 Markup · ×'.$this->fmtMarkup($markup),
+                '⚡️ Charged · '.$this->fmtNum($pnl['tokens_charged']).($pnl['refunded'] ? ' <i>(refunded)</i>' : '')
+                    .' → '.$this->fmtUsd($pnl['nominal_revenue_usd']),
                 '🧮 Net tokens · '.$this->fmtNum($pnl['net_tokens']),
                 $this->hr(),
                 '🔮 Est. fal · '.$this->fmtUsd($pnl['estimated_fal_usd']),
@@ -222,8 +231,9 @@ class CreationTelegramNotifier
             $lines[] = '✂️ Deducted · '.$this->fmtUsd($creation->getAttribute('deducted_amount_from_main_wallet'));
             $lines[] = '🎛️ Mode · '.$this->e($mode !== '' ? $mode : '—');
             $lines[] = '🧠 Model · '.$this->e((string) ($creation->getAttribute('model_name') ?? '—'));
+            $lines[] = '🔌 Endpoint · <code>'.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')).'</code>';
 
-            $this->telegram->send(implode("\n", $lines));
+            $this->upsertMessage($creation, implode("\n", $lines));
 
             if ($creation->isFillable('cost_settled_notified_at') || array_key_exists('cost_settled_notified_at', $creation->getAttributes())) {
                 $creation->forceFill(['cost_settled_notified_at' => now()])->save();
@@ -245,17 +255,20 @@ class CreationTelegramNotifier
         }
 
         try {
+            $creation->refresh();
             $credits = $creation->getAttribute('credits_charged');
-            $this->telegram->send(implode("\n", [
+            $this->upsertMessage($creation, implode("\n", [
                 '↩️ <b>Tokens bounced back</b>',
                 '<i>refunded · nothing to worry about… probably</i>',
                 $this->hr(),
                 '📦 Type · <b>'.$this->e($creationType).'</b>',
                 '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
+                $this->statusLine((string) ($creation->getAttribute('status') ?? '')),
                 '👤 User · '.$this->e((string) ($user->email ?? '—')),
                 '🪙 Tokens · <b>'.$this->fmtNum($credits).'</b>',
                 '💬 Reason · '.$this->e($reason),
                 '💼 Balance · <b>'.number_format((int) $user->tokens).'</b>',
+                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
             ]));
         } catch (Throwable $e) {
             report($e);
@@ -287,6 +300,7 @@ class CreationTelegramNotifier
             $errorType = trim((string) ($creation->getAttribute('error_type') ?? ''));
             $progressMessage = trim((string) ($creation->getAttribute('progress_message') ?? ''));
             $requestId = trim((string) ($creation->getAttribute('fal_request_id') ?? ''));
+            $markup = (float) config('credits.markup', 1.25);
 
             $lines = [
                 '🚨 <b>Customer creation failed</b>',
@@ -297,9 +311,10 @@ class CreationTelegramNotifier
                 $this->statusLine((string) ($creation->getAttribute('status') ?? 'failed')),
                 '👤 User · '.$this->e((string) ($user?->email ?? '—')).' <code>#'.(int) ($creation->getAttribute('user_id') ?? 0).'</code>',
                 '🪙 Balance · <b>'.number_format((int) ($user?->tokens ?? 0)).'</b> tokens',
+                '📐 Markup · ×'.$this->fmtMarkup($markup),
                 '⚡️ Charged · <b>'.$this->fmtNum($creation->getAttribute('credits_charged')).'</b>',
                 '🔮 Est. fal · '.$this->fmtUsd($settings['fal_cost_usd'] ?? null),
-                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+                '💸 Actual fal · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
             ];
 
             if ($toolSlug) {
@@ -357,7 +372,7 @@ class CreationTelegramNotifier
                 );
             }
 
-            $this->telegram->send(implode("\n", $lines));
+            $this->upsertMessage($creation, implode("\n", $lines));
         } catch (Throwable $e) {
             report($e);
             Cache::forget($cacheKey);
@@ -376,17 +391,21 @@ class CreationTelegramNotifier
         }
 
         try {
+            $creation->refresh();
             $user = User::query()->find($creation->getAttribute('user_id'));
             $errorMessage = trim((string) ($creation->getAttribute('error_message') ?? ''));
-            $this->telegram->send(implode("\n", [
+            $markup = (float) config('credits.markup', 1.25);
+            $this->upsertMessage($creation, implode("\n", [
                 '🚨 <b>Failed job — fal still took a bite</b>',
                 '<i>tokens kept · we paid fal anyway</i>',
                 $this->hr(),
                 '📦 Type · <b>'.$this->e($creationType).'</b>',
                 '🪪 ID · <code>#'.(int) $creation->getKey().'</code>',
+                $this->statusLine((string) ($creation->getAttribute('status') ?? 'failed')),
                 '👤 User · '.$this->e((string) ($user?->email ?? '—')),
+                '📐 Markup · ×'.$this->fmtMarkup($markup),
                 '⚡️ Charged · '.$this->fmtNum($creation->getAttribute('credits_charged')),
-                '💸 cost_usd · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
+                '💸 Actual fal · '.$this->fmtUsd($creation->getAttribute('cost_usd')),
                 '🔌 Endpoint · <code>'.$this->e((string) ($creation->getAttribute('endpoint_id') ?? '—')).'</code>',
                 '💬 Error · '.$this->e($this->truncate($errorMessage !== '' ? $errorMessage : '—', 800)),
             ]));
@@ -404,6 +423,29 @@ class CreationTelegramNotifier
             $creation instanceof UserVoiceCreation => 'voice',
             default => null,
         };
+    }
+
+    /**
+     * Edit the existing Telegram message for this creation, or send + store message_id.
+     */
+    private function upsertMessage(Model $creation, string $text): void
+    {
+        $existingId = (int) ($creation->getAttribute('telegram_message_id') ?? 0);
+
+        if ($existingId > 0 && $this->telegram->edit($existingId, $text)) {
+            return;
+        }
+
+        $newId = $this->telegram->sendReturningId($text);
+        if ($newId === null) {
+            return;
+        }
+
+        if (! Schema::hasColumn($creation->getTable(), 'telegram_message_id')) {
+            return;
+        }
+
+        $creation->forceFill(['telegram_message_id' => $newId])->save();
     }
 
     private function typeEmoji(string $type): string
@@ -435,7 +477,7 @@ class CreationTelegramNotifier
             'completed', 'succeeded', 'success', 'paid' => '🟢',
             'failed', 'error' => '🔴',
             'canceled', 'cancelled' => '🟠',
-            'processing', 'running', 'pending' => '🟡',
+            'processing', 'running', 'pending', 'in_progress' => '🟡',
             default => '⚪️',
         };
 
@@ -483,5 +525,12 @@ class CreationTelegramNotifier
         }
 
         return number_format((float) $value, 4, '.', '');
+    }
+
+    private function fmtMarkup(float $markup): string
+    {
+        $formatted = rtrim(rtrim(number_format($markup, 4, '.', ''), '0'), '.');
+
+        return $formatted !== '' ? $formatted : '1';
     }
 }
