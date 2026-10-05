@@ -109,7 +109,7 @@ class TrendTemplateResource extends Resource
                             $set('sheet_prompt', $get('sheet_prompt') ?: TrendTemplate::defaultSheetPrompt());
                             $set('prompt', 'Character sheet only — prompt lives in sheet_prompt.');
                             $set('slots', TrendTemplate::characterSheetSlots());
-                            $set('duration', null);
+                            $set('duration', '');
                             $set('generate_audio', false);
                             Notification::make()
                                 ->title('Character Sheet trend mode')
@@ -754,7 +754,7 @@ class TrendTemplateResource extends Resource
             $data['sheet_endpoint_id'] = $data['sheet_endpoint_id'] ?? TrendTemplate::DEFAULT_SHEET_ENDPOINT;
             $data['model_name'] = $data['model_name'] ?: 'Nano Banana Pro Character Sheet';
             $data['generate_audio'] = false;
-            $data['duration'] = null;
+            $data['duration'] = '';
         } elseif (! str_contains($prompt, '@Video1')) {
             throw ValidationException::withMessages([
                 'prompt' => 'Prompt must reference @Video1 (motion sketch).',
