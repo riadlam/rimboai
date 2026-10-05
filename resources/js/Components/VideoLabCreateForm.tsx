@@ -1332,15 +1332,14 @@ export default function VideoLabCreateForm({
                                 value={prompt}
                                 onChange={setPrompt}
                                 mentions={assetMentions}
-                                maxLength={5000}
                                 minRows={4}
                                 maxRows={16}
                                 placeholder={resolvedPlaceholder}
                                 className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"
                             />
                             <div className="mt-1.5 flex items-center justify-between px-1">
-                                <span className={`text-[11px] ${prompt.length > 900 ? 'text-orange-300' : 'text-white/30'}`}>
-                                    {prompt.length}/1500
+                                <span className="text-[11px] text-white/30">
+                                    {prompt.length.toLocaleString()}
                                 </span>
                                 <button
                                     type="button"
@@ -1692,7 +1691,6 @@ export default function VideoLabCreateForm({
                                     value={prompt}
                                     onChange={setPrompt}
                                     mentions={assetMentions}
-                                    maxLength={5000}
                                     minRows={10}
                                     maxRows={24}
                                     className="w-full rounded-xl border border-white/10 bg-black/40 p-3.5 text-[15px] leading-6 text-white outline-none focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"

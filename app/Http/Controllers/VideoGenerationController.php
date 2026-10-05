@@ -76,7 +76,7 @@ class VideoGenerationController extends Controller
 
         try {
             $data = $request->validate([
-                'prompt' => ['required', 'string', 'min:2', 'max:5000'],
+                'prompt' => ['required', 'string', 'min:2', 'max:100000'],
                 'endpoint_id' => ['nullable', 'string', 'max:191'],
                 'aspect' => ['nullable', 'string', 'max:32'],
                 'resolution' => ['nullable', 'string', 'max:32'],
