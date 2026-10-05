@@ -112,21 +112,22 @@ class TrendTemplateResource extends Resource
 
                         $slots = $get('slots');
                         if (is_array($slots)) {
-                            foreach ($slots as $i => $slot) {
+                            $imageIndex = 0;
+                            foreach ($slots as $key => $slot) {
                                 if (! is_array($slot)) {
                                     continue;
                                 }
+                                $imageIndex++;
                                 $hint = (string) ($slot['hint'] ?? '');
                                 $hint = preg_replace('/character sheet/i', 'reference photo', $hint) ?? $hint;
                                 if ($hint === '' || str_contains(strtolower($hint), '@image')) {
-                                    $n = $i + 1;
                                     $side = str_contains((string) ($slot['role'] ?? ''), 'left') ? 'LEFT' : 'RIGHT';
                                     if (($slot['role'] ?? '') === 'extra') {
                                         $side = 'extra';
                                     }
-                                    $hint = "Upload a clear identity/outfit reference (your own sheet OK). Becomes @Image{$n}".($side !== 'extra' ? " ({$side} performer)." : '.');
+                                    $hint = "Upload a clear identity/outfit reference (your own sheet OK). Becomes @Image{$imageIndex}".($side !== 'extra' ? " ({$side} performer)." : '.');
                                 }
-                                $slots[$i]['hint'] = $hint;
+                                $slots[$key]['hint'] = $hint;
                             }
                             $set('slots', $slots);
                         }
