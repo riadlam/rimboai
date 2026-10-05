@@ -292,6 +292,7 @@ class TrendTemplateResource extends Resource
                                     'aspect_ratio' => $get('aspect_ratio'),
                                     'generate_audio' => (bool) $get('generate_audio'),
                                     'slots' => $get('slots'),
+                                    'workflow' => $get('workflow'),
                                 ]);
                                 $set('fal_estimate_usd', $estimate['fal_estimate_usd']);
                                 if ((int) ($get('trend_cost') ?? 0) <= 0 && $estimate['suggested_trend_cost'] > 0) {

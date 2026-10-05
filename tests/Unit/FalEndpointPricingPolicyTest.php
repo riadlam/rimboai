@@ -67,6 +67,26 @@ class FalEndpointPricingPolicyTest extends TestCase
         $this->assertEqualsWithDelta(0.81, $r2v['fal_cost_usd'], 1e-6);
     }
 
+    public function test_minimax_h3_r2v_bills_reference_video_seconds(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $quote = $policy->quoteVideo([
+            'endpoint_id' => 'minimax/h3/reference-to-video',
+            'unit' => 'seconds',
+            'unit_price' => 0.05,
+            'duration_seconds' => 15,
+            'resolution' => '768p',
+            'reference_video_seconds' => 15,
+            'reference_image_count' => 2,
+        ]);
+
+        $this->assertNotNull($quote);
+        // fal: (output 15s + ref video 15s) * $0.06 = $1.80
+        $this->assertEqualsWithDelta(1.80, $quote['fal_cost_usd'], 1e-6);
+        $this->assertSame(30.0, $quote['billable_units']);
+        $this->assertSame('input_plus_output_seconds', $quote['unit']);
+    }
+
     public function test_pixverse_c1_720p_audio_is_official_rate(): void
     {
         $policy = new FalEndpointPricingPolicy;

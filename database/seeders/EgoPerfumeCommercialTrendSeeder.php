@@ -251,8 +251,9 @@ PROMPT;
                 'resolution' => '768p',
                 'duration' => '15',
                 'generate_audio' => true,
-                'fal_estimate_usd' => 0.90,
-                'trend_cost' => 120,
+                // 15s out + ~15s motion ref @ $0.06/s (768P) = $1.80 fal → ×1.25 markup = 225 credits
+                'fal_estimate_usd' => 1.80,
+                'trend_cost' => 225,
                 'slots' => [
                     [
                         'key' => 'product',

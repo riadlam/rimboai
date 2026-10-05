@@ -67,7 +67,19 @@ export function estimateVideoCredits(
         else perSecond = 0.06; // 768p / 720p
         const imageFee =
             endpointId.includes('reference-to-video') && refImages > 5 ? (refImages - 5) * 0.08 : 0;
-        return present(round6(durationSeconds * perSecond + imageFee), durationSeconds, 'seconds', perSecond, config);
+        // fal bills reference video seconds at the same $/s as output (combined refs ≤15s).
+        const refBillable =
+            endpointId.includes('reference-to-video') && refVideo > 0
+                ? Math.min(15, Math.max(1, Math.ceil(refVideo - 1e-9)))
+                : 0;
+        const billable = durationSeconds + refBillable;
+        return present(
+            round6(billable * perSecond + imageFee),
+            billable,
+            refBillable > 0 ? 'input_plus_output_seconds' : 'seconds',
+            perSecond,
+            config,
+        );
     }
 
     if (endpointId.includes('pixverse/c1/reference-to-video')) {

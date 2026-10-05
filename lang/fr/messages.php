@@ -13,6 +13,7 @@ return [
     'no_video' => 'La génération s’est terminée sans vidéo.',
     'no_audio' => 'La génération s’est terminée sans audio.',
     'upload_failed' => 'Impossible de téléverser les médias de référence. Veuillez réessayer.',
+    'provider_balance_exhausted' => 'La génération vidéo est temporairement indisponible (solde fournisseur). Réessayez sous peu.',
     'audio_too_large' => 'Le fichier audio est trop volumineux. Utilisez un MP3 de moins de 20 Mo.',
     'content_blocked' => 'Bloqué : votre invite a été rejetée par le filtre de contenu. Reformulez et réessayez.',
     'payment_confirmed' => 'Paiement confirmé. Vos jetons ont été ajoutés.',

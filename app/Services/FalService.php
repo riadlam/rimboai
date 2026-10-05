@@ -88,7 +88,9 @@ class FalService
             ->timeout(30)
             ->post($url, $input);
 
-        $response->throw();
+        if (! $response->successful()) {
+            $this->throwFriendlyFalHttpError($response->status(), $response->body(), 'submit');
+        }
 
         $json = $response->json() ?? [];
 
@@ -398,7 +400,7 @@ class FalService
                 'content_type' => $contentType,
                 'filename' => $safeName,
             ]);
-            $initResponse->throw();
+            $this->throwFriendlyFalHttpError($initResponse->status(), $initResponse->body(), 'upload');
         }
 
         $init = $initResponse->json();
@@ -423,7 +425,7 @@ class FalService
                 'content_type' => $contentType,
                 'size' => $size,
             ]);
-            $uploadResponse->throw();
+            $this->throwFriendlyFalHttpError($uploadResponse->status(), $uploadResponse->body(), 'upload');
         }
 
         $this->waitUntilCdnUrlReady($fileUrl, $size);
@@ -596,5 +598,28 @@ class FalService
         if (! $allowed) {
             throw new InvalidArgumentException('Untrusted host for fal URL.');
         }
+    }
+
+    /**
+     * Map fal HTTP failures to clear RuntimeExceptions (esp. billing lockouts).
+     *
+     * @throws RuntimeException
+     */
+    private function throwFriendlyFalHttpError(int $status, string $body, string $context): never
+    {
+        $lower = strtolower($body);
+        if (
+            str_contains($lower, 'exhausted balance')
+            || str_contains($lower, 'user is locked')
+            || (str_contains($lower, 'locked') && str_contains($lower, 'balance'))
+        ) {
+            throw new RuntimeException(__('messages.provider_balance_exhausted'));
+        }
+
+        if ($context === 'upload') {
+            throw new RuntimeException(__('messages.upload_failed'));
+        }
+
+        throw new RuntimeException(__('messages.could_not_start')." (fal {$status})");
     }
 }

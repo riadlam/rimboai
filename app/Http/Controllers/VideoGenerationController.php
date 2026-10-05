@@ -98,6 +98,8 @@ class VideoGenerationController extends Controller
                 'audio_urls.*' => ['string', 'max:2048'],
                 'frame_mode' => ['nullable', 'string', Rule::in(['first_last'])],
                 'negative_prompt' => ['nullable', 'string', 'max:500'],
+                // Client-probed hint used when server cannot ffprobe pre-uploaded video URLs.
+                'reference_video_seconds' => ['nullable', 'numeric', 'min:0', 'max:45'],
             ]);
         } catch (ValidationException $e) {
             $first = collect($e->errors())->flatten()->first();
@@ -307,6 +309,26 @@ class VideoGenerationController extends Controller
             if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
                 $referenceVideoSeconds += (float) $probed['duration'];
             }
+        }
+        // Lab pre-uploads to fal CDN then sends video_urls[] — probe those too.
+        foreach ($preVideoUrls as $url) {
+            $probed = $mediaProbe->probeUrl($url);
+            if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
+                $referenceVideoSeconds += (float) $probed['duration'];
+            }
+        }
+        $clientHint = max(0.0, (float) ($data['reference_video_seconds'] ?? 0));
+        if ($referenceVideoSeconds <= 0 && $clientHint > 0) {
+            $referenceVideoSeconds = $clientHint;
+        }
+        // Fail closed on H3 R2V: unknown ref duration still bills ≈ output length (fal bills both).
+        if (
+            $referenceVideoSeconds <= 0
+            && $videoUrls !== []
+            && str_contains(strtolower($submitEndpoint), 'minimax/h3')
+            && str_contains(strtolower($submitEndpoint), 'reference-to-video')
+        ) {
+            $referenceVideoSeconds = (float) min(15, max(1, $durationSeconds));
         }
 
         $cost = $costEstimator->estimate([

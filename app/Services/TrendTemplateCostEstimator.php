@@ -32,6 +32,7 @@ class TrendTemplateCostEstimator
      *   generate_audio?: bool|null,
      *   slots?: list<mixed>|null,
      *   reference_video_seconds?: float|int|null,
+     *   workflow?: string|null,
      * }  $data
      * @return array{
      *   fal_estimate_usd: float,
@@ -123,6 +124,55 @@ class TrendTemplateCostEstimator
                         'unit' => $quoted['unit'],
                         'unit_price' => $quoted['unit_price'],
                         'source' => 'higgsfield_list',
+                    ],
+                    'billing_sheet' => null,
+                ],
+            ];
+        }
+
+        $workflow = strtolower(trim((string) ($data['workflow'] ?? '')));
+        $isH3Direct = $workflow === TrendTemplate::WORKFLOW_H3_DIRECT
+            || $workflow === 'h3_direct';
+
+        // H3 direct R2V: bill output + motion-ref seconds (no FlashVSR split path).
+        if ($isH3Direct && TrendTemplateRemakeService::isH3SplitEndpoint($endpointId)) {
+            $videoBilling = $this->resolveBilling($endpointId);
+            $video = $this->videoCost->estimate([
+                'endpoint_id' => $endpointId,
+                'unit' => $videoBilling['unit'] ?? 'seconds',
+                'unit_price' => $videoBilling['unit_price'] ?? 0,
+                'duration_seconds' => $durationSeconds,
+                'audio' => $audio,
+                'resolution' => $resolution !== '' ? $resolution : '768p',
+                'aspect' => $aspect,
+                'reference_video_seconds' => $durationSeconds,
+                'reference_image_count' => $slotCount,
+            ]);
+            $videoUsd = (float) $video['fal_cost_usd'];
+            $suggested = $videoUsd > 0
+                ? max(1, $this->credits->applyFloor($this->credits->fromFalUsd($videoUsd), 'video'))
+                : 0;
+
+            return [
+                'fal_estimate_usd' => $videoUsd,
+                'suggested_trend_cost' => $suggested,
+                'video_usd' => $videoUsd,
+                'sheets_usd' => 0.0,
+                'upscale_usd' => 0.0,
+                'breakdown' => [
+                    'endpoint_id' => $endpointId,
+                    'sheet_endpoint_id' => null,
+                    'sheets_in_pipeline' => false,
+                    'workflow' => TrendTemplate::WORKFLOW_H3_DIRECT,
+                    'duration_seconds' => $durationSeconds,
+                    'slot_count' => $slotCount,
+                    'video' => $video['breakdown'],
+                    'sheet_one' => ['mode' => 'skipped_for_h3_direct'],
+                    'billing_video' => [
+                        'endpoint_id' => $endpointId,
+                        'unit' => $video['unit'],
+                        'unit_price' => $video['unit_price'],
+                        'source' => 'fal_h3_direct',
                     ],
                     'billing_sheet' => null,
                 ],

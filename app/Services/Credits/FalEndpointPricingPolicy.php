@@ -43,7 +43,13 @@ class FalEndpointPricingPolicy
         }
 
         if (str_contains($id, 'minimax/h3')) {
-            return $this->quoteMiniMaxH3($id, $duration, $resolution, (int) ($options['reference_image_count'] ?? 0));
+            return $this->quoteMiniMaxH3(
+                $id,
+                $duration,
+                $resolution,
+                (int) ($options['reference_image_count'] ?? 0),
+                (float) ($options['reference_video_seconds'] ?? 0),
+            );
         }
 
         if (str_contains($id, 'pixverse/c1/reference-to-video')) {
@@ -171,9 +177,14 @@ class FalEndpointPricingPolicy
     /**
      * @return array{fal_cost_usd: float, unit: string, unit_price: float, billable_units: float, breakdown: array<string, mixed>}
      */
-    private function quoteMiniMaxH3(string $id, int $duration, string $resolution, int $images): array
-    {
-        // fal.ai MiniMax H3 gallery rates (per output second).
+    private function quoteMiniMaxH3(
+        string $id,
+        int $duration,
+        string $resolution,
+        int $images,
+        float $referenceVideoSeconds = 0.0,
+    ): array {
+        // fal.ai MiniMax H3 gallery rates (per billable second).
         $perSecond = match ($resolution) {
             '480p', '480' => 0.05,
             '2k', '1080p' => 0.13,
@@ -187,16 +198,25 @@ class FalEndpointPricingPolicy
             $imageFee = ($images - 5) * 0.08;
         }
 
-        $fal = round(($duration * $perSecond) + $imageFee, 6);
+        // fal bills reference video seconds at the same $/s as output (combined refs ≤15s).
+        $refBillable = 0;
+        if (str_contains($id, 'reference-to-video') && $referenceVideoSeconds > 0) {
+            $refBillable = (int) min(15, max(1, (int) ceil($referenceVideoSeconds - 1e-9)));
+        }
+
+        $billable = $duration + $refBillable;
+        $fal = round(($billable * $perSecond) + $imageFee, 6);
 
         return [
             'fal_cost_usd' => $fal,
-            'unit' => 'seconds',
+            'unit' => $refBillable > 0 ? 'input_plus_output_seconds' : 'seconds',
             'unit_price' => $perSecond,
-            'billable_units' => (float) $duration,
+            'billable_units' => (float) $billable,
             'breakdown' => [
                 'mode' => 'minimax_h3_resolution',
                 'duration_seconds' => $duration,
+                'reference_video_seconds' => $referenceVideoSeconds,
+                'reference_video_billable_seconds' => $refBillable,
                 'resolution' => $resolution,
                 'image_fee_usd' => $imageFee,
                 'reference_image_count' => $images,

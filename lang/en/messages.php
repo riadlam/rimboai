@@ -13,6 +13,7 @@ return [
     'no_video' => 'Generation finished without a video.',
     'no_audio' => 'Generation finished without audio.',
     'upload_failed' => 'Could not upload reference media. Please try again.',
+    'provider_balance_exhausted' => 'Video generation is temporarily unavailable (provider balance). Please try again shortly.',
     'audio_too_large' => 'Audio file is too large. Please use an MP3 under 20MB.',
     'content_blocked' => 'Blocked: your prompt was rejected by the content checker. Rephrase and try again.',
     'payment_confirmed' => 'Payment confirmed. Your tokens have been added.',

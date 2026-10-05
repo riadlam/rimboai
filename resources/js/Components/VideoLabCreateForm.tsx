@@ -48,6 +48,8 @@ export type VideoGenerateOptions = {
     routeMode?: 'text-to-video' | 'image-to-video' | 'reference-to-video' | 'first-last-frame-to-video';
     frameMode?: 'first_last';
     negativePrompt?: string;
+    /** Sum of reference video durations (client probe); server re-probes when possible. */
+    referenceVideoSeconds?: number;
     imageFiles?: File[];
     videoFiles?: File[];
     audioFiles?: File[];
@@ -1609,6 +1611,11 @@ export default function VideoLabCreateForm({
                             routeMode: routeMode ?? undefined,
                             frameMode: framesMode ? 'first_last' : undefined,
                             negativePrompt: supportsNegativePrompt ? negativePrompt.trim() || undefined : undefined,
+                            referenceVideoSeconds: framesMode
+                                ? 0
+                                : media
+                                      .filter((m) => m.kind === 'video')
+                                      .reduce((sum, m) => sum + Math.max(0, m.durationSeconds ?? 0), 0),
                             imageFiles: framesMode
                                 ? [firstFrame, lastFrame].filter(Boolean).map((m) => m!.file)
                                 : media.filter((m) => m.kind === 'image').map((m) => m.file),

@@ -60,14 +60,18 @@ class LabMediaUploadController extends Controller
             $assets = $mediaStorage->storeMany((int) $request->user()->id, [$file], 'reference');
             $asset = $assets[0] ?? null;
             if ($asset === null) {
-                return response()->json(['message' => 'Could not store media file.'], 502);
+                return response()->json(['message' => __('messages.upload_failed')], 503);
             }
         } catch (\Throwable $e) {
             report($e);
 
-            return response()->json([
-                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'Could not upload media to CDN.',
-            ], 502);
+            $message = $e->getMessage();
+            // Avoid leaking raw HTTP client dumps; FalService already maps billing lockouts.
+            if ($message === '' || str_starts_with($message, 'HTTP request returned status code')) {
+                $message = __('messages.upload_failed');
+            }
+
+            return response()->json(['message' => $message], 503);
         }
 
         return response()->json([
