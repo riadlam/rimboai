@@ -635,32 +635,61 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         </section>
                                     )}
 
-                                    {workspace.uploads.map((upload) => (
-                                        <UploadSlot
-                                            key={upload.key}
-                                            upload={upload}
-                                            slot={slots[upload.key]}
-                                            dragging={draggingKey === upload.key}
-                                            label={
-                                                upload.label_key
-                                                    ? t(upload.label_key, { defaultValue: upload.label })
-                                                    : upload.label
-                                            }
-                                            hint={
-                                                upload.hint ||
-                                                (upload.kind === 'audio'
-                                                    ? t('uploadAudioTypes')
-                                                    : upload.kind === 'video'
-                                                      ? t('uploadVideoTypes')
-                                                      : t('uploadImageTypes'))
-                                            }
-                                            changeLabel={t('changeFile')}
-                                            uploadHint={t('uploadHint')}
-                                            onDragState={(on) => setDraggingKey(on ? upload.key : null)}
-                                            onFile={(file) => assignFile(upload.key, file)}
-                                            onClear={() => clearFile(upload.key)}
-                                        />
-                                    ))}
+                                    {(() => {
+                                        const imageUploads = workspace.uploads.filter(
+                                            (u) => u.kind === 'image' || u.accept.startsWith('image'),
+                                        );
+                                        const otherUploads = workspace.uploads.filter(
+                                            (u) => !(u.kind === 'image' || u.accept.startsWith('image')),
+                                        );
+                                        const cols =
+                                            imageUploads.length <= 1
+                                                ? 'grid-cols-1 max-w-[132px]'
+                                                : imageUploads.length === 2
+                                                  ? 'grid-cols-2'
+                                                  : imageUploads.length === 3
+                                                    ? 'grid-cols-3'
+                                                    : 'grid-cols-4';
+
+                                        const renderSlot = (upload: TrendUpload, compact: boolean) => (
+                                            <UploadSlot
+                                                key={upload.key}
+                                                upload={upload}
+                                                slot={slots[upload.key]}
+                                                dragging={draggingKey === upload.key}
+                                                compact={compact}
+                                                label={
+                                                    upload.label_key
+                                                        ? t(upload.label_key, { defaultValue: upload.label })
+                                                        : upload.label
+                                                }
+                                                hint={
+                                                    upload.hint ||
+                                                    (upload.kind === 'audio'
+                                                        ? t('uploadAudioTypes')
+                                                        : upload.kind === 'video'
+                                                          ? t('uploadVideoTypes')
+                                                          : t('uploadImageTypes'))
+                                                }
+                                                changeLabel={t('changeFile')}
+                                                uploadHint={t('uploadHint')}
+                                                onDragState={(on) => setDraggingKey(on ? upload.key : null)}
+                                                onFile={(file) => assignFile(upload.key, file)}
+                                                onClear={() => clearFile(upload.key)}
+                                            />
+                                        );
+
+                                        return (
+                                            <>
+                                                {imageUploads.length > 0 && (
+                                                    <div className={`grid ${cols} gap-2`}>
+                                                        {imageUploads.map((upload) => renderSlot(upload, true))}
+                                                    </div>
+                                                )}
+                                                {otherUploads.map((upload) => renderSlot(upload, false))}
+                                            </>
+                                        );
+                                    })()}
 
                                     {promptEditable && (
                                         <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
@@ -1199,6 +1228,7 @@ function UploadSlot({
     upload,
     slot,
     dragging,
+    compact = false,
     label,
     hint,
     changeLabel,
@@ -1210,6 +1240,7 @@ function UploadSlot({
     upload: TrendUpload;
     slot?: FileSlot;
     dragging: boolean;
+    compact?: boolean;
     label: string;
     hint: string;
     changeLabel: string;
@@ -1227,6 +1258,68 @@ function UploadSlot({
         onDragState(false);
         onFile(e.dataTransfer.files[0]);
     };
+
+    if (compact && isImage) {
+        return (
+            <section className="min-w-0">
+                <div
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        onDragState(true);
+                    }}
+                    onDragLeave={(e) => {
+                        e.preventDefault();
+                        onDragState(false);
+                    }}
+                    onDrop={onDrop}
+                    onClick={() => inputRef.current?.click()}
+                    className={`group relative aspect-square cursor-pointer overflow-hidden rounded-xl border border-dashed transition ${
+                        dragging
+                            ? 'border-[#FF5733]/60 bg-orange-500/[0.08]'
+                            : 'border-white/15 bg-gradient-to-b from-white/[0.06] to-white/[0.02] hover:border-orange-400/40 hover:bg-orange-500/[0.04]'
+                    }`}
+                >
+                    {slot?.preview ? (
+                        <>
+                            <img src={slot.preview} alt="" className="absolute inset-0 size-full object-cover" />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-1.5 pb-1.5 pt-5">
+                                <p className="truncate text-center text-[10px] font-medium leading-tight text-white/90">
+                                    {label}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClear();
+                                }}
+                                className="absolute end-1 top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-black/65 text-[11px] text-white/80 ring-1 ring-white/15 transition hover:bg-black/85 hover:text-white"
+                                aria-label="Remove"
+                            >
+                                ×
+                            </button>
+                        </>
+                    ) : (
+                        <div className="flex h-full flex-col items-center justify-center gap-1.5 px-1.5 text-center">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.05]">
+                                <svg className="h-3.5 w-3.5 text-[#FF8A65]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                            </div>
+                            <p className="line-clamp-2 text-[10px] font-medium leading-tight text-white/75">{label}</p>
+                        </div>
+                    )}
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept={upload.accept}
+                        className="hidden"
+                        onChange={(e) => onFile(e.target.files?.[0])}
+                    />
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section className="space-y-2">
