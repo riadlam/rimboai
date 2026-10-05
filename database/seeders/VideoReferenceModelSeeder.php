@@ -217,14 +217,14 @@ class VideoReferenceModelSeeder extends Seeder
         [
             'endpoint_id' => 'minimax/h3/reference-to-video',
             'name' => 'MiniMax H3 Reference to Video',
-            'description' => 'Best Kapwing/Hotel Lobby match on fal: Image 1–9 + Video 1–3 (2–15s motion), output 5–15s. Faces OK; no Seedance likeness ban. Prompt uses Image N / Video N.',
+            'description' => 'R2V sibling (pricing / status sync). Prefer MiniMaxH3LabSeeder for Lab-visible T2V/R2V rows: 9 images · 3 videos (2–15s, ≤15s total) · 3 audios.',
             'category' => 'MiniMax',
-            'sort' => 75,
+            'sort' => 49,
             'unit_price' => 0.06,
             'supports_audio' => false,
             'max_duration' => 15,
             'enums' => [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'trends', 'hailuo'],
+            'tags' => ['reference-to-video', 'multi-reference', 'multimodal', 'trends', 'hailuo', 'minimax', 'h3'],
             'image_url' => '/storage/ai_icons/minimax-color.svg',
         ],
         [

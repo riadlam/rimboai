@@ -183,9 +183,29 @@ class VideoModelCapabilities
             );
         }
 
+        // MiniMax H3 — T2V routes to I2V / FLF / multimodal R2V.
+        if (str_contains($id, 'minimax/h3') && str_contains($id, 'text-to-video')) {
+            return $this->withH3RefLimits($this->caps(
+                images: true,
+                videos: true,
+                audio: true,
+                firstFrame: true,
+                lastFrame: true,
+                lastRequired: false,
+                maxImages: 9,
+                maxVideos: 3,
+                maxAudios: 3,
+                reference: 'minimax/h3/reference-to-video',
+                firstFrameEndpoint: 'minimax/h3/image-to-video',
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: 'minimax/h3/image-to-video',
+                lastFrameParam: 'end_image_url',
+            ));
+        }
+
         // MiniMax H3 — Kapwing-style multimodal R2V (images + motion videos up to 15s).
         if (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video')) {
-            return $this->caps(
+            return $this->withH3RefLimits($this->caps(
                 images: true,
                 videos: true,
                 audio: true,
@@ -200,6 +220,25 @@ class VideoModelCapabilities
                 firstFrameParam: null,
                 firstLastEndpoint: null,
                 lastFrameParam: null,
+            ));
+        }
+
+        if (str_contains($id, 'minimax/h3') && str_contains($id, 'image-to-video')) {
+            return $this->caps(
+                images: false,
+                videos: false,
+                audio: false,
+                firstFrame: true,
+                lastFrame: true,
+                lastRequired: false,
+                maxImages: 2,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: null,
+                firstFrameEndpoint: 'minimax/h3/image-to-video',
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: 'minimax/h3/image-to-video',
+                lastFrameParam: 'end_image_url',
             );
         }
 
@@ -725,6 +764,26 @@ class VideoModelCapabilities
         return $map[$id] ?? (str_contains($id, 'text-to-video')
             ? str_replace('text-to-video', 'image-to-video', $id)
             : null);
+    }
+
+    /**
+     * Fal H3 R2V: videos/audios 2–15s each, combined ≤15s; max 12 files across images+videos+audios.
+     *
+     * @param  array<string, mixed>  $caps
+     * @return array<string, mixed>
+     */
+    private function withH3RefLimits(array $caps): array
+    {
+        return array_merge($caps, [
+            'min_ref_video_seconds' => 2,
+            'max_ref_video_seconds' => 15,
+            'max_ref_video_seconds_total' => 15,
+            'min_ref_audio_seconds' => 2,
+            'max_ref_audio_seconds' => 15,
+            'max_ref_audio_seconds_total' => 15,
+            'max_ref_files_total' => 12,
+            'prompt_ref_style' => 'Image N / Video N / Audio N',
+        ]);
     }
 
     /**

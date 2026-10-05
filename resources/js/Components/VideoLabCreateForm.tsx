@@ -12,6 +12,7 @@ import AssetMentionTextarea, {
 } from '@/Components/AssetMentionTextarea';
 import {
     describeMediaGuidance,
+    formatUploadLimitHint,
     generateBlockReason,
     getMediaCaps,
     mediaTotal,
@@ -70,7 +71,36 @@ const PROMPT_CHIPS = [
     { id: 'soft', label: 'Soft light', text: 'soft golden-hour lighting, gentle motion, film grain' },
 ] as const;
 
-type MediaItem = { id: string; url: string; kind: 'image' | 'video' | 'audio'; name: string; file: File };
+type MediaItem = {
+    id: string;
+    url: string;
+    kind: 'image' | 'video' | 'audio';
+    name: string;
+    file: File;
+    durationSeconds?: number | null;
+};
+
+function probeMediaDuration(url: string, kind: 'video' | 'audio'): Promise<number | null> {
+    return new Promise((resolve) => {
+        const el = document.createElement(kind);
+        let settled = false;
+        const finish = (value: number | null) => {
+            if (settled) return;
+            settled = true;
+            el.removeAttribute('src');
+            el.load?.();
+            resolve(value);
+        };
+        el.preload = 'metadata';
+        el.onloadedmetadata = () => {
+            const d = Number(el.duration);
+            finish(Number.isFinite(d) && d > 0 ? d : null);
+        };
+        el.onerror = () => finish(null);
+        window.setTimeout(() => finish(null), 8000);
+        el.src = url;
+    });
+}
 
 type DurationSelection = number | 'auto';
 
@@ -353,10 +383,14 @@ export default function VideoLabCreateForm({
                     audio: effectiveAudio,
                     resolution,
                     aspect,
+                    referenceImageCount: mediaCounts.images,
+                    referenceVideoSeconds: media
+                        .filter((m) => m.kind === 'video')
+                        .reduce((sum, m) => sum + Math.max(0, m.durationSeconds ?? 0), 0),
                 },
                 creditsConfig,
             ),
-        [selectedModelRecord, durationSeconds, effectiveAudio, resolution, aspect, creditsConfig],
+        [selectedModelRecord, durationSeconds, effectiveAudio, resolution, aspect, creditsConfig, mediaCounts.images, media],
     );
     const creditCost = creditEstimate.credits;
     const hasEnoughTokens = creditCost > 0 && tokenBalance >= creditCost;
@@ -724,15 +758,19 @@ export default function VideoLabCreateForm({
         if (!files || files.length === 0) return;
 
         const prev = mediaRef.current;
+        const caps = getMediaCaps(selectedModelRecord);
+        const maxFilesTotal = caps.max_ref_files_total;
         const counts = {
             image: prev.filter((m) => m.kind === 'image').length,
             video: prev.filter((m) => m.kind === 'video').length,
             audio: prev.filter((m) => m.kind === 'audio').length,
         };
+        let totalFiles = counts.image + counts.video + counts.audio;
         const next: MediaItem[] = [];
         let skippedUnsupported = 0;
         let skippedLimit = 0;
         let skippedType = 0;
+        let skippedTotal = 0;
 
         for (const file of Array.from(files)) {
             const kind = detectMediaKind(file);
@@ -748,13 +786,19 @@ export default function VideoLabCreateForm({
                 skippedLimit += 1;
                 continue;
             }
+            if (maxFilesTotal !== null && totalFiles >= maxFilesTotal) {
+                skippedTotal += 1;
+                continue;
+            }
             counts[kind] += 1;
+            totalFiles += 1;
             next.push({
                 id: `${Date.now()}-${file.name}-${Math.random().toString(36).slice(2, 6)}`,
                 url: URL.createObjectURL(file),
                 kind,
                 name: file.name,
                 file,
+                durationSeconds: null,
             });
         }
 
@@ -762,6 +806,73 @@ export default function VideoLabCreateForm({
             const merged = [...prev, ...next];
             mediaRef.current = merged;
             setMedia(merged);
+
+            // Probe video/audio lengths so we can warn on H3 2–15s / ≤15s combined caps.
+            void (async () => {
+                const probed = await Promise.all(
+                    next.map(async (item) => {
+                        if (item.kind === 'image') return item;
+                        const durationSeconds = await probeMediaDuration(item.url, item.kind);
+                        return { ...item, durationSeconds };
+                    }),
+                );
+                setMedia((current) => {
+                    const byId = new Map(probed.map((p) => [p.id, p]));
+                    const updated = current.map((item) => byId.get(item.id) ?? item);
+                    mediaRef.current = updated;
+
+                    const videoSecs = updated
+                        .filter((m) => m.kind === 'video')
+                        .map((m) => m.durationSeconds)
+                        .filter((d): d is number => typeof d === 'number');
+                    const audioSecs = updated
+                        .filter((m) => m.kind === 'audio')
+                        .map((m) => m.durationSeconds)
+                        .filter((d): d is number => typeof d === 'number');
+
+                    const notices: string[] = [];
+                    const minV = caps.min_ref_video_seconds;
+                    const maxV = caps.max_ref_video_seconds;
+                    const totalV = caps.max_ref_video_seconds_total;
+                    if (minV !== null || maxV !== null) {
+                        for (const d of videoSecs) {
+                            if (minV !== null && d + 0.05 < minV) {
+                                notices.push(`A video ref is ${d.toFixed(1)}s — min ${minV}s for this model.`);
+                            }
+                            if (maxV !== null && d - 0.05 > maxV) {
+                                notices.push(`A video ref is ${d.toFixed(1)}s — max ${maxV}s for this model. Trim it first.`);
+                            }
+                        }
+                    }
+                    if (totalV !== null && videoSecs.length > 0) {
+                        const sum = videoSecs.reduce((a, b) => a + b, 0);
+                        if (sum - 0.05 > totalV) {
+                            notices.push(`Video refs total ${sum.toFixed(1)}s — max ${totalV}s combined for this model.`);
+                        }
+                    }
+                    const minA = caps.min_ref_audio_seconds;
+                    const maxA = caps.max_ref_audio_seconds;
+                    const totalA = caps.max_ref_audio_seconds_total;
+                    if (minA !== null || maxA !== null) {
+                        for (const d of audioSecs) {
+                            if (minA !== null && d + 0.05 < minA) {
+                                notices.push(`An audio ref is ${d.toFixed(1)}s — min ${minA}s for this model.`);
+                            }
+                            if (maxA !== null && d - 0.05 > maxA) {
+                                notices.push(`An audio ref is ${d.toFixed(1)}s — max ${maxA}s for this model.`);
+                            }
+                        }
+                    }
+                    if (totalA !== null && audioSecs.length > 0) {
+                        const sum = audioSecs.reduce((a, b) => a + b, 0);
+                        if (sum - 0.05 > totalA) {
+                            notices.push(`Audio refs total ${sum.toFixed(1)}s — max ${totalA}s combined for this model.`);
+                        }
+                    }
+                    if (notices.length) setMediaNotice(notices[0]);
+                    return updated;
+                });
+            })();
         }
 
         if (skippedUnsupported > 0) {
@@ -770,11 +881,15 @@ export default function VideoLabCreateForm({
             setMediaNotice(
                 `${selectedModelRecord?.name || 'This model'} doesn’t accept that media type. Pick a multimodal model or remove unsupported files.`,
             );
+        } else if (skippedTotal > 0) {
+            setMediaNotice(
+                `Some files were skipped — ${selectedModelRecord?.name || 'this model'} allows at most ${maxFilesTotal} reference files total.`,
+            );
         } else if (skippedLimit > 0) {
             setMediaNotice(
                 `Some files were skipped — ${selectedModelRecord?.name || 'this model'} allows up to ${uploadLimits.image} images, ${uploadLimits.video} videos, ${uploadLimits.audio} audio.`,
             );
-        } else {
+        } else if (!next.length) {
             setMediaNotice(null);
         }
     };
@@ -1025,11 +1140,16 @@ export default function VideoLabCreateForm({
                                 <div className="text-center">
                                     <p className="text-sm font-semibold text-white">{t('video.uploadMedia')}</p>
                                     <p className="mt-1 text-xs text-white/40">
-                                        Image, video, or audio · up to {uploadLimits.image} images / {uploadLimits.video}{' '}
-                                        videos / {uploadLimits.audio} audio
-                                        {selectedModelRecord?.name
-                                            ? ` for ${formatModelName(selectedModelRecord.name)}`
-                                            : ''}
+                                        Image, video, or audio ·{' '}
+                                        {formatUploadLimitHint(
+                                            selectedModelRecord
+                                                ? {
+                                                      name: formatModelName(selectedModelRecord.name),
+                                                      media_capabilities: selectedModelRecord.media_capabilities,
+                                                  }
+                                                : null,
+                                            uploadLimits,
+                                        )}
                                     </p>
                                 </div>
                             </label>

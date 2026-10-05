@@ -58,6 +58,18 @@ export function estimateVideoCredits(
         return present(round6(durationSeconds * perSecond + imageFee), durationSeconds, 'seconds', perSecond, config);
     }
 
+    if (endpointId.includes('minimax/h3')) {
+        const res = resolution.toLowerCase();
+        let perSecond = 0.06;
+        if (res === '480p' || res === '480') perSecond = 0.05;
+        else if (res === '2k' || res === '1080p') perSecond = 0.13;
+        else if (res === '4k') perSecond = 0.16;
+        else perSecond = 0.06; // 768p / 720p
+        const imageFee =
+            endpointId.includes('reference-to-video') && refImages > 5 ? (refImages - 5) * 0.08 : 0;
+        return present(round6(durationSeconds * perSecond + imageFee), durationSeconds, 'seconds', perSecond, config);
+    }
+
     if (endpointId.includes('pixverse/c1/reference-to-video')) {
         const silent = resolution === '360p' ? 0.03 : resolution === '540p' ? 0.04 : resolution === '1080p' ? 0.095 : 0.05;
         const withAudio = resolution === '360p' ? 0.04 : resolution === '540p' ? 0.05 : resolution === '1080p' ? 0.12 : 0.065;

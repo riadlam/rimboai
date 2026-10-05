@@ -18,6 +18,7 @@ const KNOWN_ASPECT_META: Record<string, { w: number; h: number; label: string }>
     '2:3': { w: 10, h: 15, label: 'Tall' },
     '9:16': { w: 10, h: 18, label: 'Vertical' },
     auto: { w: 14, h: 14, label: 'Auto' },
+    adaptive: { w: 14, h: 14, label: 'Adaptive' },
 };
 
 function asStringList(value: unknown): string[] {
@@ -31,7 +32,9 @@ function asStringList(value: unknown): string[] {
 export function normalizeVideoResolution(value: string): string {
     const lower = value.toLowerCase();
     if (lower === '4k' || lower === '2160' || lower === '2160p') return '4K';
+    if (lower === '2k' || lower === '2048' || lower === '2048p') return '2K';
     if (lower === '1080' || lower === '1080p') return '1080p';
+    if (lower === '768' || lower === '768p') return '768p';
     if (lower === '720' || lower === '720p') return '720p';
     if (lower === '480' || lower === '480p') return '480p';
     return value;
@@ -56,7 +59,18 @@ export function videoResolutionOptions(fromModel?: string[] | null): Array<{ id:
     const ids = list.length > 0 ? Array.from(new Set(list)) : [...VIDEO_DEFAULT_RESOLUTIONS];
     return ids.map((id) => ({
         id,
-        sub: id === '4K' ? 'Cinema' : id === '1080p' ? 'HD' : id === '480p' ? 'Lite' : 'Standard',
+        sub:
+            id === '4K'
+                ? 'Cinema'
+                : id === '2K'
+                  ? '2K'
+                  : id === '1080p'
+                    ? 'HD'
+                    : id === '768p'
+                      ? 'Native'
+                      : id === '480p'
+                        ? 'Lite'
+                        : 'Standard',
     }));
 }
 

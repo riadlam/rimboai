@@ -42,6 +42,10 @@ class FalEndpointPricingPolicy
             return $this->quoteGrok($id, $duration, $resolution, (int) ($options['reference_image_count'] ?? 0));
         }
 
+        if (str_contains($id, 'minimax/h3')) {
+            return $this->quoteMiniMaxH3($id, $duration, $resolution, (int) ($options['reference_image_count'] ?? 0));
+        }
+
         if (str_contains($id, 'pixverse/c1/reference-to-video')) {
             return $this->quotePixverseC1($duration, $resolution, $audio);
         }
@@ -160,6 +164,43 @@ class FalEndpointPricingPolicy
                 'resolution' => $resolution,
                 'image_fee_usd' => $imageFee,
                 'policy' => $is15 ? 'grok_imagine_v1_5' : 'grok_imagine',
+            ],
+        ];
+    }
+
+    /**
+     * @return array{fal_cost_usd: float, unit: string, unit_price: float, billable_units: float, breakdown: array<string, mixed>}
+     */
+    private function quoteMiniMaxH3(string $id, int $duration, string $resolution, int $images): array
+    {
+        // fal.ai MiniMax H3 gallery rates (per output second).
+        $perSecond = match ($resolution) {
+            '480p', '480' => 0.05,
+            '2k', '1080p' => 0.13,
+            '4k' => 0.16,
+            default => 0.06, // 768P / 720p
+        };
+
+        // First 5 reference images free on R2V; each extra image +$0.08.
+        $imageFee = 0.0;
+        if (str_contains($id, 'reference-to-video') && $images > 5) {
+            $imageFee = ($images - 5) * 0.08;
+        }
+
+        $fal = round(($duration * $perSecond) + $imageFee, 6);
+
+        return [
+            'fal_cost_usd' => $fal,
+            'unit' => 'seconds',
+            'unit_price' => $perSecond,
+            'billable_units' => (float) $duration,
+            'breakdown' => [
+                'mode' => 'minimax_h3_resolution',
+                'duration_seconds' => $duration,
+                'resolution' => $resolution,
+                'image_fee_usd' => $imageFee,
+                'reference_image_count' => $images,
+                'policy' => 'minimax_h3',
             ],
         ];
     }

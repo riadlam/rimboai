@@ -41,6 +41,32 @@ class FalEndpointPricingPolicyTest extends TestCase
         $this->assertSame(0.14, $quote['unit_price']);
     }
 
+    public function test_minimax_h3_768p_and_extra_image_fee(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $base = $policy->quoteVideo([
+            'endpoint_id' => 'minimax/h3/text-to-video',
+            'unit' => 'seconds',
+            'unit_price' => 0.05,
+            'duration_seconds' => 5,
+            'resolution' => '768p',
+        ]);
+        $r2v = $policy->quoteVideo([
+            'endpoint_id' => 'minimax/h3/reference-to-video',
+            'unit' => 'seconds',
+            'unit_price' => 0.05,
+            'duration_seconds' => 5,
+            'resolution' => '2K',
+            'reference_image_count' => 7,
+        ]);
+
+        $this->assertNotNull($base);
+        $this->assertEqualsWithDelta(0.30, $base['fal_cost_usd'], 1e-6);
+        $this->assertNotNull($r2v);
+        // 5s * $0.13 + 2 extra images * $0.08
+        $this->assertEqualsWithDelta(0.81, $r2v['fal_cost_usd'], 1e-6);
+    }
+
     public function test_pixverse_c1_720p_audio_is_official_rate(): void
     {
         $policy = new FalEndpointPricingPolicy;

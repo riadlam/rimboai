@@ -257,6 +257,21 @@ class SeedLabModelDescriptions extends Command
                 'Grok 1.5 référence→vidéo — garde l’identité sur 1–7 images avec balises <IMAGE_0> et son natif.',
                 'Grok 1.5 مرجع→فيديو — يحافظ على الهوية عبر 1–7 صور مع وسوم <IMAGE_0> وصوت أصلي.'
             ),
+            'minimax/h3/text-to-video' => $t(
+                'MiniMax H3 — 5–15s up to 2K/4K with native audio. Add product images + a 2–15s motion clip (≤15s combined) for remakes; cite Image 1 / Video 1.',
+                'MiniMax H3 — 5–15s jusqu’à 2K/4K avec audio natif. Ajoutez images produit + clip motion 2–15s (≤15s total); citez Image 1 / Video 1.',
+                'MiniMax H3 — 5–15ث حتى 2K/4K بصوت أصلي. أضف صور المنتج + مقطع حركة 2–15ث (≤15ث مجمّع)؛ اذكر Image 1 / Video 1.'
+            ),
+            'minimax/h3/reference-to-video' => $t(
+                'MiniMax H3 R2V — up to 9 images, 3 videos (2–15s each, ≤15s total), 3 audios; max 12 files. Cite Image N / Video N / Audio N.',
+                'MiniMax H3 R2V — jusqu’à 9 images, 3 vidéos (2–15s, ≤15s total), 3 audios; max 12 fichiers. Citez Image N / Video N / Audio N.',
+                'MiniMax H3 R2V — حتى 9 صور و3 فيديوهات (2–15ث، ≤15ث مجمّع) و3 صوتيات؛ حد 12 ملفاً. اذكر Image N / Video N / Audio N.'
+            ),
+            'minimax/h3/image-to-video' => $t(
+                'MiniMax H3 image-to-video — animate a still or first→last frame, 5–15s, up to 4K. Aspect follows the source.',
+                'MiniMax H3 image→vidéo — animez une image ou premier→dernier frame, 5–15s, jusqu’à 4K. Le ratio suit la source.',
+                'MiniMax H3 صورة→فيديو — حرّك صورة أو إطار أول→أخير، 5–15ث حتى 4K. النسبة تتبع المصدر.'
+            ),
             'fal-ai/pixverse/c1/reference-to-video' => $t(
                 'PixVerse C1 — character-consistent video using named subject/background references.',
                 'PixVerse C1 — vidéo cohérente personnage via références sujet/fond nommées.',

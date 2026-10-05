@@ -110,7 +110,19 @@ class FalVideoInputBuilder
             'audio' => true,
             'audio_field' => 'generate_audio',
         ],
-        // MiniMax H3 — Image N / Video N refs, motion clips 2–15s, output 5–15s.
+        // MiniMax H3 — T2V / I2V / R2V. Output 5–15s; R2V motion clips 2–15s (≤15s combined).
+        'minimax/h3/text-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['adaptive', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+            'resolution' => true,
+        ],
+        'minimax/h3/image-to-video' => [
+            'duration_format' => 'int',
+            // Aspect follows source image — do not force aspect_ratio.
+            'aspects' => ['auto', 'adaptive', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+            'resolution' => true,
+            'i2v_aspect_auto' => true,
+        ],
         'minimax/h3/reference-to-video' => [
             'duration_format' => 'int',
             'aspects' => ['adaptive', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
@@ -256,9 +268,12 @@ class FalVideoInputBuilder
             $input['aspect_ratio'] = $this->mapWan22Aspect($aspect);
         }
 
-        // Grok Imagine Video 1.5 I2V has no aspect_ratio field — framing follows the source image.
+        // Grok Imagine Video 1.5 / MiniMax H3 I2V — framing follows the source image.
         if (
-            str_contains(strtolower($endpointId), 'grok-imagine-video/v1.5')
+            (
+                str_contains(strtolower($endpointId), 'grok-imagine-video/v1.5')
+                || str_contains(strtolower($endpointId), 'minimax/h3')
+            )
             && str_contains(strtolower($endpointId), 'image-to-video')
         ) {
             unset($input['aspect_ratio']);
@@ -269,8 +284,15 @@ class FalVideoInputBuilder
             || str_contains(strtolower($endpointId), 'seedance')
             || str_contains(strtolower($endpointId), 'veo')
             || str_contains(strtolower($endpointId), 'grok-imagine-video')
+            || str_contains(strtolower($endpointId), 'minimax/h3')
         ) {
             $input['resolution'] = $this->mapResolutionForFal($resolution, $endpointId);
+        }
+
+        // MiniMax H3: keep prompt expansion off by default (Lab prompts are already authored).
+        if (str_contains(strtolower($endpointId), 'minimax/h3')) {
+            $input['prompt_expansion_mode'] = (string) ($options['prompt_expansion_mode'] ?? 'disabled');
+            $input['enable_safety_checker'] = (bool) ($options['enable_safety_checker'] ?? true);
         }
 
         if (! empty($profile['audio']) || str_contains(strtolower($endpointId), 'seedance') || str_contains(strtolower($endpointId), 'veo') || str_contains(strtolower($endpointId), 'kling')) {
@@ -595,8 +617,8 @@ class FalVideoInputBuilder
             return max(3, min(15, $seconds));
         }
 
-        // MiniMax H3 R2V: output duration 5–15 (motion refs also 2–15s).
-        if (str_contains($id, 'minimax/h3') && str_contains($id, 'reference-to-video')) {
+        // MiniMax H3: output duration 5–15 on T2V / I2V / R2V (motion refs separately 2–15s).
+        if (str_contains($id, 'minimax/h3')) {
             return max(5, min(15, $seconds));
         }
 
@@ -687,10 +709,11 @@ class FalVideoInputBuilder
         // MiniMax H3: 480P / 768P / 2K / 4K (uppercase P on fal).
         if (str_contains($id, 'minimax/h3')) {
             return match (strtolower($resolution)) {
-                '480p', '480P' => '480P',
-                '1080p', '2k', '2K' => '2K',
-                '4k', '4K' => '4K',
-                default => '768P', // Lab 720p → native 768P
+                '480p', '480' => '480P',
+                '768p', '768', '720p', '720' => '768P',
+                '2k', '1080p', '1080' => '2K',
+                '4k', '2160p', '2160' => '4K',
+                default => '768P',
             };
         }
 

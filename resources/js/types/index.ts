@@ -93,6 +93,16 @@ export type BrandModel = {
         max_ref_images?: number | null;
         max_ref_videos?: number | null;
         max_ref_audios?: number | null;
+        /** Per-clip / combined duration ceilings for motion + audio refs (seconds). */
+        min_ref_video_seconds?: number | null;
+        max_ref_video_seconds?: number | null;
+        max_ref_video_seconds_total?: number | null;
+        min_ref_audio_seconds?: number | null;
+        max_ref_audio_seconds?: number | null;
+        max_ref_audio_seconds_total?: number | null;
+        max_ref_files_total?: number | null;
+        /** How to cite refs in the prompt, e.g. "Image N / Video N / Audio N" */
+        prompt_ref_style?: string | null;
         reference_endpoint_id?: string | null;
         first_frame_endpoint_id?: string | null;
         first_frame_param?: string | null;

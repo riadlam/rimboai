@@ -10,6 +10,14 @@ export type MediaCaps = {
     max_ref_images: number | null;
     max_ref_videos: number | null;
     max_ref_audios: number | null;
+    min_ref_video_seconds: number | null;
+    max_ref_video_seconds: number | null;
+    max_ref_video_seconds_total: number | null;
+    min_ref_audio_seconds: number | null;
+    max_ref_audio_seconds: number | null;
+    max_ref_audio_seconds_total: number | null;
+    max_ref_files_total: number | null;
+    prompt_ref_style: string | null;
     first_last_frame_endpoint_id?: string | null;
 };
 
@@ -33,8 +41,20 @@ const EMPTY_CAPS: MediaCaps = {
     max_ref_images: null,
     max_ref_videos: null,
     max_ref_audios: null,
+    min_ref_video_seconds: null,
+    max_ref_video_seconds: null,
+    max_ref_video_seconds_total: null,
+    min_ref_audio_seconds: null,
+    max_ref_audio_seconds: null,
+    max_ref_audio_seconds_total: null,
+    max_ref_files_total: null,
+    prompt_ref_style: null,
     first_last_frame_endpoint_id: null,
 };
+
+function numOrNull(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 export function getMediaCaps(model: Pick<BrandModel, 'media_capabilities'> | null | undefined): MediaCaps {
     const caps = model?.media_capabilities;
@@ -49,8 +69,60 @@ export function getMediaCaps(model: Pick<BrandModel, 'media_capabilities'> | nul
         max_ref_images: typeof caps.max_ref_images === 'number' ? caps.max_ref_images : null,
         max_ref_videos: typeof caps.max_ref_videos === 'number' ? caps.max_ref_videos : null,
         max_ref_audios: typeof caps.max_ref_audios === 'number' ? caps.max_ref_audios : null,
+        min_ref_video_seconds: numOrNull(caps.min_ref_video_seconds),
+        max_ref_video_seconds: numOrNull(caps.max_ref_video_seconds),
+        max_ref_video_seconds_total: numOrNull(caps.max_ref_video_seconds_total),
+        min_ref_audio_seconds: numOrNull(caps.min_ref_audio_seconds),
+        max_ref_audio_seconds: numOrNull(caps.max_ref_audio_seconds),
+        max_ref_audio_seconds_total: numOrNull(caps.max_ref_audio_seconds_total),
+        max_ref_files_total: numOrNull(caps.max_ref_files_total),
+        prompt_ref_style: typeof caps.prompt_ref_style === 'string' ? caps.prompt_ref_style : null,
         first_last_frame_endpoint_id: caps.first_last_frame_endpoint_id ?? null,
     };
+}
+
+/** Short upload-zone copy for the selected model's reference ceilings. */
+export function formatUploadLimitHint(
+    model: Pick<BrandModel, 'media_capabilities' | 'name'> | null | undefined,
+    limits: UploadLimits,
+): string {
+    const caps = getMediaCaps(model);
+    const parts = [
+        `up to ${limits.image} images / ${limits.video} videos / ${limits.audio} audio`,
+    ];
+
+    if (caps.max_ref_video_seconds !== null || caps.max_ref_video_seconds_total !== null) {
+        const min = caps.min_ref_video_seconds ?? 2;
+        const max = caps.max_ref_video_seconds ?? 15;
+        const total = caps.max_ref_video_seconds_total;
+        parts.push(
+            total !== null
+                ? `video refs ${min}–${max}s each (≤${total}s combined)`
+                : `video refs ${min}–${max}s each`,
+        );
+    }
+
+    if (caps.max_ref_audio_seconds !== null || caps.max_ref_audio_seconds_total !== null) {
+        const min = caps.min_ref_audio_seconds ?? 2;
+        const max = caps.max_ref_audio_seconds ?? 15;
+        const total = caps.max_ref_audio_seconds_total;
+        parts.push(
+            total !== null
+                ? `audio refs ${min}–${max}s each (≤${total}s combined)`
+                : `audio refs ${min}–${max}s each`,
+        );
+    }
+
+    if (caps.max_ref_files_total !== null) {
+        parts.push(`max ${caps.max_ref_files_total} files total`);
+    }
+
+    if (caps.prompt_ref_style) {
+        parts.push(`cite as ${caps.prompt_ref_style}`);
+    }
+
+    const forModel = model?.name ? ` for ${model.name}` : '';
+    return parts.join(' · ') + forModel;
 }
 
 export function mediaTotal(counts: MediaCounts): number {
@@ -298,7 +370,7 @@ export function describeMediaGuidance(counts: MediaCounts, compatibleCount: numb
         return {
             tone: 'info',
             title: 'Multimodal references',
-            body: 'Video and audio refs need a multimodal model. We’ve hidden models that can’t use this mix.',
+            body: 'Video and audio refs need a multimodal model. We’ve hidden models that can’t use this mix. For MiniMax H3, keep each motion/audio clip 2–15s and combined video (or audio) length ≤15s; cite Image N / Video N in the prompt.',
         };
     }
 
