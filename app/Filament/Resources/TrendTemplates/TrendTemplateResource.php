@@ -192,6 +192,7 @@ class TrendTemplateResource extends Resource
                             ->maxLength(120),
                         Select::make('role')
                             ->options([
+                                'product' => 'Product packshot (@Image1)',
                                 'body_right' => 'Person on the right (@ImageN)',
                                 'body_left' => 'Person on the left (@ImageN)',
                                 'extra' => 'Extra person',
@@ -217,8 +218,23 @@ class TrendTemplateResource extends Resource
                     ->collapsible()
                     ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
                     ->columnSpanFull(),
+                Select::make('workflow')
+                    ->label('Remake workflow')
+                    ->options([
+                        TrendTemplate::WORKFLOW_H3_DIRECT => 'MiniMax H3 direct (product packshot R2V)',
+                        TrendTemplate::WORKFLOW_H3_SPLIT => 'MiniMax H3 split (face/motion sections)',
+                    ])
+                    ->nullable()
+                    ->placeholder('Auto / default for endpoint')
+                    ->helperText('Use “H3 direct” for product commercials (one packshot + locked motion). Split is for Hotel Lobby–style face remakes.')
+                    ->visible(fn (Get $get): bool => ! TrendTemplate::isCharacterSheetEndpoint($get('endpoint_id'))),
+                Toggle::make('prompt_editable')
+                    ->label('Client can edit prompt')
+                    ->helperText('Show the full prompt in Trends UI so the user can swap brand name / colors before remake.')
+                    ->default(false)
+                    ->visible(fn (Get $get): bool => ! TrendTemplate::isCharacterSheetEndpoint($get('endpoint_id'))),
                 Textarea::make('prompt')
-                    ->label('Model prompt (locked)')
+                    ->label(fn (Get $get): string => $get('prompt_editable') ? 'Model prompt (shown + editable by client)' : 'Model prompt (locked)')
                     ->rows(12)
                     ->required()
                     ->default(TrendTemplate::defaultPromptScaffold())

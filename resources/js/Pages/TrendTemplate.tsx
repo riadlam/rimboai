@@ -87,7 +87,11 @@ type TrendWorkspace = {
     creation_id: number;
     template: TrendTemplateCard;
     uploads: TrendUpload[];
-    locked: Record<string, unknown>;
+    locked: Record<string, unknown> & {
+        prompt?: string;
+        prompt_editable?: boolean;
+        workflow?: string | null;
+    };
     locked_preview?: {
         kind: 'video' | 'image' | 'audio';
         url: string;
@@ -164,6 +168,8 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const [slots, setSlots] = useState<Record<string, FileSlot>>(() =>
         Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])),
     );
+    const promptEditable = Boolean(workspace.locked?.prompt_editable);
+    const [promptDraft, setPromptDraft] = useState(() => String(workspace.locked?.prompt ?? ''));
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const initialActive =
         workspace.active_remake && !isTerminalCreationStatus(workspace.active_remake.status)
@@ -274,6 +280,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
 
     useEffect(() => {
         setSlots(Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])));
+        setPromptDraft(String(workspace.locked?.prompt ?? ''));
         setError(null);
         setDetailsOpen(false);
         const count = workspace.user_remake_count ?? 0;
@@ -346,10 +353,11 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const requiredReady =
         workspace.uploads.length === 0 ||
         workspace.uploads.every((u) => !u.required || Boolean(slots[u.key]?.file));
+    const promptReady = !promptEditable || promptDraft.trim().length >= 8;
 
     const credits = workspace.credits > 0 ? workspace.credits : tmpl.credits;
     const jobInFlight = Boolean(job && !isTerminalCreationStatus(job.status));
-    const canCreate = requiredReady && !creating && !jobInFlight && !isGuest;
+    const canCreate = requiredReady && promptReady && !creating && !jobInFlight && !isGuest;
 
     const assignFile = (key: string, file?: File) => {
         if (!file) return;
@@ -405,6 +413,9 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                     if (!url) continue;
                     form.append(`slot_urls[${u.key}]`, url);
                     form.append('image_urls[]', url);
+                }
+                if (promptEditable) {
+                    form.append('prompt', promptDraft.trim());
                 }
             } else {
                 form.append('type', workspace.type);
@@ -645,6 +656,33 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                             onClear={() => clearFile(upload.key)}
                                         />
                                     ))}
+
+                                    {promptEditable && (
+                                        <section className="space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
+                                                    {t('prompt')}
+                                                </p>
+                                                <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100/90">
+                                                    {t('promptEditableBadge')}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] leading-relaxed text-white/40">
+                                                {t('promptEditableHint')}
+                                            </p>
+                                            <textarea
+                                                value={promptDraft}
+                                                onChange={(e) => setPromptDraft(e.target.value)}
+                                                rows={12}
+                                                className="w-full resize-y rounded-2xl border border-white/10 bg-black/40 px-3.5 py-3 text-[13px] leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
+                                                placeholder={t('promptEditablePlaceholder')}
+                                            />
+                                            <div className="flex items-center justify-between px-0.5 text-[10px] text-white/30">
+                                                <span>{t('promptKeepTags')}</span>
+                                                <span>{promptDraft.length.toLocaleString()}</span>
+                                            </div>
+                                        </section>
+                                    )}
                                 </div>
 
                                 <div className="relative shrink-0 border-t border-white/[0.07] bg-[#0a0a0f]/95 p-3 backdrop-blur-xl">

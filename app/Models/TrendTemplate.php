@@ -29,6 +29,12 @@ class TrendTemplate extends Model
      */
     public const CHARACTER_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 
+    /** MiniMax H3 product R2V (no section split / no face sheets). */
+    public const WORKFLOW_H3_DIRECT = 'h3_direct';
+
+    /** MiniMax H3 Sogni-style section split + FlashVSR. */
+    public const WORKFLOW_H3_SPLIT = 'h3_split';
+
     protected $fillable = [
         'title',
         'slug',
@@ -39,8 +45,10 @@ class TrendTemplate extends Model
         'sort_order',
         'uses_count',
         'endpoint_id',
+        'workflow',
         'model_name',
         'prompt',
+        'prompt_editable',
         'aspect_ratio',
         'resolution',
         'duration',
@@ -59,6 +67,7 @@ class TrendTemplate extends Model
             'is_published' => 'boolean',
             'is_featured' => 'boolean',
             'generate_audio' => 'boolean',
+            'prompt_editable' => 'boolean',
             'sort_order' => 'integer',
             'uses_count' => 'integer',
             'trend_cost' => 'integer',
@@ -211,6 +220,51 @@ class TrendTemplate extends Model
                 'required' => true,
             ],
         ];
+    }
+
+    /**
+     * Product packshot remake (MiniMax H3 direct R2V).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function productSlots(): array
+    {
+        return [
+            [
+                'key' => 'product',
+                'kind' => 'image',
+                'label' => 'Your product photo',
+                'role' => 'product',
+                'hint' => 'Clear packshot of your bottle / product. Becomes @Image1 — edit the prompt with your brand name & colors.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+        ];
+    }
+
+    public function isPromptEditable(): bool
+    {
+        return (bool) $this->prompt_editable;
+    }
+
+    public function isH3DirectWorkflow(): bool
+    {
+        $workflow = strtolower(trim((string) $this->workflow));
+        if ($workflow === self::WORKFLOW_H3_DIRECT) {
+            return true;
+        }
+        if ($workflow === self::WORKFLOW_H3_SPLIT) {
+            return false;
+        }
+
+        // Auto: product upload slots → direct R2V (not face-split).
+        foreach ($this->clientSlots() as $slot) {
+            if (($slot['role'] ?? '') === 'product') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function uniqueSlug(string $title): string

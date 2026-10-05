@@ -17,7 +17,8 @@ class TrendTemplateModelTest extends TestCase
         $this->assertStringContainsString('burnt-orange studio backdrop', $prompt);
         $this->assertStringContainsString('silver condenser microphone', $prompt);
         $this->assertStringContainsString('camera movement', $prompt);
-        $this->assertSame('minimax/h3/reference-to-video', TrendTemplate::DEFAULT_ENDPOINT);
+        $this->assertSame('higgsfield/genjutsu/motion-transfer/v1.0', TrendTemplate::DEFAULT_ENDPOINT);
+        $this->assertSame('minimax/h3/reference-to-video', TrendTemplate::SECONDARY_FALLBACK_ENDPOINT);
     }
 
     public function test_client_slots_are_image_only_in_order(): void
@@ -29,6 +30,19 @@ class TrendTemplateModelTest extends TestCase
         $this->assertCount(2, $slots);
         $this->assertSame('body_right', $slots[0]['key']);
         $this->assertSame('body_left', $slots[1]['key']);
+    }
+
+    public function test_product_slots_mark_h3_direct_workflow(): void
+    {
+        $template = new TrendTemplate([
+            'endpoint_id' => 'minimax/h3/reference-to-video',
+            'workflow' => TrendTemplate::WORKFLOW_H3_DIRECT,
+            'prompt_editable' => true,
+            'slots' => TrendTemplate::productSlots(),
+        ]);
+        $this->assertTrue($template->isPromptEditable());
+        $this->assertTrue($template->isH3DirectWorkflow());
+        $this->assertSame('product', $template->clientSlots()[0]['role']);
     }
 
     public function test_cost_estimator_returns_structure(): void

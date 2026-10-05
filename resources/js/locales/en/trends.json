@@ -66,6 +66,10 @@
   "hot": "Hot",
   "outputs": "Outputs",
   "prompt": "Prompt",
+  "promptEditableBadge": "Edit for your brand",
+  "promptEditableHint": "This is the full commercial brief. Keep @Image1 / @Video1 tags, then change product name, colors, and on-screen text to match your packshot.",
+  "promptEditablePlaceholder": "Describe your product commercial…",
+  "promptKeepTags": "Keep @Image1 and @Video1 in the prompt",
   "stats": {
     "uses": "Uses",
     "type": "Type",

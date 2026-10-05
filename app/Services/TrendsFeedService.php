@@ -398,15 +398,21 @@ class TrendsFeedService
                 'prompt' => $isSheet
                     ? (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt())
                     : (string) $template->prompt,
+                'prompt_editable' => $isSheet ? false : $template->isPromptEditable(),
                 'endpoint_id' => $template->endpoint_id,
                 'model_name' => $template->model_name,
                 'aspect' => $template->aspect_ratio,
                 'resolution' => $template->resolution,
                 'duration' => $isSheet ? null : $template->duration,
                 'audio' => $isSheet ? false : (bool) $template->generate_audio,
-                'mode' => $isSheet ? 'trend_character_sheet' : 'trend_template',
+                'mode' => $isSheet
+                    ? 'trend_character_sheet'
+                    : ($template->isH3DirectWorkflow() ? 'trend_product_r2v' : 'trend_template'),
+                'workflow' => $template->workflow,
                 'motion_sketch_url' => $sketchUrl,
-                'motion_sketch_label' => $isSheet ? null : 'Motion choreography',
+                'motion_sketch_label' => $isSheet
+                    ? null
+                    : ($template->isH3DirectWorkflow() ? 'Style & motion reference' : 'Motion choreography'),
                 'sheet_endpoint_id' => $isSheet
                     ? ($template->sheet_endpoint_id ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT)
                     : null,
@@ -421,8 +427,10 @@ class TrendsFeedService
                 : ($sketchUrl ? [
                     'kind' => 'video',
                     'url' => $sketchUrl,
-                    'label' => 'Motion choreography',
-                    'hint' => 'Locked admin sketch — used for movement only, not faces or outfits.',
+                    'label' => $template->isH3DirectWorkflow() ? 'Style & motion reference' : 'Motion choreography',
+                    'hint' => $template->isH3DirectWorkflow()
+                        ? 'Locked motion/style clip — upload your product packshot and edit the prompt with your brand.'
+                        : 'Locked admin sketch — used for movement only, not faces or outfits.',
                 ] : null),
             'credits' => (int) $template->trend_cost,
             'user_remake_count' => $userRemakes['count'],
@@ -723,6 +731,10 @@ class TrendsFeedService
         $isSheet = $template->isCharacterSheetTemplate();
         $sketch = $isSheet ? null : $this->normalizeTrendMediaUrl($template->motionSketchUrl());
         $cover = $this->normalizeTrendMediaUrl($template->cover_url) ?: $sketch;
+        // Product remakes: cover is usually the example MP4 — play that in the feed.
+        $exampleVideo = $cover && preg_match('/\.(mp4|webm|mov)(\?|$)/i', $cover)
+            ? $cover
+            : $sketch;
         // Missing cover/sketch must not hide or 404 the template workspace.
         $uses = (int) $template->uses_count;
 
@@ -736,7 +748,9 @@ class TrendsFeedService
             'uses' => $uses,
             'rating' => null,
             'credits' => (int) $template->trend_cost,
-            'model' => $template->model_name ?: ($isSheet ? 'Nano Banana Pro' : 'Seedance'),
+            'model' => $template->model_name ?: ($isSheet
+                ? 'Nano Banana Pro'
+                : ($template->isH3DirectWorkflow() ? 'MiniMax H3' : 'Seedance')),
             'endpoint_id' => $template->endpoint_id,
             'trend_title' => $template->title,
             'created_at' => $template->updated_at?->toIso8601String()
@@ -744,13 +758,15 @@ class TrendsFeedService
             'name' => $template->title,
             'category' => $isSheet ? 'Images' : 'Videos',
             'cover' => $cover ?: '',
-            'coverType' => $isSheet || ! $sketch ? 'image' : 'video',
-            'video_url' => $sketch,
+            'coverType' => $isSheet || ! $exampleVideo ? 'image' : 'video',
+            'video_url' => $exampleVideo,
             'thumbnail_url' => $this->normalizeTrendMediaUrl($template->cover_url),
             'samples' => array_values(array_filter([$cover, $sketch])),
             'description' => (string) ($template->description ?: ($isSheet
                 ? 'Upload a photo — get a multi-angle character sheet.'
-                : 'Official trend template')),
+                : ($template->isH3DirectWorkflow()
+                    ? 'Upload your product packshot, edit the prompt, remake the commercial.'
+                    : 'Official trend template'))),
             'prompt' => $isSheet
                 ? (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt())
                 : (string) $template->prompt,
@@ -764,6 +780,8 @@ class TrendsFeedService
             'featured' => (bool) $template->is_featured,
             'hot' => $uses >= 5,
             'slug' => $template->slug,
+            'prompt_editable' => $isSheet ? false : $template->isPromptEditable(),
+            'workflow' => $template->workflow,
         ];
     }
 

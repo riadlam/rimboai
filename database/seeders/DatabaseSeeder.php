@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             GeminiOmniFlashSeeder::class,
             GrokImagineVideo15Seeder::class,
             MiniMaxH3LabSeeder::class,
+            VenusProductCommercialTrendSeeder::class,
             VoiceCloneModelSeeder::class,
         ]);
     }

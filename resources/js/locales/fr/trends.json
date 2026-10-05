@@ -66,6 +66,10 @@
   "hot": "Tendance",
   "outputs": "Sorties",
   "prompt": "Prompt",
+  "promptEditableBadge": "À adapter à votre marque",
+  "promptEditableHint": "Brief commercial complet. Gardez les balises @Image1 / @Video1, puis changez nom, couleurs et textes à l’écran selon votre produit.",
+  "promptEditablePlaceholder": "Décrivez votre pub produit…",
+  "promptKeepTags": "Gardez @Image1 et @Video1 dans le prompt",
   "stats": {
     "uses": "Utilisations",
     "type": "Type",

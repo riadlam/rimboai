@@ -17,6 +17,7 @@ use Throwable;
 /**
  * Curated Trend Template remake:
  * - Higgsfield Genjutsu: slot photos as image refs (no sheets)
+ * - MiniMax H3 direct: product/packshot image + locked motion video (Lab-style R2V)
  * - MiniMax H3 split: scene-cut sections + FlashVSR + song mux (no sheets)
  * - Other fal R2V: face photos → character sheets → video
  */
@@ -39,8 +40,12 @@ class TrendTemplateRemakeService
      * @param  array<string, string>  $slotPhotos  slot key => image URL
      * @return array<string, mixed>
      */
-    public function remake(User $user, TrendTemplate|string|int $template, array $slotPhotos): array
-    {
+    public function remake(
+        User $user,
+        TrendTemplate|string|int $template,
+        array $slotPhotos,
+        ?string $clientPrompt = null,
+    ): array {
         $template = $this->resolveTemplate($template);
         if (! $template->is_published) {
             throw new TrendsRemakeException('Template not found or not published.', 404);
@@ -87,7 +92,7 @@ class TrendTemplateRemakeService
 
         $clientSlots = $template->clientSlots();
         if ($clientSlots === []) {
-            throw new TrendsRemakeException('Template has no face upload slots.', 422);
+            throw new TrendsRemakeException('Template has no photo upload slots.', 422);
         }
 
         $orderedPhotos = [];
@@ -111,13 +116,15 @@ class TrendTemplateRemakeService
         }
 
         if ($orderedPhotos === []) {
-            throw new TrendsRemakeException('Upload at least one face photo.', 422);
+            throw new TrendsRemakeException('Upload at least one photo.', 422);
         }
 
-        $prompt = trim((string) $template->prompt);
+        $prompt = $this->resolveClientPrompt($template, $clientPrompt);
         $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
         $isHiggsfield = HiggsfieldService::isHiggsfieldEndpoint($endpointId);
-        $isH3Split = self::isH3SplitEndpoint($endpointId);
+        $isH3Direct = $template->isH3DirectWorkflow()
+            && str_contains(strtolower($endpointId), 'minimax/h3');
+        $isH3Split = self::isH3SplitEndpoint($endpointId) && ! $isH3Direct;
 
         if ($isHiggsfield) {
             if (! $this->higgsfield->configured()) {
@@ -126,33 +133,41 @@ class TrendTemplateRemakeService
             if ($prompt === '') {
                 throw new TrendsRemakeException('Template prompt is invalid.', 422);
             }
-        } elseif ($isH3Split) {
+        } elseif ($isH3Direct || $isH3Split) {
             if (! $this->fal->configured()) {
                 throw new TrendsRemakeException('Generation service is not configured.', 503);
             }
             if ($prompt === '') {
-                throw new TrendsRemakeException('Template prompt is invalid.', 422);
+                throw new TrendsRemakeException('Add a prompt before creating.', 422);
+            }
+            if ($isH3Direct && ! str_contains($prompt, '@Image') && ! str_contains($prompt, 'Image 1')) {
+                throw new TrendsRemakeException('Prompt must mention @Image1 (your product photo).', 422);
             }
         } elseif ($prompt === '' || ! str_contains($prompt, '@Video1')) {
             throw new TrendsRemakeException('Template prompt is invalid.', 422);
         }
 
         $model = $this->resolveVideoModel($endpointId);
-        if (! $model && ! $isHiggsfield && ! $isH3Split) {
+        if (! $model && ! $isHiggsfield && ! $isH3Split && ! $isH3Direct) {
             $endpointId = TrendTemplate::FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
         }
-        if (! $model && ! $isHiggsfield && ! $isH3Split) {
+        if (! $model && ! $isHiggsfield && ! $isH3Split && ! $isH3Direct) {
             $endpointId = TrendTemplate::SECONDARY_FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
-            $isH3Split = self::isH3SplitEndpoint($endpointId);
+            $isH3Direct = $template->isH3DirectWorkflow();
+            $isH3Split = self::isH3SplitEndpoint($endpointId) && ! $isH3Direct;
         }
         if (! $model) {
             throw new TrendsRemakeException(__('messages.model_unavailable'), 422);
         }
         $submitEndpoint = (string) $model->endpoint_id;
         $isHiggsfield = HiggsfieldService::isHiggsfieldEndpoint($submitEndpoint);
-        $isH3Split = self::isH3SplitEndpoint($submitEndpoint);
+        $isH3Direct = $isH3Direct || (
+            $template->isH3DirectWorkflow()
+            && str_contains(strtolower($submitEndpoint), 'minimax/h3')
+        );
+        $isH3Split = self::isH3SplitEndpoint($submitEndpoint) && ! $isH3Direct;
 
         $credits = (int) $template->trend_cost;
         if ($credits <= 0) {
@@ -202,7 +217,13 @@ class TrendTemplateRemakeService
 
         $progressStart = $isHiggsfield
             ? 'Preparing references…'
-            : ($isH3Split ? 'Planning H3 sections…' : 'Generating character sheets…');
+            : ($isH3Direct
+                ? 'Preparing product remake…'
+                : ($isH3Split ? 'Planning H3 sections…' : 'Generating character sheets…'));
+
+        $workflow = $isH3Direct
+            ? TrendTemplate::WORKFLOW_H3_DIRECT
+            : ($isH3Split ? 'h3_split' : ($isHiggsfield ? 'higgsfield_genjutsu' : 'fal_r2v'));
 
         try {
             /** @var UserVideoCreation $creation */
@@ -222,9 +243,9 @@ class TrendTemplateRemakeService
                         'aspect' => $aspect,
                         'resolution' => $resolution,
                         'duration' => $duration,
-                        'audio' => $isH3Split,
+                        'audio' => $isH3Split || $isH3Direct,
                         'provider' => $isHiggsfield ? 'higgsfield' : 'fal',
-                        'workflow' => $isH3Split ? 'h3_split' : ($isHiggsfield ? 'higgsfield_genjutsu' : 'fal_r2v'),
+                        'workflow' => $workflow,
                         'catalog_endpoint' => $submitEndpoint,
                         'fal_endpoint' => $isHiggsfield ? null : $submitEndpoint,
                         'higgsfield_model' => $isHiggsfield ? $submitEndpoint : null,
@@ -232,9 +253,10 @@ class TrendTemplateRemakeService
                         'credits_source' => 'trend_cost',
                         'from_trend_template_id' => $template->id,
                         'trend_template_slug' => $template->slug,
-                        'sheet_endpoint_id' => ($isHiggsfield || $isH3Split) ? null : $template->sheet_endpoint_id,
-                        'skip_character_sheets' => $isHiggsfield || $isH3Split,
+                        'sheet_endpoint_id' => ($isHiggsfield || $isH3Split || $isH3Direct) ? null : $template->sheet_endpoint_id,
+                        'skip_character_sheets' => $isHiggsfield || $isH3Split || $isH3Direct,
                         'face_slots' => $orderedPhotos,
+                        'prompt_editable' => $template->isPromptEditable(),
                         'h3_split' => $isH3Split ? [
                             'phase' => 'prepare',
                             'sketch_url' => $sketchUrl,
@@ -249,8 +271,8 @@ class TrendTemplateRemakeService
                     'duration_value' => is_numeric($duration) ? (string) $duration : (string) $duration,
                     'duration_seconds' => is_numeric($duration) ? (int) $duration : null,
                     'aspect_ratio' => $aspect,
-                    'resolution' => $isH3Split ? '768P' : $resolution,
-                    'with_audio' => $isH3Split,
+                    'resolution' => ($isH3Split || $isH3Direct) ? '768P' : $resolution,
+                    'with_audio' => $isH3Split || $isH3Direct,
                     'credits_charged' => $credits,
                     'status' => UserVideoCreation::STATUS_PENDING,
                     'progress_message' => $progressStart,
@@ -274,6 +296,36 @@ class TrendTemplateRemakeService
             ProcessTrendH3SplitJob::dispatch($creationId)
                 ->onConnection('database')
                 ->delay(now()->addSeconds(2));
+        } elseif ($isH3Direct) {
+            dispatch(function () use (
+                $creationId,
+                $templateId,
+                $userId,
+                $orderedPhotos,
+                $inputAssets,
+                $sketchUrl,
+                $submitEndpoint,
+                $prompt,
+                $aspect,
+                $resolution,
+                $duration,
+                $allowedDurations,
+            ): void {
+                app(self::class)->runH3DirectSubmit(
+                    creationId: $creationId,
+                    templateId: $templateId,
+                    userId: $userId,
+                    orderedPhotos: $orderedPhotos,
+                    inputAssets: $inputAssets,
+                    sketchUrl: $sketchUrl,
+                    submitEndpoint: $submitEndpoint,
+                    prompt: $prompt,
+                    aspect: $aspect,
+                    resolution: $resolution,
+                    duration: $duration,
+                    allowedDurations: $allowedDurations,
+                );
+            })->afterResponse();
         } else {
             // Return immediately so the client can subscribe to websocket progress while
             // media prep + provider submit run after the HTTP response.
@@ -327,6 +379,174 @@ class TrendTemplateRemakeService
         return $id !== ''
             && str_contains($id, 'minimax/h3')
             && str_contains($id, 'reference-to-video');
+    }
+
+    private function resolveClientPrompt(TrendTemplate $template, ?string $clientPrompt): string
+    {
+        $fallback = trim((string) $template->prompt);
+        if (! $template->isPromptEditable()) {
+            return $fallback;
+        }
+
+        $override = trim((string) ($clientPrompt ?? ''));
+        if ($override === '') {
+            return $fallback;
+        }
+
+        // Soft guard — Lab allows long commercial briefs.
+        if (mb_strlen($override) > 100000) {
+            throw new TrendsRemakeException('Prompt is too long.', 422);
+        }
+
+        return $override;
+    }
+
+    /**
+     * Product / packshot MiniMax H3 R2V — same path as Video Lab (no section split).
+     *
+     * @param  list<array{key: string, label: string, role: string, photo_url: string}>  $orderedPhotos
+     * @param  list<array<string, mixed>>  $inputAssets
+     * @param  list<int|string>|null  $allowedDurations
+     */
+    public function runH3DirectSubmit(
+        int $creationId,
+        int $templateId,
+        int $userId,
+        array $orderedPhotos,
+        array $inputAssets,
+        string $sketchUrl,
+        string $submitEndpoint,
+        string $prompt,
+        string $aspect,
+        string $resolution,
+        mixed $duration,
+        ?array $allowedDurations,
+    ): void {
+        $creation = UserVideoCreation::query()->whereKey($creationId)->first();
+        $template = TrendTemplate::query()->whereKey($templateId)->first();
+        $user = User::query()->whereKey($userId)->first();
+        if (! $creation || ! $template || ! $user) {
+            return;
+        }
+
+        $imageUrls = array_values(array_map(
+            static fn (array $p): string => $p['photo_url'],
+            $orderedPhotos,
+        ));
+
+        try {
+            $creation->forceFill(['progress_message' => 'Uploading references…'])->save();
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            $sketchUrl = $this->fal->ensureInferenceVideoUrl($sketchUrl, 'motion-ref.mp4');
+            $imageUrls = array_map(
+                fn (string $url): string => $this->fal->ensureCdnUrl($url),
+                $imageUrls,
+            );
+        } catch (Throwable $e) {
+            report($e);
+            $creation->markFailed(
+                $e->getMessage() !== '' ? $e->getMessage() : 'Failed to prepare media for generation.',
+                'media_rehost_error',
+            );
+            $this->tokens->refund($user, $creation, 'video', 'media_rehost_failed');
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            return;
+        }
+
+        $built = $this->videoInput->build($submitEndpoint, [
+            'prompt' => $prompt,
+            'aspect' => $aspect,
+            'resolution' => $resolution !== '' ? $resolution : '768p',
+            'duration' => $duration,
+            'audio' => true,
+            'allowed_durations' => $allowedDurations,
+            'mode' => 'reference-to-video',
+            'image_urls' => $imageUrls,
+            'video_urls' => [$sketchUrl],
+            'audio_urls' => [],
+            'prompt_expansion_mode' => 'disabled',
+            'enable_safety_checker' => true,
+        ]);
+
+        $falInput = $built['input'];
+        $billing = $this->pricing->resolve($submitEndpoint);
+        $cost = $billing
+            ? $this->videoCost->estimate([
+                'endpoint_id' => $submitEndpoint,
+                'unit' => $billing['unit'],
+                'unit_price' => $billing['unit_price'],
+                'duration_seconds' => $built['duration_seconds'],
+                'audio' => $built['with_audio'],
+                'resolution' => $built['resolution'] ?? $resolution,
+                'aspect' => $built['aspect_ratio'] ?? $aspect,
+                'reference_video_seconds' => $built['duration_seconds'],
+                'reference_image_count' => count($imageUrls),
+            ])
+            : [
+                'fal_cost_usd' => (float) ($template->fal_estimate_usd ?? 0),
+                'breakdown' => ['mode' => 'template_estimate_fallback'],
+            ];
+
+        $settings = is_array($creation->settings) ? $creation->settings : [];
+        $settings = array_merge($settings, [
+            'aspect' => $built['aspect_ratio'],
+            'resolution' => $built['resolution'],
+            'duration' => $duration ?? $built['duration_value'],
+            'audio' => true,
+            'provider' => 'fal',
+            'workflow' => TrendTemplate::WORKFLOW_H3_DIRECT,
+            'fal_input' => $falInput,
+            'fal_endpoint' => $submitEndpoint,
+            'billing_endpoint' => $billing['endpoint_id'] ?? $submitEndpoint,
+            'billing_source' => $billing['source'] ?? null,
+            'billing_unit' => $billing['unit'] ?? null,
+            'billing_unit_price' => $billing['unit_price'] ?? null,
+            'fal_cost_usd' => $cost['fal_cost_usd'],
+            'cost_breakdown' => $cost['breakdown'],
+            'media_counts' => [
+                'images' => count($imageUrls),
+                'videos' => 1,
+                'audios' => 0,
+            ],
+        ]);
+
+        $creation->forceFill([
+            'provider' => 'fal',
+            'input_assets' => $inputAssets,
+            'settings' => $settings,
+            'duration_value' => $built['duration_value'],
+            'duration_seconds' => $built['duration_seconds'],
+            'aspect_ratio' => $built['aspect_ratio'],
+            'resolution' => $built['resolution'],
+            'with_audio' => true,
+            'progress_message' => 'Starting video generation…',
+        ])->save();
+        $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+        try {
+            $this->walletCost->recordBalanceBefore($creation);
+            $submit = $this->fal->submit($submitEndpoint, $falInput);
+        } catch (Throwable $e) {
+            report($e);
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
+            $this->tokens->refund($user, $creation, 'video', 'fal_submit_failed');
+            $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+            return;
+        }
+
+        $creation->markQueued(
+            $submit['request_id'] ?? null,
+            $submit['status_url'] ?? null,
+            $submit['response_url'] ?? null,
+        );
+        if (isset($submit['queue_position'])) {
+            $creation->forceFill(['queue_position' => (int) $submit['queue_position']])->save();
+        }
+        $creation->forceFill(['progress_message' => 'Queued…'])->save();
+        $this->processor->broadcastSnapshot('video', $creation->fresh());
     }
 
     /**

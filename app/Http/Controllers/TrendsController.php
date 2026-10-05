@@ -120,6 +120,7 @@ class TrendsController extends Controller
             'slot_urls.*' => ['nullable', 'string', 'max:2048'],
             'image_urls' => ['nullable', 'array', 'max:8'],
             'image_urls.*' => ['string', 'max:2048'],
+            'prompt' => ['nullable', 'string', 'max:100000'],
             'references' => ['nullable', 'array', 'max:8'],
             'references.*' => ['file', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:10240'],
         ]);
@@ -187,7 +188,12 @@ class TrendsController extends Controller
         }
 
         try {
-            $result = $remake->remake($request->user(), $template, $slotPhotos);
+            $result = $remake->remake(
+                $request->user(),
+                $template,
+                $slotPhotos,
+                is_string($data['prompt'] ?? null) ? $data['prompt'] : null,
+            );
         } catch (InsufficientTokensException $e) {
             return response()->json([
                 'message' => __('messages.not_enough_tokens'),
