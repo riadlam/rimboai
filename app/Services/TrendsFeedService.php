@@ -429,7 +429,9 @@ class TrendsFeedService
                     'url' => $sketchUrl,
                     'label' => $template->isH3DirectWorkflow() ? 'Style & motion reference' : 'Motion choreography',
                     'hint' => $template->isH3DirectWorkflow()
-                        ? 'Locked motion/style clip — upload your product packshot and edit the prompt with your brand.'
+                        ? ($template->isPromptEditable()
+                            ? 'Locked motion/style clip — upload your product packshot and edit the prompt with your brand.'
+                            : 'Locked motion/style clip — upload your product photos to remake this ad.')
                         : 'Locked admin sketch — used for movement only, not faces or outfits.',
                 ] : null),
             'credits' => (int) $template->trend_cost,

@@ -242,6 +242,29 @@ class TrendTemplate extends Model
         ];
     }
 
+    /**
+     * Four product packshots for phone / carousel remakes (MiniMax H3 direct R2V).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function productSlotsFour(): array
+    {
+        $slots = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $slots[] = [
+                'key' => 'product_'.$i,
+                'kind' => 'image',
+                'label' => 'Product '.$i,
+                'role' => $i === 1 ? 'product' : 'product_'.$i,
+                'hint' => 'Clear product packshot. Becomes @Image'.$i.' on the phone screen (swipe order).',
+                'accept' => 'image/*',
+                'required' => true,
+            ];
+        }
+
+        return $slots;
+    }
+
     public function isPromptEditable(): bool
     {
         return (bool) $this->prompt_editable;
