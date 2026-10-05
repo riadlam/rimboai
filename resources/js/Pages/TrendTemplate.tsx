@@ -8,6 +8,7 @@ import LabVideoPlayer from '@/Components/LabVideoPlayer';
 import { ApiError, apiGet, apiPostForm } from '@/lib/api';
 import {
     CREATION_SAFETY_NET_MS,
+    CREATION_WATCHDOG_MS,
     isTerminalCreationStatus,
     matchesCreationEvent,
     subscribeCreationUpdated,
@@ -165,6 +166,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const [downloading, setDownloading] = useState(false);
     const activeCreationIdRef = useRef<number | null>(null);
     const safetyNetTimerRef = useRef<number | null>(null);
+    const watchdogTimerRef = useRef<number | null>(null);
     const remakeCountRef = useRef(workspace.user_remake_count ?? 0);
     const workspaceTypeRef = useRef(workspace.type);
     workspaceTypeRef.current = workspace.type;
@@ -174,6 +176,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         if (safetyNetTimerRef.current != null) {
             window.clearTimeout(safetyNetTimerRef.current);
             safetyNetTimerRef.current = null;
+        }
+        if (watchdogTimerRef.current != null) {
+            window.clearTimeout(watchdogTimerRef.current);
+            watchdogTimerRef.current = null;
         }
     }, []);
 
@@ -207,29 +213,39 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                 window.clearTimeout(safetyNetTimerRef.current);
                 safetyNetTimerRef.current = null;
             }
+            if (watchdogTimerRef.current != null) {
+                window.clearTimeout(watchdogTimerRef.current);
+                watchdogTimerRef.current = null;
+            }
 
             const loop = async () => {
                 if (activeCreationIdRef.current !== creationId) return;
-                if (document.visibilityState === 'visible') {
-                    try {
-                        const data = await apiGet<RemakeCreation>(
-                            statusUrl(workspaceTypeRef.current, creationId),
-                        );
-                        if (activeCreationIdRef.current === creationId) {
-                            applyRemakeStatus(data);
-                        }
-                    } catch {
-                        // Pusher is primary; ignore transient safety-net errors.
+                // Always poll (even in background) so success/failure unlocks the UI.
+                try {
+                    const data = await apiGet<RemakeCreation>(
+                        statusUrl(workspaceTypeRef.current, creationId),
+                    );
+                    if (activeCreationIdRef.current === creationId) {
+                        applyRemakeStatus(data);
                     }
+                } catch {
+                    // Pusher is primary; ignore transient safety-net errors.
                 }
                 if (activeCreationIdRef.current === creationId) {
                     safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
                 }
             };
 
-            safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
+            // First poll immediately so stuck/failed jobs unlock without waiting.
+            safetyNetTimerRef.current = window.setTimeout(loop, 0);
+            watchdogTimerRef.current = window.setTimeout(() => {
+                if (activeCreationIdRef.current !== creationId) return;
+                stopTracking();
+                setCreating(false);
+                setError(t('createFailed'));
+            }, CREATION_WATCHDOG_MS);
         },
-        [applyRemakeStatus],
+        [applyRemakeStatus, stopTracking, t],
     );
 
     const trackCreation = useCallback(

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiError, apiGet, apiPost, apiPostForm } from '@/lib/api';
 import {
     CREATION_SAFETY_NET_MS,
+    CREATION_WATCHDOG_MS,
     isTerminalCreationStatus,
     matchesCreationEvent,
     subscribeCreationUpdated,
@@ -161,6 +162,7 @@ export default function ToolCreatePanel({
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const activeCreationIdRef = useRef<number | null>(null);
     const safetyNetTimerRef = useRef<number | null>(null);
+    const watchdogTimerRef = useRef<number | null>(null);
     const onCreationUpdatedRef = useRef(onCreationUpdated);
     onCreationUpdatedRef.current = onCreationUpdated;
 
@@ -204,6 +206,10 @@ export default function ToolCreatePanel({
             window.clearTimeout(safetyNetTimerRef.current);
             safetyNetTimerRef.current = null;
         }
+        if (watchdogTimerRef.current != null) {
+            window.clearTimeout(watchdogTimerRef.current);
+            watchdogTimerRef.current = null;
+        }
     }, []);
 
     const applyCreationStatus = useCallback(
@@ -242,29 +248,38 @@ export default function ToolCreatePanel({
                 window.clearTimeout(safetyNetTimerRef.current);
                 safetyNetTimerRef.current = null;
             }
+            if (watchdogTimerRef.current != null) {
+                window.clearTimeout(watchdogTimerRef.current);
+                watchdogTimerRef.current = null;
+            }
 
             const loop = async () => {
                 if (activeCreationIdRef.current !== creationId) return;
-                if (document.visibilityState === 'visible') {
-                    try {
-                        const data = await apiGet<ToolCreationResponse>(
-                            `/tools/creations/${creationId}/status`,
-                        );
-                        if (activeCreationIdRef.current === creationId) {
-                            applyCreationStatus(data);
-                        }
-                    } catch {
-                        // Pusher is primary; ignore transient safety-net errors.
+                try {
+                    const data = await apiGet<ToolCreationResponse>(
+                        `/tools/creations/${creationId}/status`,
+                    );
+                    if (activeCreationIdRef.current === creationId) {
+                        applyCreationStatus(data);
                     }
+                } catch {
+                    // Pusher is primary; ignore transient safety-net errors.
                 }
                 if (activeCreationIdRef.current === creationId) {
                     safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
                 }
             };
 
-            safetyNetTimerRef.current = window.setTimeout(loop, CREATION_SAFETY_NET_MS);
+            safetyNetTimerRef.current = window.setTimeout(loop, 0);
+            watchdogTimerRef.current = window.setTimeout(() => {
+                if (activeCreationIdRef.current !== creationId) return;
+                stopTracking();
+                setLoading(false);
+                setProgress(0);
+                setError(t('detail.failed'));
+            }, CREATION_WATCHDOG_MS);
         },
-        [applyCreationStatus],
+        [applyCreationStatus, stopTracking, t],
     );
 
     const trackCreation = useCallback(

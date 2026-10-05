@@ -50,6 +50,14 @@ class ProcessTrendH3SplitJob implements ShouldQueue
                 'tick' => $this->tick,
                 'error' => $e->getMessage(),
             ]);
+            // Do not keep spinning forever — fail + broadcast so the UI unlocks.
+            $processor->abort(
+                $creation,
+                $e->getMessage() !== '' ? $e->getMessage() : 'H3 split failed unexpectedly.',
+                'h3_tick_error',
+            );
+
+            return;
         }
 
         $creation->refresh();
@@ -59,7 +67,7 @@ class ProcessTrendH3SplitJob implements ShouldQueue
 
         if ($this->tick >= self::MAX_TICKS) {
             Log::warning('trends.h3.split_exhausted', ['creation_id' => $this->creationId]);
-            app(TrendH3SplitProcessor::class)->forceTimeout($creation);
+            $processor->forceTimeout($creation);
 
             return;
         }

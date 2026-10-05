@@ -21,7 +21,10 @@ export type CreationUpdatedEvent = {
     };
 };
 
-export const CREATION_SAFETY_NET_MS = 6000;
+export const CREATION_SAFETY_NET_MS = 3000;
+
+/** Client watchdog: unlock UI if status never reaches a terminal state. */
+export const CREATION_WATCHDOG_MS = 45 * 60 * 1000;
 
 export function isTerminalCreationStatus(status?: string | null): boolean {
     return status === 'completed' || status === 'failed' || status === 'cancelled';

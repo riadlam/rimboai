@@ -154,10 +154,10 @@ class TrendH3SplitProcessor
             'sections' => $prepared,
             'estimate' => $estimate,
         ]);
-        $this->saveState($creation, $settings, $state, 'Generating H3 section 1/'.count($prepared).'…', [
-            'fal_cost_usd' => $estimate['fal_cost_usd'],
-            'cost_breakdown' => $estimate['breakdown'],
-        ]);
+        // fal_cost_usd / cost_breakdown live in settings JSON (not table columns).
+        $settings['fal_cost_usd'] = $estimate['fal_cost_usd'];
+        $settings['cost_breakdown'] = $estimate['breakdown'];
+        $this->saveState($creation, $settings, $state, 'Generating H3 section 1/'.count($prepared).'…');
     }
 
     /**
@@ -516,6 +516,10 @@ class TrendH3SplitProcessor
 
     private function fail(UserVideoCreation $creation, string $message, string $type): void
     {
+        if (method_exists($creation, 'isTerminal') && $creation->isTerminal()) {
+            return;
+        }
+
         $creation->markFailed($message, $type);
         $user = User::query()->find($creation->user_id);
         if ($user) {
@@ -529,11 +533,16 @@ class TrendH3SplitProcessor
         ]);
     }
 
+    /**
+     * Public abort path for the queue job (exceptions / stuck ticks) so the UI can unlock.
+     */
+    public function abort(UserVideoCreation $creation, string $message, string $type = 'h3_error'): void
+    {
+        $this->fail($creation, $message, $type);
+    }
+
     public function forceTimeout(UserVideoCreation $creation): void
     {
-        if (method_exists($creation, 'isTerminal') && $creation->isTerminal()) {
-            return;
-        }
         $this->fail($creation, 'H3 split timed out waiting for fal.', 'h3_timeout');
     }
 }
