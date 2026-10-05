@@ -5,6 +5,7 @@ namespace App\Filament\Resources\TrendTemplates;
 use App\Filament\Resources\TrendTemplates\Pages\ManageTrendTemplates;
 use App\Models\TrendTemplate;
 use App\Services\FalService;
+use App\Services\HiggsfieldService;
 use App\Services\TrendTemplateCostEstimator;
 use App\Services\TrendTemplateRemakeService;
 use BackedEnum;
@@ -100,7 +101,43 @@ class TrendTemplateResource extends Resource
                     ->default(TrendTemplate::DEFAULT_ENDPOINT)
                     ->searchable()
                     ->required()
-                    ->helperText('Genjutsu = one-shot silent motion transfer. MiniMax H3 split = camera-cut sections + FlashVSR + original song mux (Sogni-style).')
+                    ->live()
+                    ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
+                        if (! TrendTemplateRemakeService::isH3SplitEndpoint($state)) {
+                            return;
+                        }
+
+                        $set('model_name', static::r2vEndpointOptions()[$state] ?? 'MiniMax H3 split + audio (Sogni-style)');
+                        $set('prompt', TrendTemplate::adaptPromptForH3Split((string) ($get('prompt') ?? '')));
+
+                        $slots = $get('slots');
+                        if (is_array($slots)) {
+                            foreach ($slots as $i => $slot) {
+                                if (! is_array($slot)) {
+                                    continue;
+                                }
+                                $hint = (string) ($slot['hint'] ?? '');
+                                $hint = preg_replace('/character sheet/i', 'reference photo', $hint) ?? $hint;
+                                if ($hint === '' || str_contains(strtolower($hint), '@image')) {
+                                    $n = $i + 1;
+                                    $side = str_contains((string) ($slot['role'] ?? ''), 'left') ? 'LEFT' : 'RIGHT';
+                                    if (($slot['role'] ?? '') === 'extra') {
+                                        $side = 'extra';
+                                    }
+                                    $hint = "Upload a clear identity/outfit reference (your own sheet OK). Becomes @Image{$n}".($side !== 'extra' ? " ({$side} performer)." : '.');
+                                }
+                                $slots[$i]['hint'] = $hint;
+                            }
+                            $set('slots', $slots);
+                        }
+
+                        Notification::make()
+                            ->title('Prompt adapted for MiniMax H3')
+                            ->body('Kept your creative direction, swapped “character sheet” → uploaded reference photos, and added @Audio1 for lip-sync. No auto sheet generation.')
+                            ->success()
+                            ->send();
+                    })
+                    ->helperText('Genjutsu = one-shot silent motion transfer. MiniMax H3 split = camera-cut sections + FlashVSR + original song mux. Selecting H3 adapts the prompt automatically.')
                     ->columnSpanFull(),
                 TextInput::make('model_name')
                     ->label('Display model name')
@@ -264,24 +301,40 @@ class TrendTemplateResource extends Resource
                     ->helperText('Admin override. Estimate suggests a value; you can change it.'),
                 Select::make('sheet_endpoint_id')
                     ->label('Character sheet model')
-                    ->helperText('Used only for fal R2V (e.g. Seedance). Genjutsu and MiniMax H3 split skip sheets and use slot photos directly.')
+                    ->helperText('Only for fal R2V that still run sheets (e.g. Seedance). Hidden/unused for Genjutsu and MiniMax H3 — users upload reference photos (sheets) themselves.')
                     ->options([
                         'fal-ai/nano-banana-pro/edit' => 'Nano Banana Pro Edit',
                         'fal-ai/nano-banana/edit' => 'Nano Banana Edit',
                         'fal-ai/nano-banana-2/edit' => 'Nano Banana 2 Edit',
                     ])
                     ->default(TrendTemplate::DEFAULT_SHEET_ENDPOINT)
-                    ->required()
+                    ->required(fn (Get $get): bool => static::endpointUsesCharacterSheets($get('endpoint_id')))
+                    ->visible(fn (Get $get): bool => static::endpointUsesCharacterSheets($get('endpoint_id')))
+                    ->dehydrated()
                     ->columnSpanFull(),
                 Textarea::make('sheet_prompt')
                     ->label('Character sheet prompt')
                     ->rows(8)
                     ->default(TrendTemplate::defaultSheetPrompt())
-                    ->required()
+                    ->required(fn (Get $get): bool => static::endpointUsesCharacterSheets($get('endpoint_id')))
+                    ->visible(fn (Get $get): bool => static::endpointUsesCharacterSheets($get('endpoint_id')))
+                    ->dehydrated()
                     ->hintAction(static::testSheetFormAction())
-                    ->helperText('Use “Test sheet” to run only the character-sheet step (no Seedance / no user tokens).')
+                    ->helperText('Use “Test sheet” to run only the character-sheet step (no video, no user tokens).')
                     ->columnSpanFull(),
             ]);
+    }
+
+    public static function endpointUsesCharacterSheets(?string $endpointId): bool
+    {
+        if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
+            return false;
+        }
+        if (TrendTemplateRemakeService::isH3SplitEndpoint($endpointId)) {
+            return false;
+        }
+
+        return true;
     }
 
     public static function table(Table $table): Table

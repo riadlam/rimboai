@@ -231,6 +231,38 @@ Locked-off camera with the same framing as the input video. Warm studio lighting
 PROMPT;
     }
 
+    /**
+     * Adapt a Genjutsu/Seedance-style prompt for MiniMax H3 split:
+     * keep creative direction, drop "character sheet" wording (users upload refs already),
+     * and ensure @Audio1 is present for lip-sync timing.
+     */
+    public static function adaptPromptForH3Split(string $prompt): string
+    {
+        $prompt = trim($prompt);
+        if ($prompt === '') {
+            $prompt = self::defaultPromptScaffold();
+        }
+
+        $prompt = preg_replace('/\btheir character sheets?\b/i', 'their uploaded reference photo', $prompt) ?? $prompt;
+        $prompt = preg_replace('/\bcharacter sheets?\b/i', 'uploaded reference photo', $prompt) ?? $prompt;
+        $prompt = preg_replace(
+            '/face exactly as shown in their uploaded reference photo, wearing the outfit exactly as shown in their uploaded reference photo/i',
+            'face and outfit exactly as shown in their uploaded reference photo (Image N)',
+            $prompt,
+        ) ?? $prompt;
+
+        if (! preg_match('/@Audio\d+|Audio\s+\d+/i', $prompt)) {
+            $prompt .= "\n\nUse @Audio1 as the performance soundtrack for timing and lip sync. Match mouth shapes to @Audio1 together with @Video1. Keep the exact song timing; do not invent different lyrics or a different beat.";
+        }
+
+        if (! str_contains(strtolower($prompt), 'uploaded reference photo')
+            && ! preg_match('/@Image\d+|Image\s+\d+/i', $prompt)) {
+            $prompt .= "\n\n@Image1 and @Image2 are the identity/outfit reference photos uploaded by the user (already prepared sheets if they want). Use them for faces and wardrobe only.";
+        }
+
+        return trim($prompt);
+    }
+
     public static function defaultSheetPrompt(): string
     {
         return <<<'PROMPT'
