@@ -265,6 +265,35 @@ class TrendTemplate extends Model
         return $slots;
     }
 
+    /**
+     * Woman + product packshot remake (MiniMax H3 direct R2V).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function womanAndProductSlots(): array
+    {
+        return [
+            [
+                'key' => 'woman',
+                'kind' => 'image',
+                'label' => 'Your woman photo',
+                'role' => 'woman',
+                'hint' => 'Clear face / upper-body photo of the creator. Becomes @Image1 — keep identity consistent in the prompt.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+            [
+                'key' => 'product',
+                'kind' => 'image',
+                'label' => 'Your product photo',
+                'role' => 'product',
+                'hint' => 'Clear packshot of your bottle / product. Becomes @Image2 — edit the prompt with your brand name & dialogue.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+        ];
+    }
+
     public function isPromptEditable(): bool
     {
         return (bool) $this->prompt_editable;

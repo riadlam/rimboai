@@ -61,6 +61,23 @@ class TrendTemplateModelTest extends TestCase
         $this->assertTrue((bool) ($template->clientSlots()[3]['required'] ?? false));
     }
 
+    public function test_woman_and_product_slots_are_editable_prompt_ready(): void
+    {
+        $template = new TrendTemplate([
+            'endpoint_id' => 'minimax/h3/reference-to-video',
+            'workflow' => TrendTemplate::WORKFLOW_H3_DIRECT,
+            'prompt_editable' => true,
+            'slots' => TrendTemplate::womanAndProductSlots(),
+        ]);
+        $this->assertTrue($template->isPromptEditable());
+        $this->assertTrue($template->isH3DirectWorkflow());
+        $slots = $template->clientSlots();
+        $this->assertCount(2, $slots);
+        $this->assertSame('woman', $slots[0]['key']);
+        $this->assertSame('product', $slots[1]['key']);
+        $this->assertSame('product', $slots[1]['role']);
+    }
+
     public function test_cost_estimator_returns_structure(): void
     {
         // Bind lightweight doubles via the real class with catalog miss → zeros ok.
