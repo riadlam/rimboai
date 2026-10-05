@@ -70,6 +70,9 @@
   "promptEditableHint": "This is the full commercial brief. Keep @Image1 / @Video1 tags, then change product name, colors, and on-screen text to match your packshot.",
   "promptEditablePlaceholder": "Describe your product commercial…",
   "promptKeepTags": "Keep @Image1 and @Video1 in the prompt",
+  "expandEditor": "Expand editor",
+  "promptEditor": "Prompt editor",
+  "done": "Done",
   "stats": {
     "uses": "Uses",
     "type": "Type",

@@ -70,6 +70,9 @@
   "promptEditableHint": "هذا نص الإعلان الكامل. أبقِ @Image1 / @Video1 ثم غيّر اسم المنتج والألوان والنصوص حسب صورتك.",
   "promptEditablePlaceholder": "صف إعلان منتجك…",
   "promptKeepTags": "أبقِ @Image1 و @Video1 في الوصف",
+  "expandEditor": "توسيع المحرر",
+  "promptEditor": "محرر الوصف",
+  "done": "تم",
   "stats": {
     "uses": "الاستخدامات",
     "type": "النوع",

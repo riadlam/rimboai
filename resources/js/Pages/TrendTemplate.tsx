@@ -170,7 +170,12 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     );
     const promptEditable = Boolean(workspace.locked?.prompt_editable);
     const [promptDraft, setPromptDraft] = useState(() => String(workspace.locked?.prompt ?? ''));
+    const [promptExpanded, setPromptExpanded] = useState(false);
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
+    const hideMotionReference =
+        workspace.locked?.mode === 'trend_product_r2v' ||
+        workspace.locked?.workflow === 'h3_direct' ||
+        /style|motion/i.test(String(workspace.locked_preview?.label ?? ''));
     const initialActive =
         workspace.active_remake && !isTerminalCreationStatus(workspace.active_remake.status)
             ? workspace.active_remake
@@ -598,7 +603,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         </div>
                                     </div>
 
-                                    {workspace.locked_preview?.url && (
+                                    {workspace.locked_preview?.url && !hideMotionReference && (
                                         <section className="space-y-2">
                                             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
                                                 {workspace.locked_preview.label}
@@ -658,28 +663,46 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                     ))}
 
                                     {promptEditable && (
-                                        <section className="space-y-2">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
-                                                    {t('prompt')}
-                                                </p>
-                                                <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100/90">
-                                                    {t('promptEditableBadge')}
-                                                </span>
+                                        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.05] to-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
+                                            <div className="flex items-center justify-between gap-2 px-3.5 pb-1.5 pt-3">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-sm font-semibold text-white">{t('prompt')}</p>
+                                                        <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100/90">
+                                                            {t('promptEditableBadge')}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-0.5 text-[11px] leading-relaxed text-white/35">
+                                                        {t('promptEditableHint')}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPromptExpanded(true)}
+                                                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+                                                    title={t('expandEditor')}
+                                                    aria-label={t('expandEditor')}
+                                                >
+                                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                        <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
+                                                        <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
+                                                        <path d="M21 7.8V3m0 0h-4.8M21 3l-6 6" />
+                                                        <path d="M3 7.8V3m0 0h4.8M3 3l6 6" />
+                                                    </svg>
+                                                </button>
                                             </div>
-                                            <p className="text-[11px] leading-relaxed text-white/40">
-                                                {t('promptEditableHint')}
-                                            </p>
-                                            <textarea
-                                                value={promptDraft}
-                                                onChange={(e) => setPromptDraft(e.target.value)}
-                                                rows={12}
-                                                className="w-full resize-y rounded-2xl border border-white/10 bg-black/40 px-3.5 py-3 text-[13px] leading-relaxed text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15"
-                                                placeholder={t('promptEditablePlaceholder')}
-                                            />
-                                            <div className="flex items-center justify-between px-0.5 text-[10px] text-white/30">
-                                                <span>{t('promptKeepTags')}</span>
-                                                <span>{promptDraft.length.toLocaleString()}</span>
+                                            <div className="px-3 pb-2">
+                                                <textarea
+                                                    value={promptDraft}
+                                                    onChange={(e) => setPromptDraft(e.target.value)}
+                                                    rows={5}
+                                                    className="max-h-40 w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-[13px]"
+                                                    placeholder={t('promptEditablePlaceholder')}
+                                                />
+                                                <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-white/30">
+                                                    <span>{t('promptKeepTags')}</span>
+                                                    <span>{promptDraft.length.toLocaleString()}</span>
+                                                </div>
                                             </div>
                                         </section>
                                     )}
@@ -1105,6 +1128,54 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {promptExpanded && promptEditable && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 p-3 backdrop-blur-md sm:items-center"
+                        onClick={() => setPromptExpanded(false)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                            className="flex max-h-[min(92vh,820px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101016] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-white">{t('promptEditor')}</h3>
+                                    <p className="text-[11px] text-white/35">{t('promptEditableHint')}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setPromptExpanded(false)}
+                                    className="rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                                >
+                                    {t('done')}
+                                </button>
+                            </div>
+                            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                                <textarea
+                                    autoFocus
+                                    value={promptDraft}
+                                    onChange={(e) => setPromptDraft(e.target.value)}
+                                    rows={18}
+                                    className="min-h-[50vh] w-full resize-y rounded-xl border border-white/10 bg-black/40 p-3.5 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"
+                                    placeholder={t('promptEditablePlaceholder')}
+                                />
+                                <div className="mt-2 flex items-center justify-between px-0.5 text-[11px] text-white/30">
+                                    <span>{t('promptKeepTags')}</span>
+                                    <span>{promptDraft.length.toLocaleString()}</span>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>
