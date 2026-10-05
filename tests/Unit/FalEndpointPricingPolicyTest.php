@@ -25,6 +25,22 @@ class FalEndpointPricingPolicyTest extends TestCase
         $this->assertSame(0.07, $quote['unit_price']);
     }
 
+    public function test_grok_1_5_720p_uses_fal_gallery_rate(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $quote = $policy->quoteVideo([
+            'endpoint_id' => 'xai/grok-imagine-video/v1.5/text-to-video',
+            'unit' => 'seconds',
+            'unit_price' => 0.05,
+            'duration_seconds' => 5,
+            'resolution' => '720p',
+        ]);
+
+        $this->assertNotNull($quote);
+        $this->assertEqualsWithDelta(0.70, $quote['fal_cost_usd'], 1e-6);
+        $this->assertSame(0.14, $quote['unit_price']);
+    }
+
     public function test_pixverse_c1_720p_audio_is_official_rate(): void
     {
         $policy = new FalEndpointPricingPolicy;

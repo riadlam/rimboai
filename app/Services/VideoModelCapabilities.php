@@ -356,12 +356,69 @@ class VideoModelCapabilities
             );
         }
 
-        // Sora / Grok — first-frame I2V
+        // Sora / Grok — first-frame I2V (+ Grok 1.5 multi-image R2V)
         if (str_contains($id, 'sora-2/text-to-video')) {
             return $this->caps(false, false, false, true, false, false, 1, 0, 0, null, 'fal-ai/sora-2/image-to-video', 'image_url', null, null);
         }
-        if (str_contains($id, 'grok-imagine-video/text-to-video')) {
-            return $this->caps(false, false, false, true, false, false, 1, 0, 0, null, 'xai/grok-imagine-video/image-to-video', 'image_url', null, null);
+        if (str_contains($id, 'grok-imagine-video') && str_contains($id, 'text-to-video')) {
+            $is15 = str_contains($id, '/v1.5/');
+            $i2v = $is15
+                ? 'xai/grok-imagine-video/v1.5/image-to-video'
+                : 'xai/grok-imagine-video/image-to-video';
+            $r2v = $is15 ? 'xai/grok-imagine-video/v1.5/reference-to-video' : null;
+
+            return $this->caps(
+                images: $is15,
+                videos: false,
+                audio: false, // native audio always on for 1.5; legacy has no toggle either
+                firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: $is15 ? 7 : 1,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: $r2v,
+                firstFrameEndpoint: $i2v,
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+        if (str_contains($id, 'grok-imagine-video/v1.5/reference-to-video')) {
+            return $this->caps(
+                images: true,
+                videos: false,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 7,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: 'xai/grok-imagine-video/v1.5/reference-to-video',
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
+        }
+        if (str_contains($id, 'grok-imagine-video') && str_contains($id, 'image-to-video')) {
+            return $this->caps(
+                images: false,
+                videos: false,
+                audio: false,
+                firstFrame: true,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 1,
+                maxVideos: 0,
+                maxAudios: 0,
+                reference: null,
+                firstFrameEndpoint: $id,
+                firstFrameParam: 'image_url',
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            );
         }
 
         // Gemini Omni Flash — T2V + I2V + multi-image R2V + single-video edit.

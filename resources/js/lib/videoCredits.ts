@@ -47,8 +47,14 @@ export function estimateVideoCredits(
     const refImages = Math.max(0, options.referenceImageCount ?? 0);
 
     if (endpointId.includes('grok-imagine-video')) {
-        const perSecond = resolution === '480p' ? 0.05 : resolution === '1080p' ? 0.14 : 0.07;
-        const imageFee = endpointId.includes('image-to-video') ? refImages * 0.002 : 0;
+        const is15 = endpointId.includes('/v1.5/');
+        let perSecond = 0.07;
+        if (is15) {
+            perSecond = resolution === '480p' ? 0.08 : resolution === '1080p' ? 0.25 : 0.14;
+        } else {
+            perSecond = resolution === '480p' ? 0.05 : resolution === '1080p' ? 0.14 : 0.07;
+        }
+        const imageFee = !is15 && endpointId.includes('image-to-video') ? refImages * 0.002 : 0;
         return present(round6(durationSeconds * perSecond + imageFee), durationSeconds, 'seconds', perSecond, config);
     }
 

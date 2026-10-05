@@ -243,9 +243,19 @@ class SeedLabModelDescriptions extends Command
                 'حرّك صورة ثابتة بـ Wan 2.2 A14B — تحكم قوي بالحركة من صورة واحدة.'
             ),
             'xai/grok-imagine-video/text-to-video' => $t(
-                'Grok Imagine video — playful, imaginative clips when you want bold creative swings.',
-                'Vidéo Grok Imagine — clips imaginatifs quand vous voulez oser le créatif.',
-                'فيديو Grok Imagine — مقاطع خيالية جريئة عندما تريد إبداعاً جريئاً.'
+                'Grok Imagine video (legacy) — playful clips. Prefer Grok Imagine Video 1.5 for quality and audio.',
+                'Vidéo Grok Imagine (legacy) — clips imaginatifs. Préférez Grok Imagine Video 1.5.',
+                'فيديو Grok Imagine (قديم) — مقاطع خيالية. فضّل Grok Imagine Video 1.5.'
+            ),
+            'xai/grok-imagine-video/v1.5/text-to-video' => $t(
+                'Grok Imagine Video 1.5 — cinematic motion with native audio, up to 15s / 1080p. One image animates; up to 7 refs for R2V.',
+                'Grok Imagine Video 1.5 — motion ciné avec audio natif, jusqu’à 15s / 1080p. Une image anime; jusqu’à 7 refs en R2V.',
+                'Grok Imagine Video 1.5 — حركة سينمائية بصوت أصلي حتى 15ث / 1080p. صورة واحدة تحرّك؛ حتى 7 مراجع لـ R2V.'
+            ),
+            'xai/grok-imagine-video/v1.5/reference-to-video' => $t(
+                'Grok 1.5 reference-to-video — keep identity across 1–7 stills with <IMAGE_0> tags and native sound.',
+                'Grok 1.5 référence→vidéo — garde l’identité sur 1–7 images avec balises <IMAGE_0> et son natif.',
+                'Grok 1.5 مرجع→فيديو — يحافظ على الهوية عبر 1–7 صور مع وسوم <IMAGE_0> وصوت أصلي.'
             ),
             'fal-ai/pixverse/c1/reference-to-video' => $t(
                 'PixVerse C1 — character-consistent video using named subject/background references.',

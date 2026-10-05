@@ -130,12 +130,23 @@ class FalEndpointPricingPolicy
      */
     private function quoteGrok(string $id, int $duration, string $resolution, int $images): array
     {
-        $perSecond = match ($resolution) {
-            '480p' => 0.05,
-            '1080p' => 0.14,
-            default => 0.07,
-        };
-        $imageFee = str_contains($id, 'image-to-video') ? max(0, $images) * 0.002 : 0.0;
+        $is15 = str_contains($id, '/v1.5/');
+        if ($is15) {
+            // fal.ai Grok Imagine Video 1.5 gallery rates (per output second).
+            $perSecond = match ($resolution) {
+                '480p' => 0.08,
+                '1080p' => 0.25,
+                default => 0.14, // 720p
+            };
+            $imageFee = 0.0;
+        } else {
+            $perSecond = match ($resolution) {
+                '480p' => 0.05,
+                '1080p' => 0.14,
+                default => 0.07,
+            };
+            $imageFee = str_contains($id, 'image-to-video') ? max(0, $images) * 0.002 : 0.0;
+        }
         $fal = round(($duration * $perSecond) + $imageFee, 6);
 
         return [
@@ -148,7 +159,7 @@ class FalEndpointPricingPolicy
                 'duration_seconds' => $duration,
                 'resolution' => $resolution,
                 'image_fee_usd' => $imageFee,
-                'policy' => 'grok_imagine',
+                'policy' => $is15 ? 'grok_imagine_v1_5' : 'grok_imagine',
             ],
         ];
     }

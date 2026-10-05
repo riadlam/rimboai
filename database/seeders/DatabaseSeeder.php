@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             VideoReferenceModelSeeder::class,
             Wan22A14bImageToVideoSeeder::class,
             GeminiOmniFlashSeeder::class,
+            GrokImagineVideo15Seeder::class,
             VoiceCloneModelSeeder::class,
         ]);
     }

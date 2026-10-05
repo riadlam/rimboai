@@ -142,6 +142,24 @@ class FalVideoInputBuilder
             'resolution' => true,
             'i2v_aspect_auto' => true,
         ],
+        // Grok Imagine Video 1.5 — native audio always on, up to 15s / 1080p (R2V max 720p).
+        'xai/grok-imagine-video/v1.5/text-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'],
+            'resolution' => true,
+        ],
+        'xai/grok-imagine-video/v1.5/image-to-video' => [
+            'duration_format' => 'int',
+            // I2V follows source image aspect — do not send aspect_ratio.
+            'aspects' => ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'],
+            'resolution' => true,
+            'i2v_aspect_auto' => true,
+        ],
+        'xai/grok-imagine-video/v1.5/reference-to-video' => [
+            'duration_format' => 'int',
+            'aspects' => ['16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'],
+            'resolution' => true,
+        ],
         // Gemini Omni Flash — duration MUST be int (3–10). Audio always on (no generate_audio field).
         'google/gemini-omni-flash' => [
             'duration_format' => 'int',
@@ -238,6 +256,14 @@ class FalVideoInputBuilder
             $input['aspect_ratio'] = $this->mapWan22Aspect($aspect);
         }
 
+        // Grok Imagine Video 1.5 I2V has no aspect_ratio field — framing follows the source image.
+        if (
+            str_contains(strtolower($endpointId), 'grok-imagine-video/v1.5')
+            && str_contains(strtolower($endpointId), 'image-to-video')
+        ) {
+            unset($input['aspect_ratio']);
+        }
+
         if (
             ! empty($profile['resolution'])
             || str_contains(strtolower($endpointId), 'seedance')
@@ -329,6 +355,14 @@ class FalVideoInputBuilder
                 $input['prompt_expansion_mode'] = (string) ($options['prompt_expansion_mode'] ?? 'disabled');
                 $input['enable_safety_checker'] = (bool) ($options['enable_safety_checker'] ?? true);
                 unset($input['image_urls'], $input['video_urls'], $input['audio_urls'], $input['generate_audio']);
+            } elseif (str_contains($id, 'grok-imagine-video') && str_contains($id, 'reference-to-video')) {
+                // Grok R2V: reference_image_urls (1–7) tagged as <IMAGE_0>… in the prompt.
+                if ($imageUrls !== []) {
+                    $refs = array_slice($imageUrls, 0, 7);
+                    $input['reference_image_urls'] = $refs;
+                    $input['prompt'] = $this->normalizeGrokImagineR2VPrompt($prompt, count($refs));
+                }
+                unset($input['image_urls'], $input['video_urls'], $input['audio_urls']);
             } elseif (str_contains($id, 'pixverse/c1/reference-to-video')) {
                 $references = $this->buildPixVerseReferences(array_slice($imageUrls, 0, 5));
                 if ($references !== []) {
@@ -566,6 +600,11 @@ class FalVideoInputBuilder
             return max(5, min(15, $seconds));
         }
 
+        // Grok Imagine Video 1.5: 1–15 seconds on all modes.
+        if (str_contains($id, 'grok-imagine-video/v1.5') || str_contains($id, 'grok-imagine-video')) {
+            return max(1, min(15, $seconds));
+        }
+
         // Seedance 2.5 R2V: 4–30 seconds.
         if ((str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5'))
             && str_contains($id, 'reference-to-video')) {
@@ -655,7 +694,20 @@ class FalVideoInputBuilder
             };
         }
 
-        // Grok Imagine Video only accepts 480p / 720p.
+        // Grok Imagine Video 1.5: T2V/I2V up to 1080p; R2V max 720p.
+        if (str_contains($id, 'grok-imagine-video/v1.5')) {
+            if (str_contains($id, 'reference-to-video')) {
+                return in_array($resolution, ['720p', '1080p', '4k'], true) ? '720p' : '480p';
+            }
+
+            return match ($resolution) {
+                '480p' => '480p',
+                '1080p', '4k' => '1080p',
+                default => '720p',
+            };
+        }
+
+        // Legacy Grok Imagine Video only accepts 480p / 720p.
         if (str_contains($id, 'grok-imagine-video')) {
             return $resolution === '480p' ? '480p' : '720p';
         }
@@ -735,13 +787,21 @@ class FalVideoInputBuilder
         }
 
         if (str_contains($id, 'grok-imagine-video')) {
+            $is15 = str_contains($id, '/v1.5/');
+            $isI2v = str_contains($id, 'image-to-video');
+            $isR2v = str_contains($id, 'reference-to-video');
+
             return [
                 'duration_format' => 'int',
-                'aspects' => str_contains($id, 'image-to-video')
-                    ? ['auto', '16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3']
-                    : ['16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3'],
+                'aspects' => $isI2v
+                    ? ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16']
+                    : ($is15
+                        ? ['16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16']
+                        : ['16:9', '9:16', '1:1', '4:5', '3:4', '3:2', '2:3']),
                 'resolution' => true,
-                'i2v_aspect_auto' => str_contains($id, 'image-to-video'),
+                'i2v_aspect_auto' => $isI2v,
+                // R2V keeps aspect_ratio; I2V follows the source frame.
+                'skip_aspect_on_i2v' => $isI2v && $is15,
             ];
         }
 
@@ -834,6 +894,43 @@ class FalVideoInputBuilder
 
         if ($imageElementCount > 0 && ! preg_match('/@Element\d+\b/i', $prompt)) {
             $prompt = $this->withReferencePrefix($prompt, $this->referenceList('@Element', $imageElementCount));
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * Grok Imagine R2V tags references as <IMAGE_0>, <IMAGE_1>, …
+     */
+    private function normalizeGrokImagineR2VPrompt(string $prompt, int $imageCount): string
+    {
+        $prompt = trim($prompt);
+        if ($imageCount <= 0) {
+            return $prompt;
+        }
+
+        // Map common Lab tags → Grok tags.
+        for ($i = 0; $i < $imageCount; $i++) {
+            $n = $i + 1;
+            $prompt = preg_replace('/@Image'.$n.'\b/i', '<IMAGE_'.$i.'>', $prompt) ?? $prompt;
+            $prompt = preg_replace('/\bImage\s*'.$n.'\b/i', '<IMAGE_'.$i.'>', $prompt) ?? $prompt;
+        }
+
+        if ($prompt === '') {
+            $parts = [];
+            for ($i = 0; $i < $imageCount; $i++) {
+                $parts[] = '<IMAGE_'.$i.'>';
+            }
+
+            return 'Create a cinematic video featuring '.implode(', ', $parts).'.';
+        }
+
+        if (! preg_match('/<IMAGE_\d+>/i', $prompt)) {
+            $tags = [];
+            for ($i = 0; $i < $imageCount; $i++) {
+                $tags[] = '<IMAGE_'.$i.'>';
+            }
+            $prompt = implode(' ', $tags).' '.$prompt;
         }
 
         return $prompt;
