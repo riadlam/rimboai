@@ -91,11 +91,11 @@ export default function Home({ tools, trendTemplates = [], innovationSections = 
                     <Hero />
 
                     <div className="space-y-8 px-4 pb-16 pt-8 sm:px-5 sm:pt-0 lg:px-8">
-                        <ToolRail tools={tools} />
                         <TrendRail templates={trendTemplates} />
                         {innovationSections.map((section) => (
                             <InnovationRail key={section.slug} section={section} />
                         ))}
+                        <ToolRail tools={tools} />
                     </div>
                 </div>
             )}
@@ -1206,53 +1206,51 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
             transition={{ duration: 0.5 }}
         >
             <RailHeader title={t('creatorsTrends')} sub={t('creatorsTrendsSub')} href="/trends" />
-            <div className="scrollbar-hide -mx-1 overflow-x-auto px-1 pb-2">
-                <div className="flex gap-4">
-                    {templates.map((item) => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setSelectedId(item.id)}
-                            className="group relative w-[200px] shrink-0 cursor-pointer overflow-hidden rounded-2xl text-left sm:w-[220px]"
-                        >
-                            <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014]">
-                                {item.coverType === 'video' ? (
-                                    <VideoThumb
-                                        src={item.video_url || item.cover}
-                                        poster={item.thumbnail_url || undefined}
-                                        warmKey={trendWarmKey(item.id, item.video_url || item.cover)}
-                                        playOnHover={false}
-                                        autoPreviewSeconds={HOME_PREVIEW_SECONDS}
-                                        preload="metadata"
-                                        className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                    />
-                                ) : (
-                                    <img
-                                        src={item.cover}
-                                        alt={item.name}
-                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                        loading="lazy"
-                                    />
-                                )}
-                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
-                                {item.featured && (
-                                    <div className="absolute start-3 top-3 inline-flex items-center rounded-md bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                        <svg className="me-1 h-3 w-3 fill-current" viewBox="0 0 24 24">
-                                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                                        </svg>
-                                        {t('featured')}
-                                    </div>
-                                )}
-                                <div className="absolute end-3 top-3 rounded-md border border-white/20 bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-                                    {t('creditsLabel', { count: item.credits })}
+            <div className="scrollbar-hide -mx-1 grid auto-cols-[calc((100%-1.5rem)/3)] grid-flow-col gap-3 overflow-x-auto snap-x snap-mandatory px-1 pb-2 sm:auto-cols-[calc((100%-2rem)/3)] sm:gap-4">
+                {templates.map((item) => (
+                    <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                        className="group relative min-w-0 snap-start cursor-pointer overflow-hidden rounded-2xl text-left"
+                    >
+                        <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#101014] ring-1 ring-white/10">
+                            {item.coverType === 'video' ? (
+                                <VideoThumb
+                                    src={item.video_url || item.cover}
+                                    poster={item.thumbnail_url || undefined}
+                                    warmKey={trendWarmKey(item.id, item.video_url || item.cover)}
+                                    playOnHover={false}
+                                    autoPreviewSeconds={HOME_PREVIEW_SECONDS}
+                                    preload="metadata"
+                                    className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                />
+                            ) : (
+                                <img
+                                    src={item.cover}
+                                    alt={item.name}
+                                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                    loading="lazy"
+                                />
+                            )}
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+                            {item.featured && (
+                                <div className="absolute start-2 top-2 inline-flex items-center rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-semibold text-white sm:start-3 sm:top-3 sm:px-2 sm:text-[10px]">
+                                    <svg className="me-1 h-3 w-3 fill-current" viewBox="0 0 24 24">
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                    </svg>
+                                    {t('featured')}
                                 </div>
-                                <div className="absolute inset-x-0 bottom-0 p-4">
-                                    <h3 className="line-clamp-2 text-sm font-semibold text-white">{item.name}</h3>
-                                </div>
+                            )}
+                            <div className="absolute end-2 top-2 rounded-md border border-white/20 bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm sm:end-3 sm:top-3 sm:px-2 sm:text-[10px]">
+                                {t('creditsLabel', { count: item.credits })}
                             </div>
-                        </button>
-                    ))}
-                </div>
+                            <div className="absolute inset-x-0 bottom-0 p-2.5 sm:p-4">
+                                <h3 className="line-clamp-2 text-[11px] font-semibold leading-snug text-white sm:text-sm">{item.name}</h3>
+                            </div>
+                        </div>
+                    </button>
+                ))}
             </div>
 
             <AnimatePresence>
