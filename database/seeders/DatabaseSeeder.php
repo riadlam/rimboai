@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             GrokImagineVideo15Seeder::class,
             MiniMaxH3LabSeeder::class,
             VenusProductCommercialTrendSeeder::class,
+            EgoPerfumeCommercialTrendSeeder::class,
             VoiceCloneModelSeeder::class,
         ]);
     }
