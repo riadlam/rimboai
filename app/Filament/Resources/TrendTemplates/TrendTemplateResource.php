@@ -100,6 +100,7 @@ class TrendTemplateResource extends Resource
                     ->default(TrendTemplate::DEFAULT_ENDPOINT)
                     ->searchable()
                     ->required()
+                    ->helperText('Genjutsu = one-shot silent motion transfer. MiniMax H3 split = camera-cut sections + FlashVSR + original song mux (Sogni-style).')
                     ->columnSpanFull(),
                 TextInput::make('model_name')
                     ->label('Display model name')
@@ -112,15 +113,15 @@ class TrendTemplateResource extends Resource
                     ->directory('trend-templates/sketches')
                     ->visibility('public')
                     ->required()
-                    ->helperText('Line-drawing motion reference with clear mouth shapes (Kapwing-style). Seedance 2.5 accepts up to ~30s. Not shown as a client upload.')
+                    ->helperText('Motion reference. H3 split auto-cuts into ≤14.5s sections on camera changes. Prefer a sketch that still has the song audio (or upload locked audio below).')
                     ->columnSpanFull(),
                 FileUpload::make('locked_audio')
-                    ->label('Optional audio (unused — not sent to model)')
+                    ->label('Song audio (required for H3 lip-sync mux)')
                     ->acceptedFileTypes(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/*'])
                     ->disk('public')
                     ->directory('trend-templates/audio')
                     ->visibility('public')
-                    ->helperText('Stored only. Trends do not mux or upload audio to fal (keeps generate light; avoids copyright flags).')
+                    ->helperText('For MiniMax H3: used as per-section Audio 1 refs + final mux. If empty, audio is extracted from the motion sketch. Unused for Genjutsu.')
                     ->columnSpanFull(),
                 Repeater::make('slots')
                     ->label('Client face slots')
@@ -160,7 +161,7 @@ class TrendTemplateResource extends Resource
                     ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
                     ->columnSpanFull(),
                 Textarea::make('prompt')
-                    ->label('Seedance prompt (locked)')
+                    ->label('Model prompt (locked)')
                     ->rows(12)
                     ->required()
                     ->default(TrendTemplate::defaultPromptScaffold())
@@ -171,7 +172,7 @@ class TrendTemplateResource extends Resource
                                 $set('prompt', TrendTemplate::defaultPromptScaffold());
                             }),
                     )
-                    ->helperText('Must reference @Video1 and @Image1… matching slot order.')
+                    ->helperText('Reference Image 1… / Video 1 / Audio 1. For H3 lip-sync, include verse lyrics marked by who sings each line.')
                     ->columnSpanFull(),
                 Select::make('aspect_ratio')
                     ->options([
@@ -223,18 +224,34 @@ class TrendTemplateResource extends Resource
                                 if ((int) ($get('trend_cost') ?? 0) <= 0 && $estimate['suggested_trend_cost'] > 0) {
                                     $set('trend_cost', $estimate['suggested_trend_cost']);
                                 }
-                                Notification::make()
-                                    ->title('Estimate ready')
-                                    ->body(sprintf(
-                                        (float) $estimate['sheets_usd'] > 0
-                                            ? 'Provider ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d'
-                                            : 'Provider ≈ $%s (video $%s, no sheets in pipeline). Suggested tokens: %d',
+                                $upscale = (float) ($estimate['upscale_usd'] ?? 0);
+                                if ($upscale > 0) {
+                                    $body = sprintf(
+                                        'Provider ≈ $%s (H3 $%s + FlashVSR $%s). Suggested tokens: %d',
                                         number_format($estimate['fal_estimate_usd'], 4),
                                         number_format($estimate['video_usd'], 4),
-                                        ...((float) $estimate['sheets_usd'] > 0
-                                            ? [number_format($estimate['sheets_usd'], 4), $estimate['suggested_trend_cost']]
-                                            : [$estimate['suggested_trend_cost']]),
-                                    ))
+                                        number_format($upscale, 4),
+                                        $estimate['suggested_trend_cost'],
+                                    );
+                                } elseif ((float) $estimate['sheets_usd'] > 0) {
+                                    $body = sprintf(
+                                        'Provider ≈ $%s (video $%s + sheets $%s). Suggested tokens: %d',
+                                        number_format($estimate['fal_estimate_usd'], 4),
+                                        number_format($estimate['video_usd'], 4),
+                                        number_format($estimate['sheets_usd'], 4),
+                                        $estimate['suggested_trend_cost'],
+                                    );
+                                } else {
+                                    $body = sprintf(
+                                        'Provider ≈ $%s (video $%s, no sheets). Suggested tokens: %d',
+                                        number_format($estimate['fal_estimate_usd'], 4),
+                                        number_format($estimate['video_usd'], 4),
+                                        $estimate['suggested_trend_cost'],
+                                    );
+                                }
+                                Notification::make()
+                                    ->title('Estimate ready')
+                                    ->body($body)
                                     ->success()
                                     ->send();
                             }),
@@ -247,7 +264,7 @@ class TrendTemplateResource extends Resource
                     ->helperText('Admin override. Estimate suggests a value; you can change it.'),
                 Select::make('sheet_endpoint_id')
                     ->label('Character sheet model')
-                    ->helperText('Used only for fal R2V templates. Higgsfield Genjutsu skips sheets and uses slot photos directly.')
+                    ->helperText('Used only for fal R2V (e.g. Seedance). Genjutsu and MiniMax H3 split skip sheets and use slot photos directly.')
                     ->options([
                         'fal-ai/nano-banana-pro/edit' => 'Nano Banana Pro Edit',
                         'fal-ai/nano-banana/edit' => 'Nano Banana Edit',
@@ -548,8 +565,8 @@ class TrendTemplateResource extends Resource
     {
         $options = [
             TrendTemplate::DEFAULT_ENDPOINT => 'Higgsfield Genjutsu Motion Transfer (recommended)',
+            TrendTemplate::SECONDARY_FALLBACK_ENDPOINT => 'MiniMax H3 split + audio (Sogni-style, FlashVSR)',
             TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.5 Reference to Video (fal)',
-            TrendTemplate::SECONDARY_FALLBACK_ENDPOINT => 'MiniMax H3 Reference to Video (faces OK, max 15s)',
             'fal-ai/kling-video/o3/pro/reference-to-video' => 'Kling O3 Pro Reference to Video',
             'fal-ai/kling-video/o3/standard/reference-to-video' => 'Kling O3 Standard Reference to Video',
             'fal-ai/wan/v2.7/reference-to-video' => 'Wan 2.7 Reference to Video (output max 10s)',
@@ -573,8 +590,8 @@ class TrendTemplateResource extends Resource
 
         $preferredKeys = [
             TrendTemplate::DEFAULT_ENDPOINT,
-            TrendTemplate::FALLBACK_ENDPOINT,
             TrendTemplate::SECONDARY_FALLBACK_ENDPOINT,
+            TrendTemplate::FALLBACK_ENDPOINT,
             'fal-ai/kling-video/o3/pro/reference-to-video',
             'fal-ai/kling-video/o3/standard/reference-to-video',
             'fal-ai/wan/v2.7/reference-to-video',

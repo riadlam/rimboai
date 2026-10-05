@@ -48,6 +48,16 @@ class FalWebhookProcessor
             return;
         }
 
+        $settings = $creation->getAttribute('settings');
+        if (
+            $type === 'video'
+            && is_array($settings)
+            && ($settings['workflow'] ?? null) === 'h3_split'
+        ) {
+            // Parent fal_* columns stay empty until finalize; progress is job-driven.
+            return;
+        }
+
         $statusUrl = $creation->getAttribute('fal_status_url');
         if (! is_string($statusUrl) || $statusUrl === '') {
             return;

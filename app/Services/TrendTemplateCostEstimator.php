@@ -57,38 +57,7 @@ class TrendTemplateCostEstimator
 
         if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
             $quoted = HiggsfieldService::estimateGenjutsuUsd($durationSeconds, $resolution);
-            $video = [
-                'fal_cost_usd' => $quoted['fal_cost_usd'],
-                'credits' => 0,
-                'billable_units' => $quoted['billable_units'],
-                'unit' => $quoted['unit'],
-                'unit_price' => $quoted['unit_price'],
-                'breakdown' => $quoted['breakdown'],
-            ];
-            $videoBilling = [
-                'endpoint_id' => $endpointId,
-                'unit' => $quoted['unit'],
-                'unit_price' => $quoted['unit_price'],
-                'source' => 'higgsfield_list',
-            ];
-        } else {
-            $videoBilling = $this->resolveBilling($endpointId);
-            $video = $this->videoCost->estimate([
-                'endpoint_id' => $endpointId,
-                'unit' => $videoBilling['unit'] ?? 'seconds',
-                'unit_price' => $videoBilling['unit_price'] ?? 0,
-                'duration_seconds' => $durationSeconds,
-                'audio' => $audio,
-                'resolution' => $resolution,
-                'aspect' => $aspect,
-                'reference_video_seconds' => $durationSeconds,
-                'reference_image_count' => $slotCount,
-            ]);
-        }
-
-        // Higgsfield Genjutsu uses slot photos directly — no fal character-sheet step.
-        if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
-            $videoUsd = (float) $video['fal_cost_usd'];
+            $videoUsd = (float) $quoted['fal_cost_usd'];
             $suggested = $videoUsd > 0
                 ? max(1, $this->credits->applyFloor($this->credits->fromFalUsd($videoUsd), 'video'))
                 : 0;
@@ -98,19 +67,74 @@ class TrendTemplateCostEstimator
                 'suggested_trend_cost' => $suggested,
                 'video_usd' => $videoUsd,
                 'sheets_usd' => 0.0,
+                'upscale_usd' => 0.0,
                 'breakdown' => [
                     'endpoint_id' => $endpointId,
                     'sheet_endpoint_id' => null,
                     'sheets_in_pipeline' => false,
                     'duration_seconds' => $durationSeconds,
                     'slot_count' => $slotCount,
-                    'video' => $video['breakdown'],
+                    'video' => $quoted['breakdown'],
                     'sheet_one' => ['mode' => 'skipped_for_higgsfield'],
-                    'billing_video' => $videoBilling,
+                    'billing_video' => [
+                        'endpoint_id' => $endpointId,
+                        'unit' => $quoted['unit'],
+                        'unit_price' => $quoted['unit_price'],
+                        'source' => 'higgsfield_list',
+                    ],
                     'billing_sheet' => null,
                 ],
             ];
         }
+
+        if (TrendTemplateRemakeService::isH3SplitEndpoint($endpointId)) {
+            $sections = app(\App\Services\Trends\H3SplitCostEstimator::class)->planFromDuration((float) $durationSeconds);
+            $quoted = app(\App\Services\Trends\H3SplitCostEstimator::class)->estimate($sections, $slotCount);
+            $totalUsd = (float) $quoted['fal_cost_usd'];
+            $suggested = $totalUsd > 0
+                ? max(1, $this->credits->applyFloor($this->credits->fromFalUsd($totalUsd), 'video'))
+                : 0;
+
+            return [
+                'fal_estimate_usd' => $totalUsd,
+                'suggested_trend_cost' => $suggested,
+                'video_usd' => (float) $quoted['video_usd'],
+                'sheets_usd' => 0.0,
+                'upscale_usd' => (float) $quoted['upscale_usd'],
+                'breakdown' => [
+                    'endpoint_id' => $endpointId,
+                    'sheet_endpoint_id' => null,
+                    'sheets_in_pipeline' => false,
+                    'workflow' => 'h3_split',
+                    'duration_seconds' => $durationSeconds,
+                    'slot_count' => $slotCount,
+                    'section_count' => count($sections),
+                    'video' => $quoted['breakdown'],
+                    'sheet_one' => ['mode' => 'skipped_for_h3_split'],
+                    'billing_video' => [
+                        'endpoint_id' => $endpointId,
+                        'unit' => $quoted['unit'],
+                        'unit_price' => $quoted['unit_price'],
+                        'source' => 'fal_h3_split_list',
+                    ],
+                    'billing_sheet' => null,
+                    'upscale_usd' => $quoted['upscale_usd'],
+                ],
+            ];
+        }
+
+        $videoBilling = $this->resolveBilling($endpointId);
+        $video = $this->videoCost->estimate([
+            'endpoint_id' => $endpointId,
+            'unit' => $videoBilling['unit'] ?? 'seconds',
+            'unit_price' => $videoBilling['unit_price'] ?? 0,
+            'duration_seconds' => $durationSeconds,
+            'audio' => $audio,
+            'resolution' => $resolution,
+            'aspect' => $aspect,
+            'reference_video_seconds' => $durationSeconds,
+            'reference_image_count' => $slotCount,
+        ]);
 
         $sheetBase = preg_replace('#/edit$#', '', $sheetEndpoint) ?: $sheetEndpoint;
         $sheetSubmit = str_ends_with($sheetEndpoint, '/edit')
@@ -139,6 +163,7 @@ class TrendTemplateCostEstimator
             'suggested_trend_cost' => $suggested,
             'video_usd' => $videoUsd,
             'sheets_usd' => $sheetsUsd,
+            'upscale_usd' => 0.0,
             'breakdown' => [
                 'endpoint_id' => $endpointId,
                 'sheet_endpoint_id' => $sheetSubmit,

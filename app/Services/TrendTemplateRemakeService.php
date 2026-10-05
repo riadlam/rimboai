@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\InsufficientTokensException;
 use App\Exceptions\TrendsRemakeException;
 use App\Jobs\PollHiggsfieldCreationJob;
+use App\Jobs\ProcessTrendH3SplitJob;
 use App\Models\TrendTemplate;
 use App\Models\User;
 use App\Models\UserVideoCreation;
@@ -15,8 +16,9 @@ use Throwable;
 
 /**
  * Curated Trend Template remake:
- * - Higgsfield Genjutsu: slot photos used directly as image refs (no sheet step)
- * - fal R2V: face photos → fal character sheets → video
+ * - Higgsfield Genjutsu: slot photos as image refs (no sheets)
+ * - MiniMax H3 split: scene-cut sections + FlashVSR + song mux (no sheets)
+ * - Other fal R2V: face photos → character sheets → video
  */
 class TrendTemplateRemakeService
 {
@@ -111,10 +113,18 @@ class TrendTemplateRemakeService
         $prompt = trim((string) $template->prompt);
         $endpointId = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
         $isHiggsfield = HiggsfieldService::isHiggsfieldEndpoint($endpointId);
+        $isH3Split = self::isH3SplitEndpoint($endpointId);
 
         if ($isHiggsfield) {
             if (! $this->higgsfield->configured()) {
                 throw new TrendsRemakeException('Higgsfield is not configured.', 503);
+            }
+            if ($prompt === '') {
+                throw new TrendsRemakeException('Template prompt is invalid.', 422);
+            }
+        } elseif ($isH3Split) {
+            if (! $this->fal->configured()) {
+                throw new TrendsRemakeException('Generation service is not configured.', 503);
             }
             if ($prompt === '') {
                 throw new TrendsRemakeException('Template prompt is invalid.', 422);
@@ -124,19 +134,21 @@ class TrendTemplateRemakeService
         }
 
         $model = $this->resolveVideoModel($endpointId);
-        if (! $model && ! $isHiggsfield) {
+        if (! $model && ! $isHiggsfield && ! $isH3Split) {
             $endpointId = TrendTemplate::FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
         }
-        if (! $model && ! $isHiggsfield) {
+        if (! $model && ! $isHiggsfield && ! $isH3Split) {
             $endpointId = TrendTemplate::SECONDARY_FALLBACK_ENDPOINT;
             $model = $this->resolveVideoModel($endpointId);
+            $isH3Split = self::isH3SplitEndpoint($endpointId);
         }
         if (! $model) {
             throw new TrendsRemakeException(__('messages.model_unavailable'), 422);
         }
         $submitEndpoint = (string) $model->endpoint_id;
         $isHiggsfield = HiggsfieldService::isHiggsfieldEndpoint($submitEndpoint);
+        $isH3Split = self::isH3SplitEndpoint($submitEndpoint);
 
         $credits = (int) $template->trend_cost;
         if ($credits <= 0) {
@@ -174,6 +186,20 @@ class TrendTemplateRemakeService
             'role' => 'motion_sketch',
         ];
 
+        $optionalAudio = $template->optionalAudioUrl();
+        if (is_string($optionalAudio) && $optionalAudio !== '') {
+            $inputAssets[] = [
+                'url' => $optionalAudio,
+                'fal_url' => $optionalAudio,
+                'type' => 'audio',
+                'role' => 'locked_audio',
+            ];
+        }
+
+        $progressStart = $isHiggsfield
+            ? 'Preparing references…'
+            : ($isH3Split ? 'Planning H3 sections…' : 'Generating character sheets…');
+
         try {
             /** @var UserVideoCreation $creation */
             $creation = $this->tokens->reserve(
@@ -192,8 +218,9 @@ class TrendTemplateRemakeService
                         'aspect' => $aspect,
                         'resolution' => $resolution,
                         'duration' => $duration,
-                        'audio' => false,
+                        'audio' => $isH3Split,
                         'provider' => $isHiggsfield ? 'higgsfield' : 'fal',
+                        'workflow' => $isH3Split ? 'h3_split' : ($isHiggsfield ? 'higgsfield_genjutsu' : 'fal_r2v'),
                         'catalog_endpoint' => $submitEndpoint,
                         'fal_endpoint' => $isHiggsfield ? null : $submitEndpoint,
                         'higgsfield_model' => $isHiggsfield ? $submitEndpoint : null,
@@ -201,30 +228,35 @@ class TrendTemplateRemakeService
                         'credits_source' => 'trend_cost',
                         'from_trend_template_id' => $template->id,
                         'trend_template_slug' => $template->slug,
-                        'sheet_endpoint_id' => $isHiggsfield ? null : $template->sheet_endpoint_id,
-                        'skip_character_sheets' => $isHiggsfield,
+                        'sheet_endpoint_id' => ($isHiggsfield || $isH3Split) ? null : $template->sheet_endpoint_id,
+                        'skip_character_sheets' => $isHiggsfield || $isH3Split,
                         'face_slots' => $orderedPhotos,
+                        'h3_split' => $isH3Split ? [
+                            'phase' => 'prepare',
+                            'sketch_url' => $sketchUrl,
+                            'audio_url' => is_string($optionalAudio) ? $optionalAudio : '',
+                            'image_urls' => array_map(fn (array $p) => $p['photo_url'], $orderedPhotos),
+                            'prompt' => $prompt,
+                            'aspect' => $aspect,
+                            'index' => 0,
+                            'sections' => [],
+                        ] : null,
                     ],
                     'duration_value' => is_numeric($duration) ? (string) $duration : (string) $duration,
                     'duration_seconds' => is_numeric($duration) ? (int) $duration : null,
                     'aspect_ratio' => $aspect,
-                    'resolution' => $resolution,
-                    'with_audio' => false,
+                    'resolution' => $isH3Split ? '768P' : $resolution,
+                    'with_audio' => $isH3Split,
                     'credits_charged' => $credits,
                     'status' => UserVideoCreation::STATUS_PENDING,
-                    'progress_message' => $isHiggsfield
-                        ? 'Preparing references…'
-                        : 'Generating character sheets…',
+                    'progress_message' => $progressStart,
                 ]),
             );
         } catch (InsufficientTokensException $e) {
             throw $e;
         }
 
-        $creation->markInProgress(
-            null,
-            $isHiggsfield ? 'Preparing references…' : 'Generating character sheets…',
-        );
+        $creation->markInProgress(null, $progressStart);
         $this->processor->broadcastSnapshot('video', $creation);
 
         $template->increment('uses_count');
@@ -234,39 +266,45 @@ class TrendTemplateRemakeService
         $templateId = (int) $template->id;
         $userId = (int) $user->id;
 
-        // Return immediately so the client can subscribe to websocket progress while
-        // media prep + provider submit run after the HTTP response.
-        dispatch(function () use (
-            $creationId,
-            $templateId,
-            $userId,
-            $orderedPhotos,
-            $inputAssets,
-            $sketchUrl,
-            $submitEndpoint,
-            $prompt,
-            $aspect,
-            $resolution,
-            $duration,
-            $audio,
-            $allowedDurations,
-        ): void {
-            app(self::class)->runSheetsAndSubmit(
-                creationId: $creationId,
-                templateId: $templateId,
-                userId: $userId,
-                orderedPhotos: $orderedPhotos,
-                inputAssets: $inputAssets,
-                sketchUrl: $sketchUrl,
-                submitEndpoint: $submitEndpoint,
-                prompt: $prompt,
-                aspect: $aspect,
-                resolution: $resolution,
-                duration: $duration,
-                audio: $audio,
-                allowedDurations: $allowedDurations,
-            );
-        })->afterResponse();
+        if ($isH3Split) {
+            ProcessTrendH3SplitJob::dispatch($creationId)
+                ->onConnection('database')
+                ->delay(now()->addSeconds(2));
+        } else {
+            // Return immediately so the client can subscribe to websocket progress while
+            // media prep + provider submit run after the HTTP response.
+            dispatch(function () use (
+                $creationId,
+                $templateId,
+                $userId,
+                $orderedPhotos,
+                $inputAssets,
+                $sketchUrl,
+                $submitEndpoint,
+                $prompt,
+                $aspect,
+                $resolution,
+                $duration,
+                $audio,
+                $allowedDurations,
+            ): void {
+                app(self::class)->runSheetsAndSubmit(
+                    creationId: $creationId,
+                    templateId: $templateId,
+                    userId: $userId,
+                    orderedPhotos: $orderedPhotos,
+                    inputAssets: $inputAssets,
+                    sketchUrl: $sketchUrl,
+                    submitEndpoint: $submitEndpoint,
+                    prompt: $prompt,
+                    aspect: $aspect,
+                    resolution: $resolution,
+                    duration: $duration,
+                    audio: $audio,
+                    allowedDurations: $allowedDurations,
+                );
+            })->afterResponse();
+        }
 
         $remakes = $this->trends->userRemakesForTrendTemplate($templateId, $userId);
 
@@ -276,6 +314,15 @@ class TrendTemplateRemakeService
             'user_remake_count' => $remakes['count'],
             'user_latest' => $remakes['latest'],
         ];
+    }
+
+    public static function isH3SplitEndpoint(?string $endpointId): bool
+    {
+        $id = strtolower(trim((string) $endpointId));
+
+        return $id !== ''
+            && str_contains($id, 'minimax/h3')
+            && str_contains($id, 'reference-to-video');
     }
 
     /**
@@ -809,6 +856,25 @@ class TrendTemplateRemakeService
                     : 'Higgsfield',
                 'status' => 'active',
                 'enums' => null,
+            ];
+        }
+
+        if (self::isH3SplitEndpoint($endpointId)) {
+            foreach (['text_to_video_models', 'image_to_video_models'] as $table) {
+                $row = DB::table($table)
+                    ->where('status', 'active')
+                    ->where('endpoint_id', $endpointId)
+                    ->first();
+                if ($row) {
+                    return $row;
+                }
+            }
+
+            return (object) [
+                'endpoint_id' => $endpointId,
+                'name' => 'MiniMax H3 split + audio (Sogni-style)',
+                'status' => 'active',
+                'enums' => json_encode([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
             ];
         }
 

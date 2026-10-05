@@ -208,6 +208,227 @@ class MediaMuxService
         return $seconds > 0 ? $seconds : null;
     }
 
+    /**
+     * Trim a time range from a video (with audio) to public storage.
+     *
+     * @return array{url: string, path: string, content_type: string}
+     */
+    public function sliceVideoRangeToPublicStorage(
+        string $videoUrl,
+        float $startSeconds,
+        float $durationSeconds,
+        string $storageDir = 'trend-remakes/h3-slices',
+        ?string $filename = null,
+    ): array {
+        $ffmpeg = $this->normalize->ffmpegBinary();
+        if ($ffmpeg === null) {
+            throw new RuntimeException('ffmpeg is not available to slice trend video.');
+        }
+
+        $src = $this->downloadToTemp($videoUrl, 'slice-vid-');
+        $outTmp = tempnam(sys_get_temp_dir(), 'slice-out-');
+        if ($outTmp === false) {
+            @unlink($src);
+            throw new RuntimeException('Could not create temp file for video slice.');
+        }
+        @unlink($outTmp);
+        $outMp4 = $outTmp.'.mp4';
+
+        $ss = number_format(max(0, $startSeconds), 3, '.', '');
+        $t = number_format(max(0.5, $durationSeconds), 3, '.', '');
+
+        try {
+            $ok = $this->runFfmpeg($ffmpeg, [
+                '-y',
+                '-ss', $ss,
+                '-i', $src,
+                '-t', $t,
+                '-map', '0:v:0',
+                '-map', '0:a:0?',
+                '-c:v', 'libx264',
+                '-preset', 'veryfast',
+                '-crf', '18',
+                '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-movflags', '+faststart',
+                '-f', 'mp4',
+                $outMp4,
+            ]);
+            if (! $ok) {
+                throw new RuntimeException('ffmpeg video slice failed.');
+            }
+
+            return $this->storePublicFile($outMp4, $storageDir, $filename ?: (Str::uuid()->toString().'.mp4'), 'video/mp4');
+        } finally {
+            @unlink($src);
+            @unlink($outMp4);
+        }
+    }
+
+    /**
+     * Extract/trim an audio range to public mp3 storage.
+     *
+     * @return array{url: string, path: string, content_type: string}
+     */
+    public function sliceAudioRangeToPublicStorage(
+        string $mediaUrl,
+        float $startSeconds,
+        float $durationSeconds,
+        string $storageDir = 'trend-remakes/h3-slices',
+        ?string $filename = null,
+    ): array {
+        $ffmpeg = $this->normalize->ffmpegBinary();
+        if ($ffmpeg === null) {
+            throw new RuntimeException('ffmpeg is not available to slice trend audio.');
+        }
+
+        $src = $this->downloadToTemp($mediaUrl, 'slice-aud-');
+        $outTmp = tempnam(sys_get_temp_dir(), 'slice-aud-out-');
+        if ($outTmp === false) {
+            @unlink($src);
+            throw new RuntimeException('Could not create temp file for audio slice.');
+        }
+        @unlink($outTmp);
+        $outMp3 = $outTmp.'.mp3';
+
+        $ss = number_format(max(0, $startSeconds), 3, '.', '');
+        $t = number_format(max(0.5, $durationSeconds), 3, '.', '');
+
+        try {
+            $ok = $this->runFfmpeg($ffmpeg, [
+                '-y',
+                '-ss', $ss,
+                '-i', $src,
+                '-t', $t,
+                '-vn',
+                '-c:a', 'libmp3lame',
+                '-b:a', '192k',
+                $outMp3,
+            ]);
+            if (! $ok) {
+                throw new RuntimeException('ffmpeg audio slice failed.');
+            }
+
+            return $this->storePublicFile($outMp3, $storageDir, $filename ?: (Str::uuid()->toString().'.mp3'), 'audio/mpeg');
+        } finally {
+            @unlink($src);
+            @unlink($outMp3);
+        }
+    }
+
+    /**
+     * Extract full audio track from a video/audio URL to public mp3.
+     *
+     * @return array{url: string, path: string, content_type: string}
+     */
+    public function extractAudioToPublicStorage(
+        string $mediaUrl,
+        string $storageDir = 'trend-remakes/h3-audio',
+        ?string $filename = null,
+    ): array {
+        $duration = $this->probeUrlDurationSeconds($mediaUrl) ?? 600.0;
+
+        return $this->sliceAudioRangeToPublicStorage($mediaUrl, 0.0, $duration, $storageDir, $filename);
+    }
+
+    /**
+     * Concatenate MP4 clips (re-encode for safety) to public storage.
+     *
+     * @param  list<string>  $videoUrls
+     * @return array{url: string, path: string, content_type: string}
+     */
+    public function concatVideosToPublicStorage(
+        array $videoUrls,
+        string $storageDir = 'trend-remakes/h3-final',
+        ?string $filename = null,
+    ): array {
+        $videoUrls = array_values(array_filter($videoUrls, fn ($u) => is_string($u) && $u !== ''));
+        if ($videoUrls === []) {
+            throw new RuntimeException('No videos to concatenate.');
+        }
+        if (count($videoUrls) === 1) {
+            // Re-host single clip so finalize always owns a public path.
+            $tmp = $this->downloadToTemp($videoUrls[0], 'concat-one-');
+            try {
+                return $this->storePublicFile($tmp, $storageDir, $filename ?: (Str::uuid()->toString().'.mp4'), 'video/mp4');
+            } finally {
+                @unlink($tmp);
+            }
+        }
+
+        $ffmpeg = $this->normalize->ffmpegBinary();
+        if ($ffmpeg === null) {
+            throw new RuntimeException('ffmpeg is not available to concat trend videos.');
+        }
+
+        $tmps = [];
+        $listFile = tempnam(sys_get_temp_dir(), 'concat-list-');
+        $outTmp = tempnam(sys_get_temp_dir(), 'concat-out-');
+        if ($listFile === false || $outTmp === false) {
+            throw new RuntimeException('Could not create temp files for concat.');
+        }
+        @unlink($outTmp);
+        $outMp4 = $outTmp.'.mp4';
+
+        try {
+            $lines = [];
+            foreach ($videoUrls as $i => $url) {
+                $path = $this->downloadToTemp($url, 'concat-part-'.$i.'-');
+                $tmps[] = $path;
+                $escaped = str_replace("'", "'\\''", $path);
+                $lines[] = "file '{$escaped}'";
+            }
+            file_put_contents($listFile, implode("\n", $lines)."\n");
+
+            $ok = $this->runFfmpeg($ffmpeg, [
+                '-y',
+                '-f', 'concat',
+                '-safe', '0',
+                '-i', $listFile,
+                '-c:v', 'libx264',
+                '-preset', 'veryfast',
+                '-crf', '18',
+                '-pix_fmt', 'yuv420p',
+                '-an',
+                '-movflags', '+faststart',
+                '-f', 'mp4',
+                $outMp4,
+            ]);
+            if (! $ok) {
+                throw new RuntimeException('ffmpeg concat failed.');
+            }
+
+            return $this->storePublicFile($outMp4, $storageDir, $filename ?: (Str::uuid()->toString().'.mp4'), 'video/mp4');
+        } finally {
+            foreach ($tmps as $path) {
+                @unlink($path);
+            }
+            @unlink($listFile);
+            @unlink($outMp4);
+        }
+    }
+
+    /**
+     * @return array{url: string, path: string, content_type: string}
+     */
+    private function storePublicFile(string $localPath, string $storageDir, string $filename, string $contentType): array
+    {
+        $bytes = @file_get_contents($localPath);
+        if ($bytes === false || $bytes === '') {
+            throw new RuntimeException('Media file was empty.');
+        }
+
+        $path = trim($storageDir, '/').'/'.$filename;
+        Storage::disk('public')->put($path, $bytes);
+
+        return [
+            'url' => url('/storage/'.$path),
+            'path' => $path,
+            'content_type' => $contentType,
+        ];
+    }
+
     private function runTrimVideo(string $ffmpeg, string $sourcePath, string $outPath, float $maxSeconds): bool
     {
         $t = number_format($maxSeconds, 3, '.', '');
