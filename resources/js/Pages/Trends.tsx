@@ -412,7 +412,8 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
                             poster={videoPoster}
                             warmKey={trendWarmKey(tmpl.id, videoSrc)}
                             playOnHover={false}
-                            autoLoop
+                            autoPreviewSeconds={5}
+                            preload="metadata"
                             className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                         />
                     ) : showImage ? (

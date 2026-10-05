@@ -11,6 +11,9 @@ import { TemplateDetailModal, type TrendTemplate } from '@/Pages/Trends';
 import type { InnovationPost } from '@/data/innovationPrompts';
 import { trendWarmKey } from '@/lib/trendWarmVideo';
 import { entranceInitial } from '@/lib/motionWebView';
+import { releaseMutedPreview, requestMutedPreviewPlay } from '@/lib/mutedPreviewPlayback';
+
+const HOME_PREVIEW_SECONDS = 5;
 
 type HomeInnovationSection = {
     slug: string;
@@ -1055,20 +1058,55 @@ function ToolChip({
 
     useEffect(() => {
         const el = videoRef.current;
-        if (!el) return;
+        if (!el || !tool.video) return;
+
+        const softLoop = () => {
+            if (el.currentTime >= HOME_PREVIEW_SECONDS) {
+                try {
+                    el.currentTime = 0;
+                } catch {
+                    /* ignore */
+                }
+            }
+        };
+
         const io = new IntersectionObserver(
             ([entry]) => {
-                if (entry?.isIntersecting) {
-                    void el.play().catch(() => undefined);
+                const visible = Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5);
+                if (visible) {
+                    el.muted = true;
+                    if (!requestMutedPreviewPlay(el)) return;
+                    void el.play().catch(() => {
+                        releaseMutedPreview(el);
+                    });
                 } else {
-                    el.pause();
+                    releaseMutedPreview(el);
                 }
             },
-            { rootMargin: '80px', threshold: 0.2 },
+            { rootMargin: '0px', threshold: [0, 0.5, 1] },
         );
         io.observe(el);
-        return () => io.disconnect();
-    }, []);
+        el.addEventListener('timeupdate', softLoop);
+
+        const onVis = () => {
+            if (document.visibilityState !== 'visible') return;
+            const rect = el.getBoundingClientRect();
+            const vh = window.innerHeight || 0;
+            const visibleH = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
+            if (visibleH / Math.max(rect.height, 1) < 0.5) return;
+            el.muted = true;
+            if (!requestMutedPreviewPlay(el)) return;
+            void el.play().catch(() => releaseMutedPreview(el));
+        };
+        document.addEventListener('visibilitychange', onVis);
+
+        return () => {
+            io.disconnect();
+            el.removeEventListener('timeupdate', softLoop);
+            document.removeEventListener('visibilitychange', onVis);
+            releaseMutedPreview(el);
+        };
+    }, [tool.video]);
 
     return (
         <motion.div
@@ -1098,7 +1136,6 @@ function ToolChip({
                         poster={tool.poster}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                         muted
-                        loop
                         playsInline
                         preload="metadata"
                     />
@@ -1185,7 +1222,8 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
                                         poster={item.thumbnail_url || undefined}
                                         warmKey={trendWarmKey(item.id, item.video_url || item.cover)}
                                         playOnHover={false}
-                                        autoLoop
+                                        autoPreviewSeconds={HOME_PREVIEW_SECONDS}
+                                        preload="metadata"
                                         className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-105"
                                     />
                                 ) : (

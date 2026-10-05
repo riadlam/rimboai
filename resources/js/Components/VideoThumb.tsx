@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent, type VideoHTMLAttributes } from 'react';
 import { bindTrendWarmVideo } from '@/lib/trendWarmVideo';
+import { releaseMutedPreview, requestMutedPreviewPlay } from '@/lib/mutedPreviewPlayback';
 
 type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls' | 'loop'> & {
     /** Seconds into the clip to freeze as the thumbnail frame. Defaults to first scene. */
@@ -8,12 +9,13 @@ type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'
     playOnHover?: boolean;
     /**
      * When set (and playOnHover is false), muted-autoplay the first N seconds in a loop
-     * while the card is in view — used on Trends feed.
+     * while the card is in view — used on Trends feed / Home rails.
      */
     autoPreviewSeconds?: number;
     /**
      * When true (and playOnHover is false), muted-autoplay the full clip in a loop
      * while the card is in view until the user navigates away.
+     * Prefer `autoPreviewSeconds` for grids (anti-hang).
      */
     autoLoop?: boolean;
     /**
@@ -118,7 +120,7 @@ export default function VideoThumb({
     warmKey,
     muted = true,
     playsInline = true,
-    preload = 'auto',
+    preload: preloadProp,
     onLoadedMetadata,
     onMouseEnter,
     onMouseLeave,
@@ -142,6 +144,9 @@ export default function VideoThumb({
         !autoLoop && typeof autoPreviewSeconds === 'number' && autoPreviewSeconds > 0
             ? autoPreviewSeconds
             : undefined;
+    const budgetedPreview = previewMode && Boolean(clipPreviewSeconds);
+    // Grids must not preload aggressively — hang prevention.
+    const preload = preloadProp ?? (previewMode ? 'metadata' : 'auto');
     const effectivePoster = poster || capturedPoster || undefined;
     // Only treat as still-image card when poster is not the video URL itself (CDN thumbs, data URLs).
     const stillOnly =
@@ -182,6 +187,7 @@ export default function VideoThumb({
                         setCapturedPoster(poster);
                     }
                 }
+                releaseMutedPreview(el);
                 setLifted(true);
                 setPlaying(false);
             },
@@ -252,13 +258,20 @@ export default function VideoThumb({
                 }
                 requestAnimationFrame(() => {
                     el.muted = true;
+                    if (budgetedPreview && !requestMutedPreviewPlay(el)) {
+                        setPlaying(false);
+                        return;
+                    }
                     void el.play()
                         .then(() => setPlaying(true))
-                        .catch(() => setPlaying(false));
+                        .catch(() => {
+                            if (budgetedPreview) releaseMutedPreview(el);
+                            setPlaying(false);
+                        });
                 });
             },
         });
-    }, [warmKey, src, previewMode, playOnHover, fit, seekTo, autoLoop, poster]);
+    }, [warmKey, src, previewMode, playOnHover, fit, seekTo, autoLoop, poster, budgetedPreview]);
 
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;
@@ -266,9 +279,10 @@ export default function VideoThumb({
         const io = new IntersectionObserver(
             (entries) => {
                 const entry = entries[0];
-                setInView(Boolean(entry?.isIntersecting));
+                setInView(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5));
             },
-            { rootMargin: '80px', threshold: 0.35 },
+            // Only truly visible cards compete for the muted-preview budget.
+            { rootMargin: '0px', threshold: [0, 0.5, 1] },
         );
         io.observe(node);
         return () => io.disconnect();
@@ -282,15 +296,74 @@ export default function VideoThumb({
 
         if (inView) {
             video.muted = true;
+            if (budgetedPreview && !requestMutedPreviewPlay(video)) {
+                setPlaying(false);
+                return;
+            }
             void video
                 .play()
                 .then(() => setPlaying(true))
-                .catch(() => undefined);
+                .catch(() => {
+                    if (budgetedPreview) releaseMutedPreview(video);
+                    setPlaying(false);
+                });
         } else {
-            video.pause();
+            if (budgetedPreview) {
+                releaseMutedPreview(video);
+            } else {
+                video.pause();
+                try {
+                    video.currentTime = 0;
+                } catch {
+                    /* ignore */
+                }
+            }
             setPlaying(false);
         }
-    }, [inView, previewMode, src, lifted]);
+
+        return () => {
+            if (budgetedPreview && videoRef.current) {
+                releaseMutedPreview(videoRef.current);
+            }
+        };
+    }, [inView, previewMode, src, lifted, budgetedPreview]);
+
+    // If tab was hidden (budget wiped), resume when visible again while still in view.
+    useEffect(() => {
+        if (!budgetedPreview) return;
+        const onVis = () => {
+            if (document.visibilityState !== 'visible') return;
+            const video = videoRef.current;
+            if (!video || !inView || lifted) return;
+            video.muted = true;
+            if (!requestMutedPreviewPlay(video)) {
+                setPlaying(false);
+                return;
+            }
+            void video
+                .play()
+                .then(() => setPlaying(true))
+                .catch(() => {
+                    releaseMutedPreview(video);
+                    setPlaying(false);
+                });
+        };
+        document.addEventListener('visibilitychange', onVis);
+        return () => document.removeEventListener('visibilitychange', onVis);
+    }, [budgetedPreview, inView, lifted, src]);
+
+    // If another preview steals our budget slot, keep React state in sync.
+    useEffect(() => {
+        if (!budgetedPreview) return;
+        const video = videoRef.current;
+        if (!video) return;
+        const onPause = () => {
+            if (!video.paused) return;
+            setPlaying(false);
+        };
+        video.addEventListener('pause', onPause);
+        return () => video.removeEventListener('pause', onPause);
+    }, [budgetedPreview, src]);
 
     const markReady = useCallback(
         (video: HTMLVideoElement) => {
@@ -366,6 +439,10 @@ export default function VideoThumb({
                 /* ignore */
             }
             if (inView) {
+                if (budgetedPreview && !requestMutedPreviewPlay(video)) {
+                    setPlaying(false);
+                    return;
+                }
                 void video.play().catch(() => undefined);
             }
         }
@@ -419,7 +496,7 @@ export default function VideoThumb({
                     poster={effectivePoster}
                     muted={muted}
                     playsInline={playsInline}
-                    loop={autoLoop}
+                    loop={autoLoop && !clipPreviewSeconds}
                     preload={preload}
                     className={`absolute inset-0 size-full ${fit} transition-opacity duration-200 ${
                         lifted || playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
