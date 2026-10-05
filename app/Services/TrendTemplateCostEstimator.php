@@ -55,6 +55,48 @@ class TrendTemplateCostEstimator
         $durationSeconds = $this->durationSeconds($data['duration'] ?? null, $data['reference_video_seconds'] ?? null);
         $slotCount = $this->imageSlotCount($data['slots'] ?? null);
 
+        if (TrendTemplate::isCharacterSheetEndpoint($endpointId)) {
+            $sheetEndpoint = trim((string) ($data['sheet_endpoint_id'] ?? TrendTemplate::DEFAULT_SHEET_ENDPOINT))
+                ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT;
+            $sheetBase = preg_replace('#/edit$#', '', $sheetEndpoint) ?: $sheetEndpoint;
+            $sheetSubmit = str_ends_with($sheetEndpoint, '/edit')
+                ? $sheetEndpoint
+                : (app(FalImageInputBuilder::class)->resolveEndpoint($sheetBase, ['https://example.com/x.jpg']));
+            $sheetBilling = $this->resolveBilling($sheetSubmit) ?? $this->resolveBilling($sheetBase);
+            $sheetOne = $this->imageCost->estimate([
+                'endpoint_id' => $sheetSubmit,
+                'unit' => $sheetBilling['unit'] ?? 'image',
+                'unit_price' => $sheetBilling['unit_price'] ?? 0,
+                'aspect' => '16:9',
+                'resolution' => '1K',
+                'quantity' => 1,
+                'reference_count' => 1,
+            ]);
+            $sheetsUsd = round(((float) $sheetOne['fal_cost_usd']) * max(1, $slotCount), 6);
+            $suggested = $sheetsUsd > 0
+                ? max(1, $this->credits->applyFloor($this->credits->fromFalUsd($sheetsUsd), 'image'))
+                : 0;
+
+            return [
+                'fal_estimate_usd' => $sheetsUsd,
+                'suggested_trend_cost' => $suggested,
+                'video_usd' => 0.0,
+                'sheets_usd' => $sheetsUsd,
+                'upscale_usd' => 0.0,
+                'breakdown' => [
+                    'endpoint_id' => $endpointId,
+                    'sheet_endpoint_id' => $sheetSubmit,
+                    'sheets_in_pipeline' => true,
+                    'workflow' => 'character_sheet',
+                    'slot_count' => max(1, $slotCount),
+                    'video' => ['mode' => 'skipped_for_character_sheet'],
+                    'sheet_one' => $sheetOne['breakdown'],
+                    'billing_video' => null,
+                    'billing_sheet' => $sheetBilling,
+                ],
+            ];
+        }
+
         if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
             $quoted = HiggsfieldService::estimateGenjutsuUsd($durationSeconds, $resolution);
             $videoUsd = (float) $quoted['fal_cost_usd'];

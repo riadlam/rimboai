@@ -31,6 +31,7 @@ type TrendTemplateCard = {
     id: string;
     creation_id: number;
     type: 'image' | 'video' | 'music' | 'template';
+    output_kind?: 'character_sheet' | 'video' | null;
     name: string;
     trend_title?: string | null;
     creator: string;
@@ -81,6 +82,8 @@ type RemakeCreation = {
 type TrendWorkspace = {
     key: string;
     type: 'image' | 'video' | 'music' | 'template';
+    /** character_sheet = Nano Banana Pro sheet product; otherwise video remake */
+    output_kind?: 'character_sheet' | 'video' | null;
     creation_id: number;
     template: TrendTemplateCard;
     uploads: TrendUpload[];
@@ -120,22 +123,33 @@ function isMobileViewport(): boolean {
     return window.matchMedia('(max-width: 767px)').matches;
 }
 
-function creationMediaKind(type: TrendWorkspace['type']): 'image' | 'video' | 'music' {
-    if (type === 'template') return 'video';
+function creationMediaKind(
+    type: TrendWorkspace['type'],
+    outputKind?: TrendWorkspace['output_kind'],
+): 'image' | 'video' | 'music' {
+    if (type === 'template') {
+        return outputKind === 'character_sheet' ? 'image' : 'video';
+    }
     return type;
 }
 
 function statusUrl(type: TrendWorkspace['type'], id: number): string {
+    // Curated templates (including character sheets) are stored as video creations.
+    if (type === 'template') return `/lab/video/creations/${id}/status`;
     const kind = creationMediaKind(type);
     if (kind === 'image') return `/lab/image/creations/${id}/status`;
     if (kind === 'music') return `/lab/music/creations/${id}/status`;
     return `/lab/video/creations/${id}/status`;
 }
 
-function resultSrc(type: TrendWorkspace['type'], c: RemakeCreation | UserTrendLatest): string | null {
-    const kind = creationMediaKind(type);
+function resultSrc(
+    type: TrendWorkspace['type'],
+    c: RemakeCreation | UserTrendLatest,
+    outputKind?: TrendWorkspace['output_kind'],
+): string | null {
+    const kind = creationMediaKind(type, outputKind);
     if (kind === 'video') return c.video_url || c.preview_url || null;
-    if (kind === 'image') return ('images' in c && c.images?.[0]) || c.preview_url || null;
+    if (kind === 'image') return ('images' in c && c.images?.[0]) || c.preview_url || c.thumbnail_url || null;
     return ('cover_url' in c ? c.cover_url : null) || c.preview_url || null;
 }
 
@@ -144,6 +158,8 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const { props } = usePage<PageProps>();
     const isGuest = props.auth.user === null;
     const tmpl = workspace.template;
+    const outputKind = workspace.output_kind ?? tmpl.output_kind ?? null;
+    const mediaKind = creationMediaKind(workspace.type, outputKind);
 
     const [slots, setSlots] = useState<Record<string, FileSlot>>(() =>
         Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])),
@@ -461,12 +477,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const handleDownloadResult = async () => {
         if (!job || downloading) return;
         const url =
-            creationMediaKind(workspace.type) === 'music'
+            mediaKind === 'music'
                 ? job.audio_url || job.preview_url || null
-                : resultSrc(workspace.type, job);
+                : resultSrc(workspace.type, job, outputKind);
         if (!url) return;
-
-        const mediaKind = creationMediaKind(workspace.type);
         const filename =
             mediaKind === 'video'
                 ? `video-${job.id}.mp4`
@@ -485,9 +499,9 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     };
 
     const replaceExample = completedRemakeCount > 1 && exampleOverride != null;
-    const exampleSrc = replaceExample ? resultSrc(workspace.type, exampleOverride) : null;
+    const exampleSrc = replaceExample ? resultSrc(workspace.type, exampleOverride, outputKind) : null;
     const showVideo = replaceExample
-        ? creationMediaKind(workspace.type) === 'video' && Boolean(exampleSrc)
+        ? mediaKind === 'video' && Boolean(exampleSrc)
         : tmpl.coverType === 'video' && Boolean(tmpl.video_url || tmpl.cover);
     const exampleVideoSrc = replaceExample && exampleSrc ? exampleSrc : tmpl.video_url || tmpl.cover;
     const examplePoster =
@@ -508,13 +522,12 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
     const jobDone = job?.status === 'completed';
     const jobFailed = job?.status === 'failed' || job?.status === 'cancelled';
     const showDesktopProgress = Boolean(job) && (creating || jobInFlight || jobDone || jobFailed);
-    const doneSrc = job ? resultSrc(workspace.type, job) : null;
+    const doneSrc = job ? resultSrc(workspace.type, job, outputKind) : null;
 
     const previewItem: ImageLabPreviewItem | null = (() => {
         if (!job || job.status !== 'completed') return null;
-        const src = resultSrc(workspace.type, job);
+        const src = resultSrc(workspace.type, job, outputKind);
         if (!src && workspace.type !== 'music') return null;
-        const mediaKind = creationMediaKind(workspace.type);
         const method =
             mediaKind === 'image'
                 ? 'image-to-image'
@@ -836,7 +849,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                                     {t('resultReady')}
                                                                 </h3>
                                                             </div>
-                                                            {creationMediaKind(workspace.type) === 'video' && doneSrc ? (
+                                                            {mediaKind === 'video' && doneSrc ? (
                                                                 <div className="aspect-video w-full overflow-hidden rounded-2xl border border-white/10">
                                                                     <LabVideoPlayer
                                                                         src={doneSrc}
@@ -847,6 +860,18 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                                         className="!rounded-none"
                                                                     />
                                                                 </div>
+                                                            ) : mediaKind === 'image' && doneSrc ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setDetailsOpen(true)}
+                                                                    className="w-full overflow-hidden rounded-2xl border border-white/10"
+                                                                >
+                                                                    <img
+                                                                        src={doneSrc}
+                                                                        alt=""
+                                                                        className="max-h-[60vh] w-full object-contain"
+                                                                    />
+                                                                </button>
                                                             ) : null}
                                                             <div className="grid grid-cols-3 gap-2">
                                                                 <button
@@ -975,7 +1000,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                             <p className="mt-1 text-[12px] text-white/45">{t('tapForDetails')}</p>
                                         </div>
                                         <div className="space-y-3">
-                                            {creationMediaKind(workspace.type) === 'video' && doneSrc ? (
+                                            {mediaKind === 'video' && doneSrc ? (
                                                 <div className="aspect-[9/16] max-h-[52vh] w-full overflow-hidden rounded-2xl border border-white/10">
                                                     <LabVideoPlayer
                                                         src={doneSrc}
@@ -1025,7 +1050,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                 disabled={
                                                     downloading ||
                                                     !(
-                                                        creationMediaKind(workspace.type) === 'music'
+                                                        mediaKind === 'music'
                                                             ? job?.audio_url || job?.preview_url
                                                             : doneSrc
                                                     )

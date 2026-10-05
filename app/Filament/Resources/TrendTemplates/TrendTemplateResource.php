@@ -103,6 +103,23 @@ class TrendTemplateResource extends Resource
                     ->required()
                     ->live()
                     ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
+                        if (TrendTemplate::isCharacterSheetEndpoint($state)) {
+                            $set('model_name', 'Nano Banana Pro Character Sheet');
+                            $set('sheet_endpoint_id', TrendTemplate::DEFAULT_SHEET_ENDPOINT);
+                            $set('sheet_prompt', $get('sheet_prompt') ?: TrendTemplate::defaultSheetPrompt());
+                            $set('prompt', 'Character sheet only — prompt lives in sheet_prompt.');
+                            $set('slots', TrendTemplate::characterSheetSlots());
+                            $set('duration', null);
+                            $set('generate_audio', false);
+                            Notification::make()
+                                ->title('Character Sheet trend mode')
+                                ->body('No motion sketch. Users upload one photo; Nano Banana Pro builds the multi-angle sheet.')
+                                ->success()
+                                ->send();
+
+                            return;
+                        }
+
                         if (! TrendTemplateRemakeService::isH3SplitEndpoint($state)) {
                             return;
                         }
@@ -138,7 +155,7 @@ class TrendTemplateResource extends Resource
                             ->success()
                             ->send();
                     })
-                    ->helperText('Genjutsu = one-shot silent motion transfer. MiniMax H3 split = camera-cut sections + FlashVSR + original song mux. Selecting H3 adapts the prompt automatically.')
+                    ->helperText('Genjutsu / H3 / Seedance = video trends. “Character Sheet only” = Nano Banana Pro photo→sheet for the Trends feed.')
                     ->columnSpanFull(),
                 TextInput::make('model_name')
                     ->label('Display model name')
@@ -150,7 +167,8 @@ class TrendTemplateResource extends Resource
                     ->disk('public')
                     ->directory('trend-templates/sketches')
                     ->visibility('public')
-                    ->required()
+                    ->required(fn (Get $get): bool => ! TrendTemplate::isCharacterSheetEndpoint($get('endpoint_id')))
+                    ->visible(fn (Get $get): bool => ! TrendTemplate::isCharacterSheetEndpoint($get('endpoint_id')))
                     ->helperText('Motion reference. H3 split auto-cuts into ≤14.5s sections on camera changes. Prefer a sketch that still has the song audio (or upload locked audio below).')
                     ->columnSpanFull(),
                 FileUpload::make('locked_audio')
@@ -159,6 +177,7 @@ class TrendTemplateResource extends Resource
                     ->disk('public')
                     ->directory('trend-templates/audio')
                     ->visibility('public')
+                    ->visible(fn (Get $get): bool => ! TrendTemplate::isCharacterSheetEndpoint($get('endpoint_id')))
                     ->helperText('For MiniMax H3: used as per-section Audio 1 refs + final mux. If empty, audio is extracted from the motion sketch. Unused for Genjutsu.')
                     ->columnSpanFull(),
                 Repeater::make('slots')
@@ -328,6 +347,9 @@ class TrendTemplateResource extends Resource
 
     public static function endpointUsesCharacterSheets(?string $endpointId): bool
     {
+        if (TrendTemplate::isCharacterSheetEndpoint($endpointId)) {
+            return true;
+        }
         if (HiggsfieldService::isHiggsfieldEndpoint($endpointId)) {
             return false;
         }
@@ -620,6 +642,7 @@ class TrendTemplateResource extends Resource
         $options = [
             TrendTemplate::DEFAULT_ENDPOINT => 'Higgsfield Genjutsu Motion Transfer (recommended)',
             TrendTemplate::SECONDARY_FALLBACK_ENDPOINT => 'MiniMax H3 split + audio (Sogni-style, FlashVSR)',
+            TrendTemplate::CHARACTER_SHEET_ENDPOINT => 'Character Sheet only (Nano Banana Pro)',
             TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.5 Reference to Video (fal)',
             'fal-ai/kling-video/o3/pro/reference-to-video' => 'Kling O3 Pro Reference to Video',
             'fal-ai/kling-video/o3/standard/reference-to-video' => 'Kling O3 Standard Reference to Video',
@@ -645,6 +668,7 @@ class TrendTemplateResource extends Resource
         $preferredKeys = [
             TrendTemplate::DEFAULT_ENDPOINT,
             TrendTemplate::SECONDARY_FALLBACK_ENDPOINT,
+            TrendTemplate::CHARACTER_SHEET_ENDPOINT,
             TrendTemplate::FALLBACK_ENDPOINT,
             'fal-ai/kling-video/o3/pro/reference-to-video',
             'fal-ai/kling-video/o3/standard/reference-to-video',
@@ -705,8 +729,9 @@ class TrendTemplateResource extends Resource
         $sketchUrl = static::publicUrlFromUpload($data['motion_sketch'] ?? null);
         $audioUrl = static::publicUrlFromUpload($data['locked_audio'] ?? null);
         $coverUrl = static::publicUrlFromUpload($data['cover_url'] ?? null);
+        $isSheet = TrendTemplate::isCharacterSheetEndpoint($data['endpoint_id'] ?? null);
 
-        if (! is_string($sketchUrl) || $sketchUrl === '') {
+        if (! $isSheet && (! is_string($sketchUrl) || $sketchUrl === '')) {
             throw ValidationException::withMessages([
                 'motion_sketch' => 'Motion sketch video is required.',
             ]);
@@ -724,27 +749,38 @@ class TrendTemplateResource extends Resource
         }
 
         $prompt = trim((string) ($data['prompt'] ?? ''));
-        if (! str_contains($prompt, '@Video1')) {
+        if ($isSheet) {
+            $prompt = $prompt !== '' ? $prompt : 'Character sheet only — prompt lives in sheet_prompt.';
+            $data['sheet_endpoint_id'] = $data['sheet_endpoint_id'] ?? TrendTemplate::DEFAULT_SHEET_ENDPOINT;
+            $data['model_name'] = $data['model_name'] ?: 'Nano Banana Pro Character Sheet';
+            $data['generate_audio'] = false;
+            $data['duration'] = null;
+        } elseif (! str_contains($prompt, '@Video1')) {
             throw ValidationException::withMessages([
                 'prompt' => 'Prompt must reference @Video1 (motion sketch).',
             ]);
         }
-        foreach (array_keys($imageSlots) as $i) {
-            $tag = '@Image'.($i + 1);
-            if (! str_contains($prompt, $tag)) {
-                throw ValidationException::withMessages([
-                    'prompt' => "Prompt must reference {$tag} for slot order.",
-                ]);
+        if (! $isSheet) {
+            foreach (array_keys($imageSlots) as $i) {
+                $tag = '@Image'.($i + 1);
+                if (! str_contains($prompt, $tag)) {
+                    throw ValidationException::withMessages([
+                        'prompt' => "Prompt must reference {$tag} for slot order.",
+                    ]);
+                }
             }
         }
 
-        $locked = [[
-            'key' => 'motion_sketch',
-            'kind' => 'video',
-            'role' => 'motion_sketch',
-            'url' => $sketchUrl,
-        ]];
-        if (is_string($audioUrl) && $audioUrl !== '') {
+        $locked = [];
+        if (! $isSheet && is_string($sketchUrl) && $sketchUrl !== '') {
+            $locked[] = [
+                'key' => 'motion_sketch',
+                'kind' => 'video',
+                'role' => 'motion_sketch',
+                'url' => $sketchUrl,
+            ];
+        }
+        if (! $isSheet && is_string($audioUrl) && $audioUrl !== '') {
             $locked[] = [
                 'key' => 'audio',
                 'kind' => 'audio',

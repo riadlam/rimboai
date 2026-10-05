@@ -47,6 +47,10 @@ class TrendTemplateRemakeService
         }
 
         $endpointIdPreview = trim((string) $template->endpoint_id) ?: TrendTemplate::DEFAULT_ENDPOINT;
+        if (TrendTemplate::isCharacterSheetEndpoint($endpointIdPreview)) {
+            return $this->remakeCharacterSheet($user, $template, $slotPhotos);
+        }
+
         $needsFal = ! HiggsfieldService::isHiggsfieldEndpoint($endpointIdPreview);
         if ($needsFal && ! $this->fal->configured()) {
             throw new TrendsRemakeException('Generation service is not configured.', 503);
@@ -323,6 +327,230 @@ class TrendTemplateRemakeService
         return $id !== ''
             && str_contains($id, 'minimax/h3')
             && str_contains($id, 'reference-to-video');
+    }
+
+    /**
+     * Character-sheet-only Trends remake (Nano Banana Pro).
+     *
+     * @param  array<string, string>  $slotPhotos
+     * @return array<string, mixed>
+     */
+    private function remakeCharacterSheet(User $user, TrendTemplate $template, array $slotPhotos): array
+    {
+        if (! $this->fal->configured()) {
+            throw new TrendsRemakeException('Generation service is not configured.', 503);
+        }
+
+        $active = UserVideoCreation::query()
+            ->where('user_id', $user->id)
+            ->where('settings->from_trend_template_id', $template->id)
+            ->whereIn('status', [
+                UserVideoCreation::STATUS_PENDING,
+                UserVideoCreation::STATUS_QUEUED,
+                UserVideoCreation::STATUS_IN_PROGRESS,
+            ])
+            ->orderByDesc('id')
+            ->first();
+        if ($active) {
+            $remakes = $this->trends->userRemakesForTrendTemplate((int) $template->id, (int) $user->id);
+
+            return [
+                'type' => 'video',
+                'creation' => $this->presentVideo($active),
+                'user_remake_count' => $remakes['count'],
+                'user_latest' => $remakes['latest'],
+            ];
+        }
+
+        $clientSlots = $template->clientSlots();
+        if ($clientSlots === []) {
+            throw new TrendsRemakeException('Template has no photo upload slots.', 422);
+        }
+
+        $orderedPhotos = [];
+        foreach ($clientSlots as $slot) {
+            $key = $slot['key'];
+            $url = $slotPhotos[$key] ?? null;
+            if ((! is_string($url) || $url === '') && $slot['required']) {
+                throw new TrendsRemakeException(
+                    'Upload a photo for “'.($slot['label'] ?: $key).'”.',
+                    422,
+                );
+            }
+            if (is_string($url) && $url !== '') {
+                $orderedPhotos[] = [
+                    'key' => $key,
+                    'label' => $slot['label'],
+                    'role' => $slot['role'],
+                    'photo_url' => $url,
+                ];
+            }
+        }
+        if ($orderedPhotos === []) {
+            throw new TrendsRemakeException('Upload at least one photo.', 422);
+        }
+
+        $credits = (int) $template->trend_cost;
+        if ($credits <= 0) {
+            throw new TrendsRemakeException(
+                'This template has no Trends token price (trend_cost). Set it in Filament.',
+                422,
+            );
+        }
+
+        $sheetEndpoint = trim((string) ($template->sheet_endpoint_id ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT))
+            ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT;
+        if (! TrendTemplate::isCharacterSheetEndpoint($sheetEndpoint)) {
+            $sheetEndpoint = TrendTemplate::DEFAULT_SHEET_ENDPOINT;
+        }
+
+        $inputAssets = [];
+        foreach ($orderedPhotos as $photo) {
+            $inputAssets[] = [
+                'url' => $photo['photo_url'],
+                'fal_url' => $photo['photo_url'],
+                'type' => 'image',
+                'role' => 'face_'.$photo['key'],
+                'slot_key' => $photo['key'],
+            ];
+        }
+
+        try {
+            /** @var UserVideoCreation $creation */
+            $creation = $this->tokens->reserve(
+                $user,
+                $credits,
+                'video',
+                fn () => UserVideoCreation::create([
+                    'user_id' => $user->id,
+                    'mode' => 'trend_character_sheet',
+                    'endpoint_id' => $sheetEndpoint,
+                    'provider' => 'fal',
+                    'model_name' => $template->model_name ?: 'Nano Banana Pro Character Sheet',
+                    'prompt' => (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt()),
+                    'input_assets' => $inputAssets,
+                    'settings' => [
+                        'aspect' => '16:9',
+                        'resolution' => '1K',
+                        'provider' => 'fal',
+                        'workflow' => 'character_sheet',
+                        'output_kind' => 'character_sheet',
+                        'catalog_endpoint' => $sheetEndpoint,
+                        'fal_endpoint' => $sheetEndpoint,
+                        'sheet_endpoint_id' => $sheetEndpoint,
+                        'credits' => $credits,
+                        'credits_source' => 'trend_cost',
+                        'from_trend_template_id' => $template->id,
+                        'trend_template_slug' => $template->slug,
+                        'face_slots' => $orderedPhotos,
+                    ],
+                    'aspect_ratio' => '16:9',
+                    'resolution' => '1K',
+                    'with_audio' => false,
+                    'credits_charged' => $credits,
+                    'status' => UserVideoCreation::STATUS_PENDING,
+                    'progress_message' => 'Generating character sheet…',
+                ]),
+            );
+        } catch (InsufficientTokensException $e) {
+            throw $e;
+        }
+
+        $creation->markInProgress(null, 'Generating character sheet…');
+        $this->processor->broadcastSnapshot('video', $creation);
+
+        $template->increment('uses_count');
+        TrendTemplate::bustFeedCache();
+
+        $creationId = (int) $creation->id;
+        $templateId = (int) $template->id;
+        $userId = (int) $user->id;
+        $photos = $orderedPhotos;
+        $endpoint = $sheetEndpoint;
+        $sheetPrompt = (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt());
+
+        dispatch(function () use ($creationId, $templateId, $userId, $photos, $endpoint, $sheetPrompt) {
+            $creation = UserVideoCreation::query()->find($creationId);
+            $user = User::query()->find($userId);
+            if (! $creation || ! $user) {
+                return;
+            }
+            if (method_exists($creation, 'isTerminal') && $creation->isTerminal()) {
+                return;
+            }
+
+            try {
+                $sheetUrls = [];
+                $sheetMeta = [];
+                foreach ($photos as $i => $photo) {
+                    $creation->forceFill([
+                        'progress_message' => 'Generating character sheet '
+                            .(count($photos) > 1 ? ($i + 1).'/'.count($photos).'…' : '…'),
+                    ])->save();
+                    $this->processor->broadcastSnapshot('video', $creation->fresh());
+
+                    $built = $this->buildCharacterSheet(
+                        $photo['photo_url'],
+                        $endpoint,
+                        $sheetPrompt,
+                    );
+                    $sheetUrls[] = $built['sheet_url'];
+                    $sheetMeta[] = [
+                        'slot_key' => $photo['key'],
+                        'role' => $photo['role'],
+                        'photo_url' => $photo['photo_url'],
+                        'sheet_url' => $built['sheet_url'],
+                        'image_tag' => '@Image'.($i + 1),
+                    ];
+                }
+
+                $assets = array_map(
+                    fn (string $url) => ['url' => $url, 'content_type' => 'image/png'],
+                    $sheetUrls,
+                );
+                $settings = is_array($creation->settings) ? $creation->settings : [];
+                $settings['character_sheets'] = $sheetMeta;
+                $settings['workflow'] = 'character_sheet';
+                $settings['output_kind'] = 'character_sheet';
+                $settings['fal_cost_usd'] = $settings['fal_cost_usd'] ?? null;
+
+                $creation->forceFill([
+                    'status' => UserVideoCreation::STATUS_COMPLETED,
+                    'result_assets' => $assets,
+                    'result_preview_url' => $sheetUrls[0] ?? null,
+                    'result_video_url' => null,
+                    'thumbnail_url' => $sheetUrls[0] ?? null,
+                    'progress_message' => 'Completed',
+                    'queue_position' => null,
+                    'completed_at' => now(),
+                    'error_message' => null,
+                    'error_type' => null,
+                    'settings' => $settings,
+                    'settled_at' => now(),
+                    'cost_usd_is_final' => true,
+                    'cost_usd_source' => 'character_sheet_estimate',
+                ])->save();
+
+                $this->processor->broadcastSnapshot('video', $creation->fresh());
+            } catch (Throwable $e) {
+                report($e);
+                $creation->markFailed(
+                    $e->getMessage() !== '' ? $e->getMessage() : 'Character sheet failed.',
+                    'character_sheet_error',
+                );
+                $this->tokens->refund($user, $creation, 'video', 'character_sheet_error');
+                $this->processor->broadcastSnapshot('video', $creation->fresh());
+            }
+        })->afterResponse();
+
+        $remakes = $this->trends->userRemakesForTrendTemplate($templateId, $userId);
+
+        return [
+            'type' => 'video',
+            'creation' => $this->presentVideo($creation->fresh()),
+            'user_remake_count' => $remakes['count'],
+            'user_latest' => $remakes['latest'],
+        ];
     }
 
     /**
@@ -897,6 +1125,19 @@ class TrendTemplateRemakeService
     private function presentVideo(UserVideoCreation $creation): array
     {
         $settings = is_array($creation->settings) ? $creation->settings : [];
+        $images = collect($creation->result_assets ?? [])
+            ->pluck('url')
+            ->filter(fn ($u) => is_string($u) && $u !== '')
+            ->values()
+            ->all();
+        if (
+            $images === []
+            && ($settings['output_kind'] ?? null) === 'character_sheet'
+            && is_string($creation->result_preview_url)
+            && $creation->result_preview_url !== ''
+        ) {
+            $images = [$creation->result_preview_url];
+        }
 
         return [
             'id' => $creation->id,
@@ -909,6 +1150,7 @@ class TrendTemplateRemakeService
             'video_url' => $creation->result_video_url,
             'thumbnail_url' => $creation->thumbnail_url,
             'preview_url' => $creation->result_preview_url ?: $creation->result_video_url,
+            'images' => $images,
             'aspect' => $creation->aspect_ratio,
             'resolution' => $creation->resolution,
             'duration' => $creation->duration_value,
@@ -917,6 +1159,7 @@ class TrendTemplateRemakeService
             'credits' => $settings['credits'] ?? $creation->credits_charged,
             'token_balance' => (int) (auth()->user()?->fresh()->tokens ?? 0),
             'mode' => $creation->mode,
+            'output_kind' => $settings['output_kind'] ?? null,
             'created_at' => optional($creation->created_at)->toIso8601String(),
         ];
     }

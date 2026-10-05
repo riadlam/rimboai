@@ -376,7 +376,9 @@ class TrendsFeedService
             ];
         }
 
-        $sketchUrl = $this->normalizeTrendMediaUrl($template->motionSketchUrl());
+        $isSheet = $template->isCharacterSheetTemplate();
+        $sketchUrl = $isSheet ? null : $this->normalizeTrendMediaUrl($template->motionSketchUrl());
+        $coverUrl = $this->normalizeTrendMediaUrl($template->cover_url);
         $user = auth()->user();
         $userRemakes = $user
             ? $this->userRemakesForTrendTemplate((int) $template->id, (int) $user->id)
@@ -388,27 +390,40 @@ class TrendsFeedService
         return [
             'key' => $template->feedKey(),
             'type' => 'template',
+            'output_kind' => $isSheet ? 'character_sheet' : 'video',
             'creation_id' => (int) $template->id,
             'template' => $card,
             'uploads' => $uploads,
             'locked' => [
-                'prompt' => (string) $template->prompt,
+                'prompt' => $isSheet
+                    ? (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt())
+                    : (string) $template->prompt,
                 'endpoint_id' => $template->endpoint_id,
                 'model_name' => $template->model_name,
                 'aspect' => $template->aspect_ratio,
                 'resolution' => $template->resolution,
-                'duration' => $template->duration,
-                'audio' => (bool) $template->generate_audio,
-                'mode' => 'trend_template',
+                'duration' => $isSheet ? null : $template->duration,
+                'audio' => $isSheet ? false : (bool) $template->generate_audio,
+                'mode' => $isSheet ? 'trend_character_sheet' : 'trend_template',
                 'motion_sketch_url' => $sketchUrl,
-                'motion_sketch_label' => 'Motion choreography',
+                'motion_sketch_label' => $isSheet ? null : 'Motion choreography',
+                'sheet_endpoint_id' => $isSheet
+                    ? ($template->sheet_endpoint_id ?: TrendTemplate::DEFAULT_SHEET_ENDPOINT)
+                    : null,
             ],
-            'locked_preview' => $sketchUrl ? [
-                'kind' => 'video',
-                'url' => $sketchUrl,
-                'label' => 'Motion choreography',
-                'hint' => 'Locked admin sketch — used for movement only, not faces or outfits.',
-            ] : null,
+            'locked_preview' => $isSheet
+                ? ($coverUrl ? [
+                    'kind' => 'image',
+                    'url' => $coverUrl,
+                    'label' => 'Example character sheet',
+                    'hint' => 'Upload one clear photo — Nano Banana Pro builds a multi-angle sheet.',
+                ] : null)
+                : ($sketchUrl ? [
+                    'kind' => 'video',
+                    'url' => $sketchUrl,
+                    'label' => 'Motion choreography',
+                    'hint' => 'Locked admin sketch — used for movement only, not faces or outfits.',
+                ] : null),
             'credits' => (int) $template->trend_cost,
             'user_remake_count' => $userRemakes['count'],
             'user_latest' => $userRemakes['latest'],
@@ -443,6 +458,12 @@ class TrendsFeedService
 
         $settings = is_array($creation->settings) ? $creation->settings : [];
 
+        $images = collect($creation->result_assets ?? [])
+            ->pluck('url')
+            ->filter(fn ($u) => is_string($u) && $u !== '' && ! preg_match('/\.(mp4|webm|mov)(\?|$)/i', $u))
+            ->values()
+            ->all();
+
         return [
             'id' => $creation->id,
             'status' => $creation->status,
@@ -454,12 +475,14 @@ class TrendsFeedService
             'video_url' => $creation->result_video_url,
             'thumbnail_url' => $creation->thumbnail_url,
             'preview_url' => $creation->result_preview_url ?: $creation->result_video_url,
+            'images' => $images,
             'aspect' => $creation->aspect_ratio,
             'resolution' => $creation->resolution,
             'duration' => $creation->duration_value,
             'audio' => (bool) $creation->with_audio,
             'error' => $creation->error_message,
             'mode' => $creation->mode,
+            'output_kind' => $settings['output_kind'] ?? null,
             'created_at' => optional($creation->created_at)->toIso8601String(),
             'credits' => $settings['credits'] ?? $creation->credits_charged,
         ];
@@ -487,6 +510,12 @@ class TrendsFeedService
             return ['count' => $count, 'latest' => null];
         }
 
+        $images = collect($latest->result_assets ?? [])
+            ->pluck('url')
+            ->filter(fn ($u) => is_string($u) && $u !== '' && ! preg_match('/\.(mp4|webm|mov)(\?|$)/i', $u))
+            ->values()
+            ->all();
+
         return [
             'count' => $count,
             'latest' => [
@@ -494,6 +523,7 @@ class TrendsFeedService
                 'video_url' => $latest->result_video_url,
                 'preview_url' => $latest->result_preview_url ?: $latest->result_video_url,
                 'thumbnail_url' => $latest->thumbnail_url,
+                'images' => $images,
             ],
         ];
     }
@@ -690,7 +720,8 @@ class TrendsFeedService
      */
     private function mapTrendTemplate(TrendTemplate $template): ?array
     {
-        $sketch = $this->normalizeTrendMediaUrl($template->motionSketchUrl());
+        $isSheet = $template->isCharacterSheetTemplate();
+        $sketch = $isSheet ? null : $this->normalizeTrendMediaUrl($template->motionSketchUrl());
         $cover = $this->normalizeTrendMediaUrl($template->cover_url) ?: $sketch;
         // Missing cover/sketch must not hide or 404 the template workspace.
         $uses = (int) $template->uses_count;
@@ -699,31 +730,36 @@ class TrendsFeedService
             'id' => $template->feedKey(),
             'creation_id' => (int) $template->id,
             'type' => 'template',
+            'output_kind' => $isSheet ? 'character_sheet' : 'video',
             'creator' => 'RIMBOAI',
             'avatar' => $this->fallbackInitialsAvatarUrl('RIMBOAI'),
             'uses' => $uses,
             'rating' => null,
             'credits' => (int) $template->trend_cost,
-            'model' => $template->model_name ?: 'Seedance',
+            'model' => $template->model_name ?: ($isSheet ? 'Nano Banana Pro' : 'Seedance'),
             'endpoint_id' => $template->endpoint_id,
             'trend_title' => $template->title,
             'created_at' => $template->updated_at?->toIso8601String()
                 ?: $template->created_at?->toIso8601String(),
             'name' => $template->title,
-            'category' => 'Videos',
+            'category' => $isSheet ? 'Images' : 'Videos',
             'cover' => $cover ?: '',
-            'coverType' => $sketch ? 'video' : 'image',
+            'coverType' => $isSheet || ! $sketch ? 'image' : 'video',
             'video_url' => $sketch,
             'thumbnail_url' => $this->normalizeTrendMediaUrl($template->cover_url),
             'samples' => array_values(array_filter([$cover, $sketch])),
-            'description' => (string) ($template->description ?: 'Official trend template'),
-            'prompt' => (string) $template->prompt,
-            'aspect' => $template->aspect_ratio,
-            'resolution' => $template->resolution,
-            'duration' => $template->duration,
-            'generate_audio' => (bool) $template->generate_audio,
+            'description' => (string) ($template->description ?: ($isSheet
+                ? 'Upload a photo — get a multi-angle character sheet.'
+                : 'Official trend template')),
+            'prompt' => $isSheet
+                ? (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt())
+                : (string) $template->prompt,
+            'aspect' => $template->aspect_ratio ?: '16:9',
+            'resolution' => $isSheet ? '1K' : $template->resolution,
+            'duration' => $isSheet ? null : $template->duration,
+            'generate_audio' => $isSheet ? false : (bool) $template->generate_audio,
             'quantity' => 1,
-            'image_mode' => null,
+            'image_mode' => $isSheet ? 'character_sheet' : null,
             'lyrics' => null,
             'featured' => (bool) $template->is_featured,
             'hot' => $uses >= 5,

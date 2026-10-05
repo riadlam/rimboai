@@ -23,6 +23,12 @@ class TrendTemplate extends Model
 
     public const DEFAULT_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
 
+    /**
+     * Character-sheet-only Trends product (Nano Banana Pro edit).
+     * No motion sketch / video — upload a photo, get a multi-angle sheet.
+     */
+    public const CHARACTER_SHEET_ENDPOINT = 'fal-ai/nano-banana-pro/edit';
+
     protected $fillable = [
         'title',
         'slug',
@@ -171,6 +177,40 @@ class TrendTemplate extends Model
     public function feedKey(): string
     {
         return 'template-'.$this->getKey();
+    }
+
+    public static function isCharacterSheetEndpoint(?string $endpointId): bool
+    {
+        $id = strtolower(trim((string) $endpointId));
+        if ($id === '') {
+            return false;
+        }
+
+        return $id === strtolower(self::CHARACTER_SHEET_ENDPOINT)
+            || ($id === 'fal-ai/nano-banana-pro' || str_ends_with($id, 'nano-banana-pro/edit'));
+    }
+
+    public function isCharacterSheetTemplate(): bool
+    {
+        return self::isCharacterSheetEndpoint($this->endpoint_id);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public static function characterSheetSlots(): array
+    {
+        return [
+            [
+                'key' => 'subject',
+                'kind' => 'image',
+                'label' => 'Your photo',
+                'role' => 'subject',
+                'hint' => 'Clear face + outfit photo. Becomes a multi-angle character sheet.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+        ];
     }
 
     public static function uniqueSlug(string $title): string

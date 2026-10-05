@@ -870,6 +870,12 @@ class FalWebhookProcessor
                 'thumbnail_url' => $creation->getAttribute('thumbnail_url'),
                 'aspect' => $creation->getAttribute('aspect_ratio'),
                 'mode' => $creation->getAttribute('mode'),
+                // Character-sheet Trends remakes store PNGs in result_assets.
+                'images' => collect($creation->getAttribute('result_assets') ?? [])
+                    ->pluck('url')
+                    ->filter(fn ($u) => is_string($u) && $u !== '' && ! preg_match('/\.(mp4|webm|mov)(\?|$)/i', $u))
+                    ->values()
+                    ->all(),
             ]),
             'music' => array_merge($base, [
                 'audio_url' => $creation->getAttribute('result_audio_url'),
