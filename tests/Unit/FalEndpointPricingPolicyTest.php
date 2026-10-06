@@ -221,4 +221,47 @@ class FalEndpointPricingPolicyTest extends TestCase
         $this->assertEqualsWithDelta(0.35, $cost['fal_cost_usd'], 1e-6);
         $this->assertSame(44, $cost['credits']);
     }
+
+    public function test_genjutsu_720p_bills_ceil_input_seconds(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $quote = $policy->quoteVideo([
+            'endpoint_id' => 'higgsfield/genjutsu/motion-transfer/v1.0',
+            'unit' => 'seconds',
+            'unit_price' => 0.681,
+            'resolution' => '720p',
+            'reference_video_seconds' => 8.1,
+        ]);
+
+        $this->assertNotNull($quote);
+        $this->assertEqualsWithDelta(9 * 0.681, $quote['fal_cost_usd'], 1e-6);
+        $this->assertSame(9.0, $quote['billable_units']);
+        $this->assertSame('input_video_seconds', $quote['unit']);
+    }
+
+    public function test_genjutsu_1080p_and_restyle_share_rates(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $quote = $policy->quoteVideo([
+            'endpoint_id' => 'higgsfield/genjutsu/restyle/v1.0',
+            'resolution' => '1080p',
+            'reference_video_seconds' => 5,
+        ]);
+
+        $this->assertNotNull($quote);
+        $this->assertEqualsWithDelta(5 * 1.632, $quote['fal_cost_usd'], 1e-6);
+    }
+
+    public function test_genjutsu_fails_closed_without_reference_duration(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $quote = $policy->quoteVideo([
+            'endpoint_id' => 'higgsfield/genjutsu/motion-transfer/v1.0',
+            'resolution' => '720p',
+            'reference_video_seconds' => 0,
+            'duration_seconds' => 10,
+        ]);
+
+        $this->assertNull($quote);
+    }
 }

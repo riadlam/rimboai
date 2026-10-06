@@ -46,6 +46,17 @@ export function estimateVideoCredits(
     const refVideo = Math.max(0, options.referenceVideoSeconds ?? 0);
     const refImages = Math.max(0, options.referenceImageCount ?? 0);
 
+    if (endpointId.includes('higgsfield/genjutsu/')) {
+        // Fail closed: without a probed motion-video duration we cannot quote.
+        if (refVideo <= 0) {
+            return { falCostUsd: 0, credits: 0, billableUnits: 0, unit: 'unsupported', unitPrice: 0 };
+        }
+        const perSecond =
+            resolution === '480p' ? 0.318 : resolution === '1080p' ? 1.632 : 0.681;
+        const billable = Math.min(30, Math.max(1, Math.ceil(refVideo - 1e-9)));
+        return present(round6(billable * perSecond), billable, 'input_video_seconds', perSecond, config);
+    }
+
     if (endpointId.includes('grok-imagine-video')) {
         const is15 = endpointId.includes('/v1.5/');
         let perSecond = 0.07;

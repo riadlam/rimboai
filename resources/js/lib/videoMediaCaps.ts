@@ -417,6 +417,13 @@ export function generateBlockReason(
     if (endpoint.includes('gemini-omni-flash/reference-to-video') && counts.images < 1) {
         return 'Add at least one reference image.';
     }
+    if (endpoint.includes('higgsfield/genjutsu/motion-transfer')) {
+        if (counts.videos < 1) return 'Add a motion video (4–30s).';
+        if (counts.images < 1) return 'Add at least one character or product image.';
+    }
+    if (endpoint.includes('higgsfield/genjutsu/restyle')) {
+        if (counts.videos < 1) return 'Add a source video to restyle (4–30s).';
+    }
     if (
         endpoint.includes('gemini-omni-flash') &&
         !endpoint.includes('/edit') &&

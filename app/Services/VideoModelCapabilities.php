@@ -30,6 +30,48 @@ class VideoModelCapabilities
     {
         $id = strtolower(trim($endpointId));
 
+        // Higgsfield Genjutsu Motion Transfer — 1 motion video + 1–8 image refs.
+        if ($id === 'higgsfield/genjutsu/motion-transfer/v1.0'
+            || str_contains($id, 'higgsfield/genjutsu/motion-transfer')) {
+            return $this->withGenjutsuLimits($this->caps(
+                images: true,
+                videos: true,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 8,
+                maxVideos: 1,
+                maxAudios: 0,
+                reference: $id,
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            ));
+        }
+
+        // Higgsfield Genjutsu Restyle — 1 motion video + style preset; optional 0–5 character images.
+        if ($id === 'higgsfield/genjutsu/restyle/v1.0'
+            || str_contains($id, 'higgsfield/genjutsu/restyle')) {
+            return $this->withGenjutsuLimits($this->caps(
+                images: true,
+                videos: true,
+                audio: false,
+                firstFrame: false,
+                lastFrame: false,
+                lastRequired: false,
+                maxImages: 5,
+                maxVideos: 1,
+                maxAudios: 0,
+                reference: $id,
+                firstFrameEndpoint: null,
+                firstFrameParam: null,
+                firstLastEndpoint: null,
+                lastFrameParam: null,
+            ));
+        }
+
         // Seedance — multimodal R2V + first-frame I2V + optional end frame on I2V
         if (str_contains($id, 'seedance') && str_contains($id, 'reference-to-video')) {
             $is25 = str_contains($id, 'seedance-2.5') || str_contains($id, 'seedance/2.5');
@@ -578,6 +620,20 @@ class VideoModelCapabilities
             return false;
         }
 
+        // Genjutsu Motion Transfer: requires 1 video + ≥1 image (no audio).
+        if (str_contains(strtolower($endpointId), 'higgsfield/genjutsu/motion-transfer')) {
+            if ($videos < 1 || $images < 1 || $audios > 0) {
+                return false;
+            }
+        }
+
+        // Genjutsu Restyle: requires 1 video; images optional (0–5); no audio refs.
+        if (str_contains(strtolower($endpointId), 'higgsfield/genjutsu/restyle')) {
+            if ($videos < 1 || $audios > 0) {
+                return false;
+            }
+        }
+
         // Kling V2V edit (face/character swap): needs a source video + at least one face/element image.
         if (str_contains(strtolower($endpointId), 'video-to-video/edit')) {
             if ($videos < 1 || $images < 1) {
@@ -665,6 +721,10 @@ class VideoModelCapabilities
             if (str_contains($id, 'gemini-omni-flash/reference-to-video')) {
                 return null;
             }
+            // Genjutsu always needs a motion video (and MT needs images too).
+            if (str_contains($id, 'higgsfield/genjutsu/')) {
+                return null;
+            }
 
             // Explicit R2V catalog models still submit to themselves (prompt-only is allowed).
             $mode = str_contains($id, 'reference-to-video')
@@ -674,6 +734,20 @@ class VideoModelCapabilities
             return [
                 'endpoint_id' => $endpointId,
                 'mode' => $mode,
+                'first_frame_param' => null,
+                'last_frame_param' => null,
+            ];
+        }
+
+        // Genjutsu: always submit to the catalog endpoint as reference-to-video.
+        if (str_contains(strtolower($endpointId), 'higgsfield/genjutsu/')) {
+            if (! $this->supportsMediaMix($endpointId, $counts, $frameMode)) {
+                return null;
+            }
+
+            return [
+                'endpoint_id' => $endpointId,
+                'mode' => 'reference-to-video',
                 'first_frame_param' => null,
                 'last_frame_param' => null,
             ];
@@ -783,6 +857,26 @@ class VideoModelCapabilities
             'max_ref_audio_seconds_total' => 15,
             'max_ref_files_total' => 12,
             'prompt_ref_style' => 'Image N / Video N / Audio N',
+        ]);
+    }
+
+    /**
+     * Genjutsu: single motion clip 4–30s; framing/duration follow the source.
+     *
+     * @param  array<string, mixed>  $caps
+     * @return array<string, mixed>
+     */
+    private function withGenjutsuLimits(array $caps): array
+    {
+        return array_merge($caps, [
+            'min_ref_video_seconds' => 4,
+            'max_ref_video_seconds' => 30,
+            'max_ref_video_seconds_total' => 30,
+            'min_ref_audio_seconds' => null,
+            'max_ref_audio_seconds' => null,
+            'max_ref_audio_seconds_total' => null,
+            'max_ref_files_total' => null,
+            'prompt_ref_style' => 'motion video + image references',
         ]);
     }
 

@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             Wan22A14bImageToVideoSeeder::class,
             GeminiOmniFlashSeeder::class,
             GrokImagineVideo15Seeder::class,
+            GenjutsuVideoLabSeeder::class,
             MiniMaxH3LabSeeder::class,
             VenusProductCommercialTrendSeeder::class,
             EgoPerfumeCommercialTrendSeeder::class,

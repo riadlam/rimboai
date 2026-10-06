@@ -147,6 +147,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/lab/video/generate', [VideoGenerationController::class, 'store'])
         ->middleware('throttle:20,1')
         ->name('lab.video.generate');
+    Route::get('/lab/video/genjutsu/restyle-presets', [VideoGenerationController::class, 'restylePresets'])
+        ->middleware('throttle:60,1')
+        ->name('lab.video.genjutsu.restyle-presets');
     Route::get('/lab/video/creations/{creation}/status', [VideoGenerationController::class, 'status'])
         ->middleware('throttle:300,1')
         ->name('lab.video.status');

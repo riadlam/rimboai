@@ -226,7 +226,16 @@
     "framesNoModels": "No models support first & last frames right now.",
     "negativePrompt": "Negative prompt",
     "negativePromptSub": "Optional — describe what to avoid in the video",
-    "negativePromptPlaceholder": "blurry, low quality, text, watermark, distorted faces…"
+    "negativePromptPlaceholder": "blurry, low quality, text, watermark, distorted faces…",
+    "blockGenjutsuVideo": "Add a motion video (4–30s).",
+    "blockGenjutsuImages": "Add at least one character or product image.",
+    "blockGenjutsuRestyleVideo": "Add a source video to restyle (4–30s).",
+    "blockGenjutsuPreset": "Pick a Restyle style before creating.",
+    "genjutsuSourceDriven": "Length & framing follow your video",
+    "genjutsuMotionHint": "Upload one 4–30s motion clip plus 1–8 character/product images. Output matches the source timing.",
+    "genjutsuRestyleHint": "Upload one 4–30s clip, pick a style, and optionally add up to 5 character images. Source audio is kept when present.",
+    "genjutsuStyles": "Restyle style",
+    "genjutsuStylesHint": "Required — choose one visual preset from Higgsfield."
   },
   "voice": {
     "title": "Voiceover",

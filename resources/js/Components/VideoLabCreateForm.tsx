@@ -29,6 +29,7 @@ import {
     parseDurationDraft,
     type LabReuseDraft,
 } from '@/lib/labReuse';
+import { apiGet } from '@/lib/api';
 import { hasMeaningfulPrompt } from '@/lib/promptText';
 import {
     aspectBox,
@@ -50,9 +51,17 @@ export type VideoGenerateOptions = {
     negativePrompt?: string;
     /** Sum of reference video durations (client probe); server re-probes when possible. */
     referenceVideoSeconds?: number;
+    /** Genjutsu Restyle style UUID */
+    presetId?: string;
     imageFiles?: File[];
     videoFiles?: File[];
     audioFiles?: File[];
+};
+
+type RestylePreset = {
+    id: string;
+    name: string;
+    preview_url: string | null;
 };
 
 type Props = {
@@ -195,6 +204,9 @@ export default function VideoLabCreateForm({
     const [resolution, setResolution] = useState('720p');
     const [aspect, setAspect] = useState('16:9');
     const [media, setMedia] = useState<MediaItem[]>([]);
+    const [restylePresets, setRestylePresets] = useState<RestylePreset[]>([]);
+    const [restylePresetId, setRestylePresetId] = useState<string | null>(null);
+    const [restylePresetsLoading, setRestylePresetsLoading] = useState(false);
     const [framesMode, setFramesMode] = useState(false);
     const [firstFrame, setFirstFrame] = useState<MediaItem | null>(null);
     const [lastFrame, setLastFrame] = useState<MediaItem | null>(null);
@@ -301,6 +313,9 @@ export default function VideoLabCreateForm({
         } as const);
 
     const selectedEndpointId = 'endpoint_id' in selectedMeta ? selectedMeta.endpoint_id || selectedMeta.name : selectedMeta.name;
+    const isGenjutsu = selectedEndpointId.toLowerCase().includes('higgsfield/genjutsu/');
+    const isGenjutsuRestyle = selectedEndpointId.toLowerCase().includes('higgsfield/genjutsu/restyle');
+    const isGenjutsuMotion = selectedEndpointId.toLowerCase().includes('higgsfield/genjutsu/motion-transfer');
     const selectedEnums = 'enums' in selectedMeta ? selectedMeta.enums : null;
     const selectedMaxDuration = 'max_duration' in selectedMeta ? selectedMeta.max_duration : null;
 
@@ -406,19 +421,31 @@ export default function VideoLabCreateForm({
     );
     const showInfoGuidance = Boolean(mediaGuidance && mediaGuidance.tone !== 'error' && !guidanceDismissed);
     const showErrorGuidance = Boolean(mediaGuidance && mediaGuidance.tone === 'error');
-    const rawBlockReason = generateBlockReason(
-        hasMeaningfulPrompt(prompt),
-        mediaCounts,
-        selectedModelRecord,
-        modelsForPicker.length,
-        framesMode ? 'first_last' : 'default',
-    );
+    const promptOk = isGenjutsu || hasMeaningfulPrompt(prompt);
+    const rawBlockReason =
+        isGenjutsuRestyle && !restylePresetId
+            ? 'Pick a Restyle style before creating.'
+            : generateBlockReason(
+                  promptOk,
+                  mediaCounts,
+                  selectedModelRecord,
+                  modelsForPicker.length,
+                  framesMode ? 'first_last' : 'default',
+              );
     const blockReason = !rawBlockReason
         ? null
         : rawBlockReason === 'Add a prompt to generate.'
           ? t('video.blockPrompt')
           : rawBlockReason === 'Add an image to animate.'
             ? t('video.blockNeedImage')
+          : rawBlockReason === 'Add a motion video (4–30s).'
+            ? t('video.blockGenjutsuVideo', { defaultValue: 'Add a motion video (4–30s).' })
+          : rawBlockReason === 'Add at least one character or product image.'
+            ? t('video.blockGenjutsuImages', { defaultValue: 'Add at least one character or product image.' })
+          : rawBlockReason === 'Add a source video to restyle (4–30s).'
+            ? t('video.blockGenjutsuRestyleVideo', { defaultValue: 'Add a source video to restyle (4–30s).' })
+          : rawBlockReason === 'Pick a Restyle style before creating.'
+            ? t('video.blockGenjutsuPreset', { defaultValue: 'Pick a Restyle style before creating.' })
           : rawBlockReason.startsWith('Add an image or video')
             ? t('video.blockAudioAlone')
             : rawBlockReason === 'No model supports this media mix. Remove some references.'
@@ -440,6 +467,47 @@ export default function VideoLabCreateForm({
             setSelectedModel(brands[0].models[0]?.name || 'Seedance 2.0');
         }
     }, [brands, selectedBrand]);
+
+    useEffect(() => {
+        if (isGenjutsu && framesMode) {
+            setFramesMode(false);
+        }
+    }, [isGenjutsu, framesMode]);
+
+    useEffect(() => {
+        if (!isGenjutsuRestyle) {
+            setRestylePresets([]);
+            setRestylePresetId(null);
+            setRestylePresetsLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setRestylePresetsLoading(true);
+        (async () => {
+            try {
+                const data = await apiGet<{ items: RestylePreset[] }>('/lab/video/genjutsu/restyle-presets');
+                if (cancelled) return;
+                const items = Array.isArray(data.items) ? data.items : [];
+                setRestylePresets(items);
+                setRestylePresetId((prev) => {
+                    if (prev && items.some((p) => p.id === prev)) return prev;
+                    return items[0]?.id ?? null;
+                });
+            } catch {
+                if (!cancelled) {
+                    setRestylePresets([]);
+                    setRestylePresetId(null);
+                }
+            } finally {
+                if (!cancelled) setRestylePresetsLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isGenjutsuRestyle]);
 
     useEffect(() => {
         setDuration((current) => pickDurationForOptions(durationOptions, current));
@@ -1403,7 +1471,7 @@ export default function VideoLabCreateForm({
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-semibold text-white">{t('settings')}</span>
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/40">
-                                    {durationLabel} · {resolution}
+                                    {isGenjutsu ? `${resolution} · source` : `${durationLabel} · ${resolution}`}
                                 </span>
                             </div>
                             <svg
@@ -1427,46 +1495,67 @@ export default function VideoLabCreateForm({
                                     className="overflow-hidden"
                                 >
                                     <div className="space-y-5 border-t border-white/[0.05] px-3.5 pb-4 pt-3">
-                                        {/* Duration — always a slider; stops come from model enums */}
-                                        <div className="space-y-2.5">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-[13px] font-medium text-zinc-200">{t('duration')}</p>
-                                                    <p className="text-[10px] text-white/30">
-                                                        {durationOptions.allowAuto
-                                                            ? `Auto or ${durationOptions.min}–${durationOptions.max}s`
-                                                            : `${durationOptions.min}–${durationOptions.max}s for this model`}
-                                                    </p>
-                                                </div>
-                                                <span className="rounded-lg border border-orange-400/25 bg-orange-500/10 px-2 py-0.5 text-[12px] font-semibold text-orange-100">
-                                                    {durationLabel}
-                                                </span>
+                                        {isGenjutsu ? (
+                                            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+                                                <p className="text-[13px] font-medium text-zinc-200">
+                                                    {t('video.genjutsuSourceDriven', {
+                                                        defaultValue: 'Length & framing follow your video',
+                                                    })}
+                                                </p>
+                                                <p className="mt-0.5 text-[11px] text-white/40">
+                                                    {isGenjutsuMotion
+                                                        ? t('video.genjutsuMotionHint', {
+                                                              defaultValue:
+                                                                  'Upload one 4–30s motion clip plus 1–8 character/product images. Output matches the source timing.',
+                                                          })
+                                                        : t('video.genjutsuRestyleHint', {
+                                                              defaultValue:
+                                                                  'Upload one 4–30s clip, pick a style, and optionally add up to 5 character images. Source audio is kept when present.',
+                                                          })}
+                                                </p>
                                             </div>
-                                            <div className="relative px-0.5 pt-1">
-                                                <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
-                                                    <div
-                                                        className="absolute inset-y-0 start-0 rounded-full bg-gradient-to-r from-[#FF5733] to-[#FF8C00]"
-                                                        style={{ width: `${durationPct}%` }}
+                                        ) : (
+                                            /* Duration — always a slider; stops come from model enums */
+                                            <div className="space-y-2.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-[13px] font-medium text-zinc-200">{t('duration')}</p>
+                                                        <p className="text-[10px] text-white/30">
+                                                            {durationOptions.allowAuto
+                                                                ? `Auto or ${durationOptions.min}–${durationOptions.max}s`
+                                                                : `${durationOptions.min}–${durationOptions.max}s for this model`}
+                                                        </p>
+                                                    </div>
+                                                    <span className="rounded-lg border border-orange-400/25 bg-orange-500/10 px-2 py-0.5 text-[12px] font-semibold text-orange-100">
+                                                        {durationLabel}
+                                                    </span>
+                                                </div>
+                                                <div className="relative px-0.5 pt-1">
+                                                    <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
+                                                        <div
+                                                            className="absolute inset-y-0 start-0 rounded-full bg-gradient-to-r from-[#FF5733] to-[#FF8C00]"
+                                                            style={{ width: `${durationPct}%` }}
+                                                        />
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={Math.max(0, durationStops.length - 1)}
+                                                        step={1}
+                                                        value={durationIndex}
+                                                        onChange={(e) => {
+                                                            const next = durationStops[Number(e.target.value)];
+                                                            if (next !== undefined) setDuration(next);
+                                                        }}
+                                                        className="absolute inset-x-0 top-0 h-4 w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#FF5733] [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-[0_0_12px_rgba(255,87,51,0.45)] [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#FF5733] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(255,87,51,0.45)]"
                                                     />
                                                 </div>
-                                                <input
-                                                    type="range"
-                                                    min={0}
-                                                    max={Math.max(0, durationStops.length - 1)}
-                                                    step={1}
-                                                    value={durationIndex}
-                                                    onChange={(e) => {
-                                                        const next = durationStops[Number(e.target.value)];
-                                                        if (next !== undefined) setDuration(next);
-                                                    }}
-                                                    className="absolute inset-x-0 top-0 h-4 w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#FF5733] [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-[0_0_12px_rgba(255,87,51,0.45)] [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#FF5733] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(255,87,51,0.45)]"
-                                                />
+                                                <div className="flex justify-between text-[11px] text-white/30">
+                                                    <span>{durationOptions.allowAuto ? t('auto') : `${durationOptions.min}s`}</span>
+                                                    <span>{durationOptions.max}s</span>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between text-[11px] text-white/30">
-                                                <span>{durationOptions.allowAuto ? t('auto') : `${durationOptions.min}s`}</span>
-                                                <span>{durationOptions.max}s</span>
-                                            </div>
-                                        </div>
+                                        )}
 
                                         {/* Audio — only for models with generate_audio */}
                                         {supportsAudio && (
@@ -1522,44 +1611,104 @@ export default function VideoLabCreateForm({
                                             </div>
                                         </div>
 
-                                        {/* Aspect */}
-                                        <div>
-                                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('aspectRatio')}</p>
-                                            <div
-                                                className="grid gap-1.5"
-                                                style={{
-                                                    gridTemplateColumns: `repeat(${Math.min(5, Math.max(2, availableAspects.length))}, minmax(0, 1fr))`,
-                                                }}
-                                            >
-                                                {availableAspects.map((key) => {
-                                                    const meta = aspectBox(key);
-                                                    const active = aspect === key;
-                                                    return (
-                                                        <button
-                                                            key={key}
-                                                            type="button"
-                                                            onClick={() => setAspect(key)}
-                                                            className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 transition ${
-                                                                active
-                                                                    ? 'border-orange-400/50 bg-orange-500/15 text-orange-100'
-                                                                    : 'border-white/[0.07] bg-white/[0.03] text-white/50 hover:border-white/15 hover:text-white/80'
-                                                            }`}
-                                                        >
-                                                            <span
-                                                                className={`rounded-[3px] border ${active ? 'border-orange-300/70' : 'border-current'}`}
-                                                                style={{ width: meta.w, height: meta.h }}
-                                                            />
-                                                            <span className="text-[10px] font-semibold">{key}</span>
-                                                        </button>
-                                                    );
-                                                })}
+                                        {/* Aspect — Genjutsu follows source framing */}
+                                        {!isGenjutsu && (
+                                            <div>
+                                                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/35">{t('aspectRatio')}</p>
+                                                <div
+                                                    className="grid gap-1.5"
+                                                    style={{
+                                                        gridTemplateColumns: `repeat(${Math.min(5, Math.max(2, availableAspects.length))}, minmax(0, 1fr))`,
+                                                    }}
+                                                >
+                                                    {availableAspects.map((key) => {
+                                                        const meta = aspectBox(key);
+                                                        const active = aspect === key;
+                                                        return (
+                                                            <button
+                                                                key={key}
+                                                                type="button"
+                                                                onClick={() => setAspect(key)}
+                                                                className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 transition ${
+                                                                    active
+                                                                        ? 'border-orange-400/50 bg-orange-500/15 text-orange-100'
+                                                                        : 'border-white/[0.07] bg-white/[0.03] text-white/50 hover:border-white/15 hover:text-white/80'
+                                                                }`}
+                                                            >
+                                                                <span
+                                                                    className={`rounded-[3px] border ${active ? 'border-orange-300/70' : 'border-current'}`}
+                                                                    style={{ width: meta.w, height: meta.h }}
+                                                                />
+                                                                <span className="text-[10px] font-semibold">{key}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
+
+                    {isGenjutsuRestyle && (
+                        <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-transparent">
+                            <div className="px-3.5 py-3">
+                                <p className="text-sm font-semibold text-white">
+                                    {t('video.genjutsuStyles', { defaultValue: 'Restyle style' })}
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-white/40">
+                                    {t('video.genjutsuStylesHint', {
+                                        defaultValue: 'Required — choose one visual preset from Higgsfield.',
+                                    })}
+                                </p>
+                            </div>
+                            <div className="border-t border-white/[0.05] px-3 pb-3 pt-2">
+                                {restylePresetsLoading ? (
+                                    <p className="py-6 text-center text-[12px] text-white/40">Loading styles…</p>
+                                ) : restylePresets.length === 0 ? (
+                                    <p className="py-6 text-center text-[12px] text-white/40">
+                                        No styles available. Check Higgsfield credentials.
+                                    </p>
+                                ) : (
+                                    <div className="grid max-h-[280px] grid-cols-2 gap-2 overflow-y-auto pe-0.5 scrollbar-thin sm:grid-cols-3">
+                                        {restylePresets.map((preset) => {
+                                            const active = restylePresetId === preset.id;
+                                            return (
+                                                <button
+                                                    key={preset.id}
+                                                    type="button"
+                                                    onClick={() => setRestylePresetId(preset.id)}
+                                                    className={`overflow-hidden rounded-xl border text-start transition ${
+                                                        active
+                                                            ? 'border-orange-400/50 bg-orange-500/10 ring-1 ring-orange-400/30'
+                                                            : 'border-white/[0.07] bg-white/[0.03] hover:border-white/15'
+                                                    }`}
+                                                >
+                                                    {preset.preview_url ? (
+                                                        <img
+                                                            src={preset.preview_url}
+                                                            alt=""
+                                                            className="aspect-[4/3] w-full object-cover"
+                                                            loading="lazy"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex aspect-[4/3] items-center justify-center bg-white/[0.04] text-[10px] text-white/30">
+                                                            Style
+                                                        </div>
+                                                    )}
+                                                    <p className="line-clamp-2 px-2 py-1.5 text-[11px] font-medium text-zinc-200">
+                                                        {preset.name}
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1568,18 +1717,22 @@ export default function VideoLabCreateForm({
                 <div className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-[#0a0a0f] to-transparent" />
                 <div className="mb-2.5 flex items-center justify-between gap-2 px-0.5">
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                            <span
-                                className="rounded-[2px] border border-orange-300/50"
-                                style={{
-                                    width: Math.max(8, (aspectBox(aspect).w || 14) * 0.7),
-                                    height: Math.max(8, (aspectBox(aspect).h || 14) * 0.7),
-                                }}
-                            />
-                            {aspect}
-                        </span>
+                        {!isGenjutsu && (
+                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
+                                <span
+                                    className="rounded-[2px] border border-orange-300/50"
+                                    style={{
+                                        width: Math.max(8, (aspectBox(aspect).w || 14) * 0.7),
+                                        height: Math.max(8, (aspectBox(aspect).h || 14) * 0.7),
+                                    }}
+                                />
+                                {aspect}
+                            </span>
+                        )}
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">{resolution}</span>
-                        <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">{durationLabel}</span>
+                        <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
+                            {isGenjutsu ? '4–30s source' : durationLabel}
+                        </span>
                         {supportsAudio && audioOn && (
                             <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">{t('video.audio')}</span>
                         )}
@@ -1601,18 +1754,20 @@ export default function VideoLabCreateForm({
                     whileTap={canGenerate && !loading ? { scale: 0.98 } : undefined}
                     disabled={loading || !canGenerate}
                     onClick={() => {
-                        if (loading || !canGenerate || !hasMeaningfulPrompt(prompt)) return;
+                        if (loading || !canGenerate) return;
+                        if (!isGenjutsu && !hasMeaningfulPrompt(prompt)) return;
                         onGenerate?.(prompt, {
                             quantity: 1,
-                            aspect,
+                            aspect: isGenjutsu ? 'auto' : aspect,
                             resolution,
-                            duration,
+                            duration: isGenjutsu ? 'auto' : duration,
                             audio: effectiveAudio,
                             endpointId: 'endpoint_id' in selectedMeta ? selectedMeta.endpoint_id || undefined : undefined,
                             modelName: selectedMeta.name,
                             routeMode: routeMode ?? undefined,
                             frameMode: framesMode ? 'first_last' : undefined,
                             negativePrompt: supportsNegativePrompt ? negativePrompt.trim() || undefined : undefined,
+                            presetId: isGenjutsuRestyle ? restylePresetId ?? undefined : undefined,
                             referenceVideoSeconds: framesMode
                                 ? 0
                                 : media

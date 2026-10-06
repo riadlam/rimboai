@@ -861,7 +861,8 @@ function LabWorkspaceInner({
     const startVideoGenerate = useCallback(
         async (nextPrompt?: string, options?: VideoGenerateOptions) => {
             const text = (nextPrompt ?? '').trim();
-            if (!hasMeaningfulPrompt(text)) return;
+            const isGenjutsu = (options?.endpointId ?? '').toLowerCase().includes('higgsfield/genjutsu/');
+            if (!isGenjutsu && !hasMeaningfulPrompt(text)) return;
 
             const aspect = options?.aspect ?? '16:9';
             const batchId = `vbatch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -975,6 +976,9 @@ function LabWorkspaceInner({
                 }
                 if (options?.negativePrompt?.trim()) {
                     form.append('negative_prompt', options.negativePrompt.trim());
+                }
+                if (options?.presetId) {
+                    form.append('preset_id', options.presetId);
                 }
 
                 const data = await apiPostForm<CreationResponse>('/lab/video/generate', form);

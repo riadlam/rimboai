@@ -17,6 +17,8 @@ class HiggsfieldService
 {
     public const GENJUTSU_MOTION_TRANSFER = 'higgsfield/genjutsu/motion-transfer/v1.0';
 
+    public const GENJUTSU_RESTYLE = 'higgsfield/genjutsu/restyle/v1.0';
+
     private string $key;
 
     private string $baseUrl;
@@ -165,8 +167,63 @@ class HiggsfieldService
         return $id !== '' && str_starts_with($id, 'higgsfield/');
     }
 
+    public static function isGenjutsuEndpoint(?string $endpointId): bool
+    {
+        $id = strtolower(trim((string) $endpointId));
+
+        return $id === self::GENJUTSU_MOTION_TRANSFER
+            || $id === self::GENJUTSU_RESTYLE
+            || str_starts_with($id, 'higgsfield/genjutsu/');
+    }
+
     /**
-     * USD per ceil(input second) for Genjutsu Motion Transfer.
+     * @return list<array{id: string, name: string, preview_url: string|null}>
+     *
+     * @throws RequestException|RuntimeException
+     */
+    public function listRestylePresets(): array
+    {
+        if (! $this->configured()) {
+            throw new RuntimeException('Higgsfield is not configured.');
+        }
+
+        $url = $this->baseUrl.'/models/'.self::GENJUTSU_RESTYLE.'/presets';
+        $response = Http::withHeaders($this->headers())
+            ->timeout(30)
+            ->get($url);
+        $response->throw();
+
+        $json = $response->json() ?? [];
+        $items = is_array($json) ? ($json['items'] ?? []) : [];
+        if (! is_array($items)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $id = isset($item['id']) && is_string($item['id']) ? trim($item['id']) : '';
+            if ($id === '') {
+                continue;
+            }
+            $out[] = [
+                'id' => $id,
+                'name' => isset($item['name']) && is_string($item['name']) && $item['name'] !== ''
+                    ? $item['name']
+                    : $id,
+                'preview_url' => isset($item['preview_url']) && is_string($item['preview_url'])
+                    ? $item['preview_url']
+                    : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * USD per ceil(input second) for Genjutsu Motion Transfer / Restyle.
      */
     public static function genjutsuUnitPriceUsd(string $resolution): float
     {
@@ -186,11 +243,14 @@ class HiggsfieldService
     /**
      * @return array{fal_cost_usd: float, billable_units: float, unit: string, unit_price: float, breakdown: array<string, mixed>}
      */
-    public static function estimateGenjutsuUsd(int $inputSeconds, string $resolution): array
+    public static function estimateGenjutsuUsd(int $inputSeconds, string $resolution, ?string $modelId = null): array
     {
         $seconds = max(1, (int) ceil(max(0, $inputSeconds)));
         $unitPrice = self::genjutsuUnitPriceUsd($resolution);
         $usd = round($seconds * $unitPrice, 6);
+        $model = is_string($modelId) && $modelId !== ''
+            ? trim($modelId, '/')
+            : self::GENJUTSU_MOTION_TRANSFER;
 
         return [
             'fal_cost_usd' => $usd,
@@ -199,7 +259,7 @@ class HiggsfieldService
             'unit_price' => $unitPrice,
             'breakdown' => [
                 'provider' => 'higgsfield',
-                'model' => self::GENJUTSU_MOTION_TRANSFER,
+                'model' => $model,
                 'resolution' => strtolower($resolution) ?: '720p',
                 'input_seconds_ceil' => $seconds,
                 'unit_price_usd' => $unitPrice,

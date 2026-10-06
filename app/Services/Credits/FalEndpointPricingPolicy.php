@@ -38,6 +38,14 @@ class FalEndpointPricingPolicy
             return null;
         }
 
+        if (str_contains($id, 'higgsfield/genjutsu/')) {
+            return $this->quoteGenjutsu(
+                $id,
+                (float) ($options['reference_video_seconds'] ?? 0),
+                $resolution,
+            );
+        }
+
         if (str_contains($id, 'grok-imagine-video')) {
             return $this->quoteGrok($id, $duration, $resolution, (int) ($options['reference_image_count'] ?? 0));
         }
@@ -132,6 +140,33 @@ class FalEndpointPricingPolicy
                 'sam_mask' => $sam,
                 'policy' => 'void_flat',
             ],
+        ];
+    }
+
+    /**
+     * Genjutsu bills ceil(input video seconds) × resolution list rate. Fail closed without duration.
+     *
+     * @return array{fal_cost_usd: float, unit: string, unit_price: float, billable_units: float, breakdown: array<string, mixed>}|null
+     */
+    private function quoteGenjutsu(string $id, float $referenceVideoSeconds, string $resolution): ?array
+    {
+        if ($referenceVideoSeconds <= 0) {
+            return null;
+        }
+
+        // Higgsfield trims to 30s; bill at most 30 ceil-seconds.
+        $seconds = (int) min(30, max(1, (int) ceil($referenceVideoSeconds - 1e-9)));
+        $quoted = \App\Services\HiggsfieldService::estimateGenjutsuUsd($seconds, $resolution, $id);
+
+        return [
+            'fal_cost_usd' => $quoted['fal_cost_usd'],
+            'unit' => $quoted['unit'],
+            'unit_price' => $quoted['unit_price'],
+            'billable_units' => $quoted['billable_units'],
+            'breakdown' => array_merge($quoted['breakdown'], [
+                'policy' => 'higgsfield_genjutsu_input_seconds',
+                'reference_video_seconds' => $referenceVideoSeconds,
+            ]),
         ];
     }
 

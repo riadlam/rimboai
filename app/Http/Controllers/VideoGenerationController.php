@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientTokensException;
+use App\Jobs\PollHiggsfieldCreationJob;
 use App\Models\UserVideoCreation;
 use App\Services\AssetPromptReferences;
 use App\Services\Credits\VideoGenerationCostEstimator;
@@ -11,6 +12,7 @@ use App\Services\FalService;
 use App\Services\FalVideoInputBuilder;
 use App\Services\FalWalletCostTracker;
 use App\Services\FalWebhookProcessor;
+use App\Services\HiggsfieldService;
 use App\Services\LabCreationPresenter;
 use App\Services\MediaProbeService;
 use App\Services\MediaReferenceStorage;
@@ -39,6 +41,7 @@ class VideoGenerationController extends Controller
         FalWalletCostTracker $walletCost,
         FalWebhookProcessor $processor,
         MediaProbeService $mediaProbe,
+        HiggsfieldService $higgsfield,
     ): JsonResponse {
         $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
         if ($contentLength > 0 && $request->all() === [] && $request->allFiles() === []) {
@@ -76,7 +79,7 @@ class VideoGenerationController extends Controller
 
         try {
             $data = $request->validate([
-                'prompt' => ['required', 'string', 'min:2', 'max:100000'],
+                'prompt' => ['nullable', 'string', 'max:100000'],
                 'endpoint_id' => ['nullable', 'string', 'max:191'],
                 'aspect' => ['nullable', 'string', 'max:32'],
                 'resolution' => ['nullable', 'string', 'max:32'],
@@ -100,6 +103,8 @@ class VideoGenerationController extends Controller
                 'negative_prompt' => ['nullable', 'string', 'max:500'],
                 // Client-probed hint used when server cannot ffprobe pre-uploaded video URLs.
                 'reference_video_seconds' => ['nullable', 'numeric', 'min:0', 'max:45'],
+                // Genjutsu Restyle style UUID from GET /lab/video/genjutsu/restyle-presets.
+                'preset_id' => ['nullable', 'uuid'],
             ]);
         } catch (ValidationException $e) {
             $first = collect($e->errors())->flatten()->first();
@@ -113,10 +118,6 @@ class VideoGenerationController extends Controller
                 'message' => is_string($first) && $first !== '' ? $first : 'Invalid video request.',
                 'errors' => $e->errors(),
             ], 422);
-        }
-
-        if (! $fal->configured()) {
-            return response()->json(['message' => 'Video service is not configured.'], 503);
         }
 
         $model = null;
@@ -136,6 +137,19 @@ class VideoGenerationController extends Controller
 
         if (! $model) {
             return response()->json(['message' => __('messages.model_unavailable')], 422);
+        }
+
+        $wantsHiggsfield = HiggsfieldService::isHiggsfieldEndpoint((string) $model->endpoint_id);
+        if ($wantsHiggsfield && ! $higgsfield->configured()) {
+            return response()->json(['message' => 'Higgsfield is not configured.'], 503);
+        }
+        if (! $wantsHiggsfield && ! $fal->configured()) {
+            return response()->json(['message' => 'Video service is not configured.'], 503);
+        }
+
+        $promptText = trim((string) ($data['prompt'] ?? ''));
+        if (! $wantsHiggsfield && mb_strlen($promptText) < 2) {
+            return response()->json(['message' => 'Add a prompt to generate.'], 422);
         }
 
         $imageFiles = $this->normalizeFiles($request->file('images'));
@@ -220,30 +234,77 @@ class VideoGenerationController extends Controller
         }
 
         // Normalize videos for partner downloaders (moov-at-end phone/Windows MP4s).
-        try {
-            $videoUrls = array_values(array_map(
-                fn (string $url): string => $fal->ensureInferenceVideoUrl($url, 'lab-video.mp4'),
-                $videoUrls,
-            ));
-            $videoIndex = 0;
-            foreach ($inputAssets as $i => $asset) {
-                if (($asset['type'] ?? null) !== 'video') {
-                    continue;
+        // Higgsfield also needs a publicly downloadable MP4 URL.
+        if ($fal->configured() && $videoUrls !== []) {
+            try {
+                $videoUrls = array_values(array_map(
+                    fn (string $url): string => $fal->ensureInferenceVideoUrl($url, 'lab-video.mp4'),
+                    $videoUrls,
+                ));
+                $videoIndex = 0;
+                foreach ($inputAssets as $i => $asset) {
+                    if (($asset['type'] ?? null) !== 'video') {
+                        continue;
+                    }
+                    if (! isset($videoUrls[$videoIndex])) {
+                        break;
+                    }
+                    $inputAssets[$i]['fal_url'] = $videoUrls[$videoIndex];
+                    $inputAssets[$i]['url'] = $videoUrls[$videoIndex];
+                    $inputAssets[$i]['normalized'] = true;
+                    $videoIndex++;
                 }
-                if (! isset($videoUrls[$videoIndex])) {
-                    break;
-                }
-                $inputAssets[$i]['fal_url'] = $videoUrls[$videoIndex];
-                $inputAssets[$i]['url'] = $videoUrls[$videoIndex];
-                $inputAssets[$i]['normalized'] = true;
-                $videoIndex++;
-            }
-        } catch (\Throwable $e) {
-            report($e);
+            } catch (\Throwable $e) {
+                report($e);
 
-            return response()->json([
-                'message' => 'Could not prepare the video for AI processing. Try re-uploading as MP4.',
-            ], 422);
+                return response()->json([
+                    'message' => 'Could not prepare the video for AI processing. Try re-uploading as MP4.',
+                ], 422);
+            }
+        }
+
+        $submitEndpoint = $route['endpoint_id'];
+        $mode = $route['mode'];
+
+        $referenceVideoSeconds = 0.0;
+        foreach ($videoFiles as $videoFile) {
+            if (! $videoFile instanceof UploadedFile) {
+                continue;
+            }
+            $probed = $mediaProbe->probeUploaded($videoFile);
+            if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
+                $referenceVideoSeconds += (float) $probed['duration'];
+            }
+        }
+        foreach ($preVideoUrls as $url) {
+            $probed = $mediaProbe->probeUrl($url);
+            if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
+                $referenceVideoSeconds += (float) $probed['duration'];
+            }
+        }
+        $clientHint = max(0.0, (float) ($data['reference_video_seconds'] ?? 0));
+        if ($referenceVideoSeconds <= 0 && $clientHint > 0) {
+            $referenceVideoSeconds = $clientHint;
+        }
+
+        if (HiggsfieldService::isGenjutsuEndpoint($submitEndpoint)) {
+            return $this->storeGenjutsu(
+                $request,
+                $higgsfield,
+                $costEstimator,
+                $tokens,
+                $processor,
+                $model,
+                $submitEndpoint,
+                $mode,
+                $promptText,
+                $data,
+                $inputAssets,
+                $imageUrls,
+                $videoUrls,
+                $counts,
+                $referenceVideoSeconds,
+            );
         }
 
         $allowedDurations = null;
@@ -252,10 +313,7 @@ class VideoGenerationController extends Controller
             $allowedDurations = is_array($decoded) ? $decoded : null;
         }
 
-        $submitEndpoint = $route['endpoint_id'];
-        $mode = $route['mode'];
-
-        $providerPrompt = $promptReferences->resolve($data['prompt'], [
+        $providerPrompt = $promptReferences->resolve($promptText !== '' ? $promptText : (string) ($data['prompt'] ?? ''), [
             'image' => count($imageUrls),
             'video' => count($videoUrls),
             'audio' => count($audioUrls),
@@ -300,27 +358,6 @@ class VideoGenerationController extends Controller
             ], 503);
         }
 
-        $referenceVideoSeconds = 0.0;
-        foreach ($videoFiles as $videoFile) {
-            if (! $videoFile instanceof UploadedFile) {
-                continue;
-            }
-            $probed = $mediaProbe->probeUploaded($videoFile);
-            if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
-                $referenceVideoSeconds += (float) $probed['duration'];
-            }
-        }
-        // Lab pre-uploads to fal CDN then sends video_urls[] — probe those too.
-        foreach ($preVideoUrls as $url) {
-            $probed = $mediaProbe->probeUrl($url);
-            if ($probed !== null && isset($probed['duration']) && is_numeric($probed['duration'])) {
-                $referenceVideoSeconds += (float) $probed['duration'];
-            }
-        }
-        $clientHint = max(0.0, (float) ($data['reference_video_seconds'] ?? 0));
-        if ($referenceVideoSeconds <= 0 && $clientHint > 0) {
-            $referenceVideoSeconds = $clientHint;
-        }
         // Fail closed on H3 R2V: unknown ref duration still bills a motion clip (fal bills both).
         // Prefer probed/client duration; otherwise assume output length (pricing policy also
         // fail-closes if this stays 0).
@@ -461,6 +498,201 @@ class VideoGenerationController extends Controller
         }
 
         return response()->json($this->present($creation));
+    }
+
+    public function restylePresets(HiggsfieldService $higgsfield): JsonResponse
+    {
+        if (! $higgsfield->configured()) {
+            return response()->json(['message' => 'Higgsfield is not configured.'], 503);
+        }
+
+        try {
+            $items = $higgsfield->listRestylePresets();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Could not load Restyle styles.'], 502);
+        }
+
+        return response()->json([
+            'model' => HiggsfieldService::GENJUTSU_RESTYLE,
+            'items' => $items,
+        ]);
+    }
+
+    /**
+     * @param  object{endpoint_id: string, name: string, resolutions?: mixed, aspect_ratios?: mixed}  $model
+     * @param  array<string, mixed>  $data
+     * @param  list<array<string, mixed>>  $inputAssets
+     * @param  list<string>  $imageUrls
+     * @param  list<string>  $videoUrls
+     * @param  array{images: int, videos: int, audios: int}  $counts
+     */
+    private function storeGenjutsu(
+        Request $request,
+        HiggsfieldService $higgsfield,
+        VideoGenerationCostEstimator $costEstimator,
+        TokenService $tokens,
+        FalWebhookProcessor $processor,
+        object $model,
+        string $submitEndpoint,
+        string $mode,
+        string $promptText,
+        array $data,
+        array $inputAssets,
+        array $imageUrls,
+        array $videoUrls,
+        array $counts,
+        float $referenceVideoSeconds,
+    ): JsonResponse {
+        if ($videoUrls === []) {
+            return response()->json(['message' => 'Add a motion video (4–30s).'], 422);
+        }
+
+        $isRestyle = str_contains(strtolower($submitEndpoint), 'restyle');
+        if (! $isRestyle && $imageUrls === []) {
+            return response()->json(['message' => 'Add at least one character or product image.'], 422);
+        }
+
+        $presetId = isset($data['preset_id']) && is_string($data['preset_id'])
+            ? trim($data['preset_id'])
+            : '';
+        if ($isRestyle && $presetId === '') {
+            return response()->json(['message' => 'Pick a Restyle style before creating.'], 422);
+        }
+
+        if ($referenceVideoSeconds <= 0) {
+            return response()->json([
+                'message' => 'Could not read the motion video length. Re-upload the clip and try again.',
+            ], 422);
+        }
+        if ($referenceVideoSeconds < 4) {
+            return response()->json([
+                'message' => 'Genjutsu needs a motion video of at least 4 seconds.',
+            ], 422);
+        }
+
+        $resolution = $this->pickSupportedOption(
+            (string) ($data['resolution'] ?? '720p'),
+            $model->resolutions ?? null,
+            '720p',
+        );
+        if (! in_array(strtolower($resolution), ['480p', '720p', '1080p'], true)) {
+            $resolution = '720p';
+        } else {
+            $resolution = strtolower($resolution);
+        }
+
+        $billableSeconds = (int) min(30, max(1, (int) ceil($referenceVideoSeconds - 1e-9)));
+        $cost = $costEstimator->estimate([
+            'endpoint_id' => $submitEndpoint,
+            'unit' => 'seconds',
+            'unit_price' => HiggsfieldService::genjutsuUnitPriceUsd($resolution),
+            'duration_seconds' => $billableSeconds,
+            'audio' => false,
+            'resolution' => $resolution,
+            'aspect' => 'auto',
+            'reference_video_seconds' => $referenceVideoSeconds,
+            'reference_image_count' => count($imageUrls),
+        ]);
+
+        if ((int) $cost['credits'] <= 0) {
+            return response()->json([
+                'message' => __('messages.model_unavailable'),
+                'endpoint_id' => $submitEndpoint,
+            ], 503);
+        }
+
+        $hfInput = [
+            'video_url' => $videoUrls[0],
+            'resolution' => $resolution,
+        ];
+        if ($isRestyle) {
+            $hfInput['preset_id'] = $presetId;
+            $hfInput['image_urls'] = array_values(array_slice($imageUrls, 0, 5));
+        } else {
+            $hfInput['image_urls'] = array_values(array_slice($imageUrls, 0, 8));
+        }
+        if ($promptText !== '') {
+            $hfInput['prompt'] = mb_substr($promptText, 0, 10000);
+        }
+
+        try {
+            /** @var UserVideoCreation $creation */
+            $creation = $tokens->reserve(
+                $request->user(),
+                (int) $cost['credits'],
+                'video',
+                fn () => UserVideoCreation::create([
+                    'user_id' => $request->user()->id,
+                    'mode' => $mode,
+                    'provider' => 'higgsfield',
+                    'endpoint_id' => $submitEndpoint,
+                    'model_name' => $model->name,
+                    'prompt' => $promptText !== '' ? $promptText : null,
+                    'negative_prompt' => null,
+                    'input_assets' => $inputAssets ?: null,
+                    'settings' => [
+                        'aspect' => 'auto',
+                        'resolution' => $resolution,
+                        'duration' => $billableSeconds,
+                        'audio' => false,
+                        'provider' => 'higgsfield',
+                        'catalog_endpoint' => $model->endpoint_id,
+                        'higgsfield_model' => $submitEndpoint,
+                        'higgsfield_input' => $hfInput,
+                        'preset_id' => $isRestyle ? $presetId : null,
+                        'billing_endpoint' => $submitEndpoint,
+                        'billing_source' => 'higgsfield_list',
+                        'billing_unit' => $cost['unit'],
+                        'billing_unit_price' => $cost['unit_price'],
+                        'fal_cost_usd' => $cost['fal_cost_usd'],
+                        'credits' => $cost['credits'],
+                        'cost_breakdown' => $cost['breakdown'],
+                        'media_counts' => $counts,
+                        'reference_video_seconds' => $referenceVideoSeconds,
+                    ],
+                    'duration_value' => (string) $billableSeconds,
+                    'duration_seconds' => $billableSeconds,
+                    'aspect_ratio' => 'auto',
+                    'resolution' => $resolution,
+                    'with_audio' => false,
+                    'credits_charged' => $cost['credits'],
+                    'status' => UserVideoCreation::STATUS_PENDING,
+                    'progress_message' => 'Starting video generation…',
+                ]),
+            );
+        } catch (InsufficientTokensException $e) {
+            return response()->json([
+                'message' => __('messages.not_enough_tokens'),
+                'required_tokens' => $e->required,
+                'available_tokens' => $e->available,
+            ], 402);
+        }
+
+        try {
+            $submit = $higgsfield->submit($submitEndpoint, $hfInput);
+        } catch (\Throwable $e) {
+            report($e);
+            $creation->markFailed(__('messages.could_not_start'), 'submit_error');
+            $tokens->refund($request->user(), $creation, 'video', 'higgsfield_submit_failed');
+            $processor->broadcastSnapshot('video', $creation->fresh());
+
+            return response()->json($this->present($creation->fresh()), 502);
+        }
+
+        $creation->markQueued(
+            $submit['request_id'] ?? null,
+            $submit['status_url'] ?? null,
+            $submit['response_url'] ?? null,
+        );
+        $processor->broadcastSnapshot('video', $creation->fresh());
+
+        PollHiggsfieldCreationJob::dispatch((int) $creation->id)
+            ->onConnection('database')
+            ->delay(now()->addSeconds(8));
+
+        return response()->json($this->present($creation->fresh()), 201);
     }
 
     /**
