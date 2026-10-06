@@ -199,9 +199,17 @@ class FalEndpointPricingPolicy
         }
 
         // fal bills reference video seconds at the same $/s as output (combined refs ≤15s).
+        // Fail closed on R2V: unknown/missing ref duration still bills a motion clip so we
+        // never undercharge (historical bug: output-only quotes while fal billed output+ref).
+        $refAssumed = false;
         $refBillable = 0;
-        if (str_contains($id, 'reference-to-video') && $referenceVideoSeconds > 0) {
-            $refBillable = (int) min(15, max(1, (int) ceil($referenceVideoSeconds - 1e-9)));
+        if (str_contains($id, 'reference-to-video')) {
+            if ($referenceVideoSeconds > 0) {
+                $refBillable = (int) min(15, max(1, (int) ceil($referenceVideoSeconds - 1e-9)));
+            } else {
+                $refBillable = (int) min(15, max(1, $duration));
+                $refAssumed = true;
+            }
         }
 
         $billable = $duration + $refBillable;
@@ -217,6 +225,7 @@ class FalEndpointPricingPolicy
                 'duration_seconds' => $duration,
                 'reference_video_seconds' => $referenceVideoSeconds,
                 'reference_video_billable_seconds' => $refBillable,
+                'reference_video_assumed' => $refAssumed,
                 'resolution' => $resolution,
                 'image_fee_usd' => $imageFee,
                 'reference_image_count' => $images,

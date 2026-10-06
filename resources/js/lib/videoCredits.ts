@@ -68,10 +68,15 @@ export function estimateVideoCredits(
         const imageFee =
             endpointId.includes('reference-to-video') && refImages > 5 ? (refImages - 5) * 0.08 : 0;
         // fal bills reference video seconds at the same $/s as output (combined refs ≤15s).
-        const refBillable =
-            endpointId.includes('reference-to-video') && refVideo > 0
-                ? Math.min(15, Math.max(1, Math.ceil(refVideo - 1e-9)))
-                : 0;
+        // Fail closed on R2V: unknown ref duration still bills ≈ output length so the UI
+        // never underquotes (matches FalEndpointPricingPolicy::quoteMiniMaxH3).
+        let refBillable = 0;
+        if (endpointId.includes('reference-to-video')) {
+            refBillable =
+                refVideo > 0
+                    ? Math.min(15, Math.max(1, Math.ceil(refVideo - 1e-9)))
+                    : Math.min(15, Math.max(1, durationSeconds));
+        }
         const billable = durationSeconds + refBillable;
         return present(
             round6(billable * perSecond + imageFee),

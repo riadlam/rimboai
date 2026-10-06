@@ -321,7 +321,9 @@ class VideoGenerationController extends Controller
         if ($referenceVideoSeconds <= 0 && $clientHint > 0) {
             $referenceVideoSeconds = $clientHint;
         }
-        // Fail closed on H3 R2V: unknown ref duration still bills ≈ output length (fal bills both).
+        // Fail closed on H3 R2V: unknown ref duration still bills a motion clip (fal bills both).
+        // Prefer probed/client duration; otherwise assume output length (pricing policy also
+        // fail-closes if this stays 0).
         if (
             $referenceVideoSeconds <= 0
             && $videoUrls !== []

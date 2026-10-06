@@ -63,8 +63,29 @@ class FalEndpointPricingPolicyTest extends TestCase
         $this->assertNotNull($base);
         $this->assertEqualsWithDelta(0.30, $base['fal_cost_usd'], 1e-6);
         $this->assertNotNull($r2v);
-        // 5s * $0.13 + 2 extra images * $0.08
-        $this->assertEqualsWithDelta(0.81, $r2v['fal_cost_usd'], 1e-6);
+        // Fail-closed R2V: (output 5s + assumed ref 5s) * $0.13 + 2 extra images * $0.08
+        $this->assertEqualsWithDelta(1.46, $r2v['fal_cost_usd'], 1e-6);
+        $this->assertTrue((bool) ($r2v['breakdown']['reference_video_assumed'] ?? false));
+    }
+
+    public function test_minimax_h3_r2v_assumes_ref_seconds_when_missing(): void
+    {
+        $policy = new FalEndpointPricingPolicy;
+        $quote = $policy->quoteVideo([
+            'endpoint_id' => 'minimax/h3/reference-to-video',
+            'unit' => 'seconds',
+            'unit_price' => 0.05,
+            'duration_seconds' => 15,
+            'resolution' => '768p',
+            'reference_video_seconds' => 0,
+            'reference_image_count' => 1,
+        ]);
+
+        $this->assertNotNull($quote);
+        // Unknown ref → assume output length: (15 + 15) * $0.06 = $1.80
+        $this->assertEqualsWithDelta(1.80, $quote['fal_cost_usd'], 1e-6);
+        $this->assertSame(15, $quote['breakdown']['reference_video_billable_seconds'] ?? null);
+        $this->assertTrue((bool) ($quote['breakdown']['reference_video_assumed'] ?? false));
     }
 
     public function test_minimax_h3_r2v_bills_reference_video_seconds(): void

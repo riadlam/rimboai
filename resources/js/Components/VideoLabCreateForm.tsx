@@ -386,6 +386,8 @@ export default function VideoLabCreateForm({
                     resolution,
                     aspect,
                     referenceImageCount: mediaCounts.images,
+                    // Fail closed: if a ref video is attached but duration not probed yet,
+                    // leave 0 so videoCredits assumes ≈ output length for H3 R2V.
                     referenceVideoSeconds: media
                         .filter((m) => m.kind === 'video')
                         .reduce((sum, m) => sum + Math.max(0, m.durationSeconds ?? 0), 0),
