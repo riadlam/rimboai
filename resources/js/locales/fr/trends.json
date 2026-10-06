@@ -1,5 +1,6 @@
 {
   "title": "Tendances",
+  "ugcTitle": "UGC",
   "search": "Rechercher par prompt, créateur ou modèle...",
   "clearSearch": "Effacer la recherche",
   "pills": {
@@ -22,8 +23,12 @@
   "sections": {
     "featuredTitle": "Sélection",
     "featuredSub": "Créations communautaires sélectionnées",
+    "ugcFeaturedTitle": "UGC sélectionné",
+    "ugcFeaturedSub": "Remakes créateurs prêts à personnaliser",
     "videosTitle": "Vidéos",
     "videosSub": "Créations en mouvement de la communauté",
+    "ugcVideosTitle": "Vidéos UGC",
+    "ugcVideosSub": "Modèles mode et créateurs",
     "imagesTitle": "Images",
     "imagesSub": "Images fixes et œuvres",
     "musicTitle": "Musique",
@@ -31,6 +36,8 @@
   },
   "emptyPublicTitle": "Aucune création publique pour l'instant",
   "emptyPublicSub": "Publiez une image, une vidéo ou une musique terminée depuis l'Historique pour l'afficher ici.",
+  "emptyUgcTitle": "Aucun modèle UGC pour l'instant",
+  "emptyUgcSub": "Les nouveaux remakes créateurs apparaîtront ici.",
   "emptyFiltered": "Aucune création ne correspond à vos filtres",
   "useTemplate": "Utiliser le modèle",
   "openingTemplate": "Ouverture…",

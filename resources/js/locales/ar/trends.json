@@ -1,5 +1,6 @@
 {
   "title": "الترندات",
+  "ugcTitle": "UGC",
   "search": "ابحث بالوصف أو المنشئ أو النموذج...",
   "clearSearch": "مسح البحث",
   "pills": {
@@ -22,8 +23,12 @@
   "sections": {
     "featuredTitle": "مميّز",
     "featuredSub": "إبداعات مجتمعية مختارة بعناية",
+    "ugcFeaturedTitle": "UGC مميّز",
+    "ugcFeaturedSub": "إعادة صنع للمبدعين جاهزة للتخصيص",
     "videosTitle": "فيديوهات",
     "videosSub": "إبداعات متحركة من المجتمع",
+    "ugcVideosTitle": "فيديوهات UGC",
+    "ugcVideosSub": "قوالب أزياء ومبدعين",
     "imagesTitle": "صور",
     "imagesSub": "صور ثابتة وأعمال فنية",
     "musicTitle": "موسيقى",
@@ -31,6 +36,8 @@
   },
   "emptyPublicTitle": "لا إبداعات عامة بعد",
   "emptyPublicSub": "انشر صورة أو فيديو أو موسيقى مكتملة من السجل لتظهر هنا.",
+  "emptyUgcTitle": "لا قوالب UGC بعد",
+  "emptyUgcSub": "ستظهر هنا إعادة الصنع الجديدة للمبدعين.",
   "emptyFiltered": "لا إبداعات تطابق عوامل التصفية",
   "useTemplate": "استخدم القالب",
   "openingTemplate": "جاري الفتح…",

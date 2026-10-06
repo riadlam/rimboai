@@ -16,6 +16,7 @@ export type TrendTemplate = {
     name: string;
     trend_title?: string | null;
     category: 'Images' | 'Videos' | 'Music' | string;
+    catalog?: 'trends' | 'ugc' | string;
     creator: string;
     avatar: string;
     cover: string;
@@ -58,14 +59,16 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 type Props = {
     templates?: TrendTemplate[];
+    catalog?: 'trends' | 'ugc' | string;
 };
 
-export default function Trends({ templates: initialTemplates = [] }: Props) {
+export default function Trends({ templates: initialTemplates = [], catalog = 'trends' }: Props) {
     const { t } = useTranslation('trends');
+    const isUgc = catalog === 'ugc';
     return (
         <AppLayout>
-            <Head title={t('title')} />
-            <TrendsWorkspace initialTemplates={initialTemplates} />
+            <Head title={isUgc ? t('ugcTitle') : t('title')} />
+            <TrendsWorkspace initialTemplates={initialTemplates} catalog={catalog} />
         </AppLayout>
     );
 }
@@ -74,9 +77,16 @@ function isAudioUrl(url?: string | null): boolean {
     return Boolean(url && /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(url));
 }
 
-function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate[] }) {
+function TrendsWorkspace({
+    initialTemplates,
+    catalog = 'trends',
+}: {
+    initialTemplates: TrendTemplate[];
+    catalog?: string;
+}) {
     const { t } = useTranslation('trends');
     const { props } = usePage<PageProps>();
+    const isUgc = catalog === 'ugc';
     const [templates, setTemplates] = useState(initialTemplates);
     const [query, setQuery] = useState('');
     const [pill, setPill] = useState<PillId>('all');
@@ -170,19 +180,22 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
         return filtered.filter((row) => row.type === 'music').length;
     };
 
+    const featuredTitle = isUgc ? t('sections.ugcFeaturedTitle') : t('sections.featuredTitle');
+    const featuredSub = isUgc ? t('sections.ugcFeaturedSub') : t('sections.featuredSub');
+
     // Sections rendered for the current pill.
     const sections: { key: string; title: string; sub: string; icon: 'star' | 'video' | 'image' | 'music'; items: TrendTemplate[] }[] =
         pill === 'all'
             ? [
-                  { key: 'featured', title: t('sections.featuredTitle'), sub: t('sections.featuredSub'), icon: 'star', items: groups.featured },
-                  { key: 'videos', title: t('sections.videosTitle'), sub: t('sections.videosSub'), icon: 'video', items: groups.videos },
+                  { key: 'featured', title: featuredTitle, sub: featuredSub, icon: 'star', items: groups.featured },
+                  { key: 'videos', title: isUgc ? t('sections.ugcVideosTitle') : t('sections.videosTitle'), sub: isUgc ? t('sections.ugcVideosSub') : t('sections.videosSub'), icon: 'video', items: groups.videos },
                   { key: 'images', title: t('sections.imagesTitle'), sub: t('sections.imagesSub'), icon: 'image', items: groups.images },
                   { key: 'music', title: t('sections.musicTitle'), sub: t('sections.musicSub'), icon: 'music', items: groups.music },
               ].filter((s) => s.items.length > 0)
             : pill === 'featured'
-              ? [{ key: 'featured', title: t('sections.featuredTitle'), sub: t('sections.featuredSub'), icon: 'star', items: groups.featured }]
+              ? [{ key: 'featured', title: featuredTitle, sub: featuredSub, icon: 'star', items: groups.featured }]
               : pill === 'videos'
-                ? [{ key: 'videos', title: t('sections.videosTitle'), sub: t('sections.videosSub'), icon: 'video', items: filtered.filter((row) => isVideoLike(row)) }]
+                ? [{ key: 'videos', title: isUgc ? t('sections.ugcVideosTitle') : t('sections.videosTitle'), sub: isUgc ? t('sections.ugcVideosSub') : t('sections.videosSub'), icon: 'video', items: filtered.filter((row) => isVideoLike(row)) }]
                 : pill === 'images'
                   ? [{ key: 'images', title: t('sections.imagesTitle'), sub: t('sections.imagesSub'), icon: 'image', items: filtered.filter((row) => row.type === 'image') }]
                   : [{ key: 'music', title: t('sections.musicTitle'), sub: t('sections.musicSub'), icon: 'music', items: filtered.filter((row) => row.type === 'music') }];
@@ -282,8 +295,8 @@ function TrendsWorkspace({ initialTemplates }: { initialTemplates: TrendTemplate
 
             {templates.length === 0 ? (
                 <EmptyState
-                    title={t('emptyPublicTitle')}
-                    sub={t('emptyPublicSub')}
+                    title={isUgc ? t('emptyUgcTitle') : t('emptyPublicTitle')}
+                    sub={isUgc ? t('emptyUgcSub') : t('emptyPublicSub')}
                 />
             ) : totalVisible === 0 ? (
                 <EmptyState title={t('emptyFiltered')} action={<button type="button" onClick={clearFilters} className="mt-3 rounded-full bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white/70 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white">{t('clearFilters')}</button>} />

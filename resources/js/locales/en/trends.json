@@ -1,5 +1,6 @@
 {
   "title": "Trends",
+  "ugcTitle": "UGC",
   "search": "Search by prompt, creator, or model...",
   "clearSearch": "Clear search",
   "pills": {
@@ -22,8 +23,12 @@
   "sections": {
     "featuredTitle": "Featured",
     "featuredSub": "Hand-picked community creations",
+    "ugcFeaturedTitle": "Featured UGC",
+    "ugcFeaturedSub": "Creator remakes ready to customize",
     "videosTitle": "Videos",
     "videosSub": "Motion creations from the community",
+    "ugcVideosTitle": "UGC videos",
+    "ugcVideosSub": "Fashion and creator templates",
     "imagesTitle": "Images",
     "imagesSub": "Stills and artwork",
     "musicTitle": "Music",
@@ -31,6 +36,8 @@
   },
   "emptyPublicTitle": "No public creations yet",
   "emptyPublicSub": "Publish a completed image, video, or music creation from History to show it here.",
+  "emptyUgcTitle": "No UGC templates yet",
+  "emptyUgcSub": "New creator remakes will show up here.",
   "emptyFiltered": "No creations match your filters",
   "useTemplate": "Use Template",
   "openingTemplate": "Opening…",

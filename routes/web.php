@@ -53,6 +53,7 @@ Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/lab', [DashboardController::class, 'lab'])->name('lab');
 Route::get('/trends', [DashboardController::class, 'trends'])->name('trends');
+Route::get('/ugc', [DashboardController::class, 'ugc'])->name('ugc');
 Route::get('/trends/{key}', [DashboardController::class, 'showTrend'])
     ->where('key', 'image-\d+|video-\d+|music-\d+|template-\d+')
     ->name('trends.show');

@@ -30,12 +30,46 @@ class TrendsFeedService
     }
 
     /**
+     * Curated admin templates for a catalog (home rails / /ugc).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function catalogTemplates(string $category = TrendTemplate::CATEGORY_TRENDS, int $limit = 24): array
+    {
+        $category = strtolower(trim($category)) === TrendTemplate::CATEGORY_UGC
+            ? TrendTemplate::CATEGORY_UGC
+            : TrendTemplate::CATEGORY_TRENDS;
+        $limit = max(1, min(200, $limit));
+
+        return \Illuminate\Support\Facades\Cache::remember(
+            "trends.catalog.{$category}.{$limit}",
+            now()->addSeconds(45),
+            function () use ($category, $limit) {
+                return TrendTemplate::query()
+                    ->published()
+                    ->category($category)
+                    ->orderByDesc('is_featured')
+                    ->orderBy('sort_order')
+                    ->orderByDesc('uses_count')
+                    ->orderByDesc('id')
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn (TrendTemplate $t) => $this->mapTrendTemplate($t))
+                    ->filter()
+                    ->values()
+                    ->all();
+            },
+        );
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function buildFeed(int $limit): array
     {
         $adminTemplates = TrendTemplate::query()
             ->published()
+            ->category(TrendTemplate::CATEGORY_TRENDS)
             ->orderByDesc('is_featured')
             ->orderBy('sort_order')
             ->orderByDesc('uses_count')
@@ -759,6 +793,7 @@ class TrendsFeedService
                 ?: $template->created_at?->toIso8601String(),
             'name' => $template->title,
             'category' => $isSheet ? 'Images' : 'Videos',
+            'catalog' => $template->catalogCategory(),
             'cover' => $cover ?: '',
             'coverType' => $isSheet || ! $exampleVideo ? 'image' : 'video',
             'video_url' => $exampleVideo,
@@ -767,7 +802,7 @@ class TrendsFeedService
             'description' => (string) ($template->description ?: ($isSheet
                 ? 'Upload a photo — get a multi-angle character sheet.'
                 : ($template->isH3DirectWorkflow()
-                    ? 'Upload your product packshot, edit the prompt, remake the commercial.'
+                    ? 'Upload your photos, edit the prompt, remake this template.'
                     : 'Official trend template'))),
             'prompt' => $isSheet
                 ? (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt())

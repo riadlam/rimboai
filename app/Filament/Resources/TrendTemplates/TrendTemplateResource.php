@@ -91,6 +91,14 @@ class TrendTemplateResource extends Resource
                 Toggle::make('is_featured')
                     ->label('Featured')
                     ->default(true),
+                Select::make('category')
+                    ->label('Catalog')
+                    ->options([
+                        TrendTemplate::CATEGORY_TRENDS => 'Trends',
+                        TrendTemplate::CATEGORY_UGC => 'UGC',
+                    ])
+                    ->default(TrendTemplate::CATEGORY_TRENDS)
+                    ->required(),
                 TextInput::make('sort_order')
                     ->numeric()
                     ->default(0)
@@ -391,6 +399,14 @@ class TrendTemplateResource extends Resource
                     ->sortable(),
                 TextColumn::make('slug')
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('category')
+                    ->label('Catalog')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        TrendTemplate::CATEGORY_UGC => 'UGC',
+                        default => 'Trends',
+                    })
+                    ->sortable(),
                 TextColumn::make('endpoint_id')
                     ->label('Model')
                     ->limit(36)

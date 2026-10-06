@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Innovation;
 use App\Models\InnovationCategory;
+use App\Models\TrendTemplate;
 use App\Services\FalImageInputBuilder;
 use App\Services\SeoService;
 use App\Services\Tools\ToolWorkspaceBuilder;
@@ -29,7 +30,8 @@ class DashboardController extends Controller
         return Inertia::render('Home', [
             'tools' => ToolsService::all(),
             'brands' => $this->loadBrands('text_to_video_models', 'text_to_video_categories'),
-            'trendTemplates' => $trends->feed(24),
+            'trendTemplates' => $trends->catalogTemplates(TrendTemplate::CATEGORY_TRENDS, 24),
+            'ugcTemplates' => $trends->catalogTemplates(TrendTemplate::CATEGORY_UGC, 24),
             'innovationSections' => $this->homeInnovationSections(),
         ]);
     }
@@ -41,10 +43,17 @@ class DashboardController extends Controller
 
     public function trends(TrendsFeedService $trends): Response
     {
-        $templates = $trends->feed();
-
         return Inertia::render('Trends', [
-            'templates' => $templates,
+            'templates' => $trends->feed(),
+            'catalog' => 'trends',
+        ]);
+    }
+
+    public function ugc(TrendsFeedService $trends): Response
+    {
+        return Inertia::render('Trends', [
+            'templates' => $trends->catalogTemplates(TrendTemplate::CATEGORY_UGC),
+            'catalog' => 'ugc',
         ]);
     }
 

@@ -35,9 +35,16 @@ class TrendTemplate extends Model
     /** MiniMax H3 Sogni-style section split + FlashVSR. */
     public const WORKFLOW_H3_SPLIT = 'h3_split';
 
+    /** Home + /trends catalog. */
+    public const CATEGORY_TRENDS = 'trends';
+
+    /** Home UGC rail + /ugc catalog. */
+    public const CATEGORY_UGC = 'ugc';
+
     protected $fillable = [
         'title',
         'slug',
+        'category',
         'description',
         'cover_url',
         'is_published',
@@ -83,6 +90,9 @@ class TrendTemplate extends Model
             if (! filled($model->slug) && filled($model->title)) {
                 $model->slug = static::uniqueSlug((string) $model->title);
             }
+            if (! filled($model->category)) {
+                $model->category = self::CATEGORY_TRENDS;
+            }
             if (! filled($model->endpoint_id)) {
                 $model->endpoint_id = self::DEFAULT_ENDPOINT;
             }
@@ -110,11 +120,28 @@ class TrendTemplate extends Model
             Cache::forget("trends.feed.v3.{$limit}");
             Cache::forget("trends.feed.v2.{$limit}");
         }
+        foreach ([self::CATEGORY_TRENDS, self::CATEGORY_UGC] as $category) {
+            foreach ([24, 60, 120, 200] as $limit) {
+                Cache::forget("trends.catalog.{$category}.{$limit}");
+            }
+        }
     }
 
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('is_published', true);
+    }
+
+    public function scopeCategory(Builder $query, string $category): Builder
+    {
+        return $query->where('category', $category);
+    }
+
+    public function catalogCategory(): string
+    {
+        $category = strtolower(trim((string) $this->category));
+
+        return $category === self::CATEGORY_UGC ? self::CATEGORY_UGC : self::CATEGORY_TRENDS;
     }
 
     /**
@@ -294,6 +321,35 @@ class TrendTemplate extends Model
         ];
     }
 
+    /**
+     * Character + outfit remake for fashion UGC (MiniMax H3 direct R2V).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function characterAndOutfitSlots(): array
+    {
+        return [
+            [
+                'key' => 'character',
+                'kind' => 'image',
+                'label' => 'Your character photo',
+                'role' => 'character',
+                'hint' => 'Clear face / full-body photo of the person. Becomes @Image1 — identity stays locked.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+            [
+                'key' => 'outfit',
+                'kind' => 'image',
+                'label' => 'Your outfit photo',
+                'role' => 'outfit',
+                'hint' => 'Clear garment / look photo. Becomes @Image2 — outfit stays locked on the character.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+        ];
+    }
+
     public function isPromptEditable(): bool
     {
         return (bool) $this->prompt_editable;
@@ -309,9 +365,10 @@ class TrendTemplate extends Model
             return false;
         }
 
-        // Auto: product upload slots → direct R2V (not face-split).
+        // Auto: product / character-outfit slots → direct R2V (not face-split).
         foreach ($this->clientSlots() as $slot) {
-            if (($slot['role'] ?? '') === 'product') {
+            $role = (string) ($slot['role'] ?? '');
+            if (in_array($role, ['product', 'character', 'outfit', 'woman'], true)) {
                 return true;
             }
         }

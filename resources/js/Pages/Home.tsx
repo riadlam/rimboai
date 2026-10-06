@@ -25,6 +25,7 @@ type Props = {
     tools: Tool[];
     brands?: Brand[];
     trendTemplates?: TrendTemplate[];
+    ugcTemplates?: TrendTemplate[];
     innovationSections?: HomeInnovationSection[];
 };
 
@@ -70,7 +71,7 @@ const HERO_SPRING = { type: 'spring' as const, stiffness: 220, damping: 28, mass
 /** How long each card stays in the big slot before rotating. */
 const HERO_ROTATE_MS = 3000;
 
-export default function Home({ tools, trendTemplates = [], innovationSections = [] }: Props) {
+export default function Home({ tools, trendTemplates = [], ugcTemplates = [], innovationSections = [] }: Props) {
     const { t: ta } = useTranslation('auth');
     const { url, props } = usePage<PageProps>();
     const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
@@ -92,6 +93,7 @@ export default function Home({ tools, trendTemplates = [], innovationSections = 
 
                     <div className="space-y-8 px-4 pb-16 pt-8 sm:px-5 sm:pt-0 lg:px-8">
                         <TrendRail templates={trendTemplates} />
+                        <UgcRail templates={ugcTemplates} />
                         {innovationSections.map((section) => (
                             <InnovationRail key={section.slug} section={section} />
                         ))}
@@ -1173,6 +1175,40 @@ function ToolChip({
 
 function TrendRail({ templates }: { templates: TrendTemplate[] }) {
     const { t } = useTranslation('home');
+    return (
+        <CatalogRail
+            templates={templates}
+            title={t('creatorsTrends')}
+            sub={t('creatorsTrendsSub')}
+            href="/trends"
+        />
+    );
+}
+
+function UgcRail({ templates }: { templates: TrendTemplate[] }) {
+    const { t } = useTranslation('home');
+    return (
+        <CatalogRail
+            templates={templates}
+            title={t('ugcTitle')}
+            sub={t('ugcSub')}
+            href="/ugc"
+        />
+    );
+}
+
+function CatalogRail({
+    templates,
+    title,
+    sub,
+    href,
+}: {
+    templates: TrendTemplate[];
+    title: string;
+    sub: string;
+    href: string;
+}) {
+    const { t } = useTranslation('home');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const selected = selectedId ? templates.find((row) => row.id === selectedId) ?? null : null;
 
@@ -1205,7 +1241,7 @@ function TrendRail({ templates }: { templates: TrendTemplate[] }) {
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.5 }}
         >
-            <RailHeader title={t('creatorsTrends')} sub={t('creatorsTrendsSub')} href="/trends" />
+            <RailHeader title={title} sub={sub} href={href} />
             <div className="scrollbar-hide -mx-1 grid auto-cols-[calc((100%-1.5rem)/3)] grid-flow-col gap-3 overflow-x-auto snap-x snap-mandatory px-1 pb-2 sm:auto-cols-[calc((100%-2rem)/3)] sm:gap-4">
                 {templates.map((item) => (
                     <button

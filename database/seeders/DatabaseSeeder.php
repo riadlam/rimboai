@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             MiniMaxH3LabSeeder::class,
             VenusProductCommercialTrendSeeder::class,
             EgoPerfumeCommercialTrendSeeder::class,
+            FashionCharacterOutfitUgcTrendSeeder::class,
             VoiceCloneModelSeeder::class,
         ]);
     }
