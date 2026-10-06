@@ -169,11 +169,17 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
         Object.fromEntries(workspace.uploads.map((u) => [u.key, { file: null, preview: null }])),
     );
     const promptEditable = Boolean(workspace.locked?.prompt_editable);
+    const isH3I2v =
+        workspace.locked?.mode === 'trend_h3_i2v' || workspace.locked?.workflow === 'h3_i2v';
+    const promptHintKey = isH3I2v ? 'promptEditableHintI2v' : 'promptEditableHint';
+    const promptPlaceholderKey = isH3I2v ? 'promptEditablePlaceholderI2v' : 'promptEditablePlaceholder';
+    const promptKeepTagsKey = isH3I2v ? 'promptKeepTagsI2v' : 'promptKeepTags';
     const [promptDraft, setPromptDraft] = useState(() => String(workspace.locked?.prompt ?? ''));
     const [promptExpanded, setPromptExpanded] = useState(false);
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const hideMotionReference =
         workspace.locked?.mode === 'trend_product_r2v' ||
+        isH3I2v ||
         workspace.locked?.workflow === 'h3_direct' ||
         /style|motion/i.test(String(workspace.locked_preview?.label ?? ''));
     const initialActive =
@@ -702,7 +708,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                         </span>
                                                     </div>
                                                     <p className="mt-0.5 text-[11px] leading-relaxed text-white/35">
-                                                        {t('promptEditableHint')}
+                                                        {t(promptHintKey)}
                                                     </p>
                                                 </div>
                                                 <button
@@ -726,10 +732,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                                     onChange={(e) => setPromptDraft(e.target.value)}
                                                     rows={5}
                                                     className="max-h-40 w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-[13px]"
-                                                    placeholder={t('promptEditablePlaceholder')}
+                                                    placeholder={t(promptPlaceholderKey)}
                                                 />
                                                 <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-white/30">
-                                                    <span>{t('promptKeepTags')}</span>
+                                                    <span>{t(promptKeepTagsKey)}</span>
                                                     <span>{promptDraft.length.toLocaleString()}</span>
                                                 </div>
                                             </div>
@@ -1182,7 +1188,7 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                             <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3">
                                 <div>
                                     <h3 className="text-sm font-semibold text-white">{t('promptEditor')}</h3>
-                                    <p className="text-[11px] text-white/35">{t('promptEditableHint')}</p>
+                                    <p className="text-[11px] text-white/35">{t(promptHintKey)}</p>
                                 </div>
                                 <button
                                     type="button"
@@ -1199,10 +1205,10 @@ export default function TrendTemplate({ workspace, tokenBalance }: Props) {
                                     onChange={(e) => setPromptDraft(e.target.value)}
                                     rows={18}
                                     className="min-h-[50vh] w-full resize-y rounded-xl border border-white/10 bg-black/40 p-3.5 text-[15px] leading-6 text-white outline-none placeholder:text-white/30 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 sm:text-sm sm:leading-relaxed"
-                                    placeholder={t('promptEditablePlaceholder')}
+                                    placeholder={t(promptPlaceholderKey)}
                                 />
                                 <div className="mt-2 flex items-center justify-between px-0.5 text-[11px] text-white/30">
-                                    <span>{t('promptKeepTags')}</span>
+                                    <span>{t(promptKeepTagsKey)}</span>
                                     <span>{promptDraft.length.toLocaleString()}</span>
                                 </div>
                             </div>

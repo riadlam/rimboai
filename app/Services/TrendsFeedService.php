@@ -411,7 +411,8 @@ class TrendsFeedService
         }
 
         $isSheet = $template->isCharacterSheetTemplate();
-        $sketchUrl = $isSheet ? null : $this->normalizeTrendMediaUrl($template->motionSketchUrl());
+        $isH3I2v = $template->isH3I2vWorkflow();
+        $sketchUrl = ($isSheet || $isH3I2v) ? null : $this->normalizeTrendMediaUrl($template->motionSketchUrl());
         $coverUrl = $this->normalizeTrendMediaUrl($template->cover_url);
         $user = auth()->user();
         $userRemakes = $user
@@ -420,6 +421,12 @@ class TrendsFeedService
         $activeRemake = $user
             ? $this->activeRemakeForTrendTemplate((int) $template->id, (int) $user->id)
             : null;
+
+        $mode = $isSheet
+            ? 'trend_character_sheet'
+            : ($isH3I2v
+                ? 'trend_h3_i2v'
+                : ($template->isH3DirectWorkflow() ? 'trend_product_r2v' : 'trend_template'));
 
         return [
             'key' => $template->feedKey(),
@@ -439,12 +446,10 @@ class TrendsFeedService
                 'resolution' => $template->resolution,
                 'duration' => $isSheet ? null : $template->duration,
                 'audio' => $isSheet ? false : (bool) $template->generate_audio,
-                'mode' => $isSheet
-                    ? 'trend_character_sheet'
-                    : ($template->isH3DirectWorkflow() ? 'trend_product_r2v' : 'trend_template'),
+                'mode' => $mode,
                 'workflow' => $template->workflow,
                 'motion_sketch_url' => $sketchUrl,
-                'motion_sketch_label' => $isSheet
+                'motion_sketch_label' => ($isSheet || $isH3I2v)
                     ? null
                     : ($template->isH3DirectWorkflow() ? 'Style & motion reference' : 'Motion choreography'),
                 'sheet_endpoint_id' => $isSheet
@@ -786,7 +791,7 @@ class TrendsFeedService
             'credits' => (int) $template->trend_cost,
             'model' => $template->model_name ?: ($isSheet
                 ? 'Nano Banana Pro'
-                : ($template->isH3DirectWorkflow() ? 'MiniMax H3' : 'Seedance')),
+                : (($template->isH3DirectWorkflow() || $template->isH3I2vWorkflow()) ? 'MiniMax H3' : 'Seedance')),
             'endpoint_id' => $template->endpoint_id,
             'trend_title' => $template->title,
             'created_at' => $template->updated_at?->toIso8601String()
@@ -801,9 +806,11 @@ class TrendsFeedService
             'samples' => array_values(array_filter([$cover, $sketch])),
             'description' => (string) ($template->description ?: ($isSheet
                 ? 'Upload a photo — get a multi-angle character sheet.'
-                : ($template->isH3DirectWorkflow()
-                    ? 'Upload your photos, edit the prompt, remake this template.'
-                    : 'Official trend template'))),
+                : ($template->isH3I2vWorkflow()
+                    ? 'Upload your start photo, edit the prompt, remake this fashion UGC.'
+                    : ($template->isH3DirectWorkflow()
+                        ? 'Upload your photos, edit the prompt, remake this template.'
+                        : 'Official trend template')))),
             'prompt' => $isSheet
                 ? (string) ($template->sheet_prompt ?: TrendTemplate::defaultSheetPrompt())
                 : (string) $template->prompt,

@@ -35,6 +35,9 @@ class TrendTemplate extends Model
     /** MiniMax H3 Sogni-style section split + FlashVSR. */
     public const WORKFLOW_H3_SPLIT = 'h3_split';
 
+    /** MiniMax H3 image-to-video (single first-frame upload, no motion clip). */
+    public const WORKFLOW_H3_I2V = 'h3_i2v';
+
     /** Home + /trends catalog. */
     public const CATEGORY_TRENDS = 'trends';
 
@@ -350,9 +353,49 @@ class TrendTemplate extends Model
         ];
     }
 
+    /**
+     * Single first-frame upload for MiniMax H3 image-to-video UGC.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function firstFrameSlot(): array
+    {
+        return [
+            [
+                'key' => 'first_frame',
+                'kind' => 'image',
+                'label' => 'Your start photo',
+                'role' => 'first_frame',
+                'hint' => 'Clear full-body / look photo. Becomes the exact first frame (@Image1) of the video.',
+                'accept' => 'image/*',
+                'required' => true,
+            ],
+        ];
+    }
+
     public function isPromptEditable(): bool
     {
         return (bool) $this->prompt_editable;
+    }
+
+    public static function isH3I2vEndpoint(?string $endpointId): bool
+    {
+        $id = strtolower(trim((string) $endpointId));
+
+        return $id !== '' && str_contains($id, 'minimax/h3') && str_contains($id, 'image-to-video');
+    }
+
+    public function isH3I2vWorkflow(): bool
+    {
+        $workflow = strtolower(trim((string) $this->workflow));
+        if ($workflow === self::WORKFLOW_H3_I2V) {
+            return true;
+        }
+        if (in_array($workflow, [self::WORKFLOW_H3_DIRECT, self::WORKFLOW_H3_SPLIT], true)) {
+            return false;
+        }
+
+        return self::isH3I2vEndpoint($this->endpoint_id);
     }
 
     public function isH3DirectWorkflow(): bool
@@ -361,7 +404,10 @@ class TrendTemplate extends Model
         if ($workflow === self::WORKFLOW_H3_DIRECT) {
             return true;
         }
-        if ($workflow === self::WORKFLOW_H3_SPLIT) {
+        if (in_array($workflow, [self::WORKFLOW_H3_SPLIT, self::WORKFLOW_H3_I2V], true)) {
+            return false;
+        }
+        if (self::isH3I2vEndpoint($this->endpoint_id)) {
             return false;
         }
 

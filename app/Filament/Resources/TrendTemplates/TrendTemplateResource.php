@@ -230,6 +230,7 @@ class TrendTemplateResource extends Resource
                     ->label('Remake workflow')
                     ->options([
                         TrendTemplate::WORKFLOW_H3_DIRECT => 'MiniMax H3 direct (product packshot R2V)',
+                        TrendTemplate::WORKFLOW_H3_I2V => 'MiniMax H3 image-to-video (first frame UGC)',
                         TrendTemplate::WORKFLOW_H3_SPLIT => 'MiniMax H3 split (face/motion sections)',
                     ])
                     ->nullable()
@@ -675,6 +676,7 @@ class TrendTemplateResource extends Resource
         $options = [
             TrendTemplate::DEFAULT_ENDPOINT => 'Higgsfield Genjutsu Motion Transfer (recommended)',
             TrendTemplate::SECONDARY_FALLBACK_ENDPOINT => 'MiniMax H3 split + audio (Sogni-style, FlashVSR)',
+            'minimax/h3/image-to-video' => 'MiniMax H3 Image to Video (first frame UGC)',
             TrendTemplate::CHARACTER_SHEET_ENDPOINT => 'Character Sheet only (Nano Banana Pro)',
             TrendTemplate::FALLBACK_ENDPOINT => 'Seedance 2.5 Reference to Video (fal)',
             'fal-ai/kling-video/o3/pro/reference-to-video' => 'Kling O3 Pro Reference to Video',
@@ -689,7 +691,10 @@ class TrendTemplateResource extends Resource
             }
             $rows = DB::table($table)
                 ->where('status', 'active')
-                ->where('endpoint_id', 'like', '%reference-to-video%')
+                ->where(function ($query): void {
+                    $query->where('endpoint_id', 'like', '%reference-to-video%')
+                        ->orWhere('endpoint_id', 'like', '%image-to-video%');
+                })
                 ->orderBy('sort')
                 ->get(['endpoint_id', 'name']);
             foreach ($rows as $row) {
@@ -701,6 +706,7 @@ class TrendTemplateResource extends Resource
         $preferredKeys = [
             TrendTemplate::DEFAULT_ENDPOINT,
             TrendTemplate::SECONDARY_FALLBACK_ENDPOINT,
+            'minimax/h3/image-to-video',
             TrendTemplate::CHARACTER_SHEET_ENDPOINT,
             TrendTemplate::FALLBACK_ENDPOINT,
             'fal-ai/kling-video/o3/pro/reference-to-video',

@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             VenusProductCommercialTrendSeeder::class,
             EgoPerfumeCommercialTrendSeeder::class,
             FashionCharacterOutfitUgcTrendSeeder::class,
+            FashionUgcI2vTrendSeeder::class,
             VoiceCloneModelSeeder::class,
         ]);
     }
