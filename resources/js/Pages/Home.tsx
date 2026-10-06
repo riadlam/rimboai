@@ -1056,11 +1056,58 @@ function ToolChip({
     const path = '/tools/' + tool.route.replace('tools.', '');
     const label = badge === 'New' ? t('new') : badge || (hot ? t('hot') : null);
     const isNew = badge === 'New' || label === t('new');
+    const rootRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [mediaAttached, setMediaAttached] = useState(false);
+    const [inView, setInView] = useState(false);
+
+    useEffect(() => {
+        const root = rootRef.current;
+        if (!root || !tool.video) return;
+
+        const nearIo = new IntersectionObserver(
+            ([entry]) => {
+                const near = Boolean(entry?.isIntersecting);
+                setMediaAttached(near);
+                if (!near) setInView(false);
+            },
+            { rootMargin: '160px 0px', threshold: 0 },
+        );
+        const playIo = new IntersectionObserver(
+            ([entry]) => {
+                setInView(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5));
+            },
+            { rootMargin: '0px', threshold: [0, 0.5, 1] },
+        );
+        nearIo.observe(root);
+        playIo.observe(root);
+        return () => {
+            nearIo.disconnect();
+            playIo.disconnect();
+        };
+    }, [tool.video]);
 
     useEffect(() => {
         const el = videoRef.current;
         if (!el || !tool.video) return;
+
+        if (!mediaAttached) {
+            releaseMutedPreview(el);
+            try {
+                el.pause();
+            } catch {
+                /* ignore */
+            }
+            if (el.getAttribute('src') || el.src) {
+                el.removeAttribute('src');
+                try {
+                    el.load();
+                } catch {
+                    /* ignore */
+                }
+            }
+            return;
+        }
 
         const softLoop = () => {
             if (el.currentTime >= HOME_PREVIEW_SECONDS) {
@@ -1071,31 +1118,19 @@ function ToolChip({
                 }
             }
         };
-
-        const io = new IntersectionObserver(
-            ([entry]) => {
-                const visible = Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5);
-                if (visible) {
-                    el.muted = true;
-                    if (!requestMutedPreviewPlay(el)) return;
-                    void el.play().catch(() => {
-                        releaseMutedPreview(el);
-                    });
-                } else {
-                    releaseMutedPreview(el);
-                }
-            },
-            { rootMargin: '0px', threshold: [0, 0.5, 1] },
-        );
-        io.observe(el);
         el.addEventListener('timeupdate', softLoop);
 
+        if (inView) {
+            el.muted = true;
+            if (requestMutedPreviewPlay(el)) {
+                void el.play().catch(() => releaseMutedPreview(el));
+            }
+        } else {
+            releaseMutedPreview(el);
+        }
+
         const onVis = () => {
-            if (document.visibilityState !== 'visible') return;
-            const rect = el.getBoundingClientRect();
-            const vh = window.innerHeight || 0;
-            const visibleH = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
-            if (visibleH / Math.max(rect.height, 1) < 0.5) return;
+            if (document.visibilityState !== 'visible' || !inView) return;
             el.muted = true;
             if (!requestMutedPreviewPlay(el)) return;
             void el.play().catch(() => releaseMutedPreview(el));
@@ -1103,12 +1138,11 @@ function ToolChip({
         document.addEventListener('visibilitychange', onVis);
 
         return () => {
-            io.disconnect();
             el.removeEventListener('timeupdate', softLoop);
             document.removeEventListener('visibilitychange', onVis);
             releaseMutedPreview(el);
         };
-    }, [tool.video]);
+    }, [tool.video, mediaAttached, inView]);
 
     return (
         <motion.div
@@ -1121,7 +1155,10 @@ function ToolChip({
                 href={path}
                 className="group relative block w-[148px] shrink-0 cursor-pointer sm:w-[160px] lg:w-[168px]"
             >
-                <div className="relative mb-2.5 aspect-[4/5] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101014] shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[#FF5733]/40 group-hover:shadow-[0_20px_48px_-20px_rgba(255,87,51,0.45)]">
+                <div
+                    ref={rootRef}
+                    className="relative mb-2.5 aspect-[4/5] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101014] shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[#FF5733]/40 group-hover:shadow-[0_20px_48px_-20px_rgba(255,87,51,0.45)]"
+                >
                     {label && (
                         <span
                             className={`absolute start-2 top-2 z-10 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow ${
@@ -1132,14 +1169,24 @@ function ToolChip({
                         </span>
                     )}
 
+                    {tool.poster && !mediaAttached && (
+                        <img
+                            src={tool.poster}
+                            alt=""
+                            className="absolute inset-0 size-full object-cover"
+                            draggable={false}
+                            loading="lazy"
+                        />
+                    )}
+
                     <video
                         ref={videoRef}
-                        src={tool.video}
+                        src={mediaAttached ? tool.video : undefined}
                         poster={tool.poster}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                         muted
                         playsInline
-                        preload="metadata"
+                        preload={mediaAttached ? 'metadata' : 'none'}
                     />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80" />

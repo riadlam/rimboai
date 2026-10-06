@@ -27,23 +27,43 @@ type Props = Omit<VideoHTMLAttributes<HTMLVideoElement>, 'autoPlay' | 'controls'
 
 /** Module cache so scrolling a grid of videos doesn't re-capture the same first frame. */
 const framePosterCache = new Map<string, string>();
+/** Cap data-URL posters — unbounded growth freezes the tab after a few minutes of rail scrolling. */
+const MAX_FRAME_POSTER_CACHE = 48;
+
+function touchPosterCache(key: string, poster: string): void {
+    if (framePosterCache.has(key)) framePosterCache.delete(key);
+    framePosterCache.set(key, poster);
+}
+
+function trimPosterCache(): void {
+    while (framePosterCache.size > MAX_FRAME_POSTER_CACHE) {
+        const oldest = framePosterCache.keys().next().value;
+        if (oldest === undefined) break;
+        framePosterCache.delete(oldest);
+    }
+}
 
 /** Reuse a captured still when opening the preview modal (avoids black screen before play). */
 export function getCachedVideoPoster(...keys: Array<string | null | undefined>): string | undefined {
     for (const key of keys) {
         if (!key) continue;
         const hit = framePosterCache.get(key);
-        if (hit) return hit;
+        if (hit) {
+            // LRU touch
+            touchPosterCache(key, hit);
+            return hit;
+        }
     }
     return undefined;
 }
 
 export function rememberVideoPoster(src: string, poster: string, extraKeys: string[] = []): void {
     if (!src || !poster) return;
-    framePosterCache.set(src, poster);
+    touchPosterCache(src, poster);
     for (const key of extraKeys) {
-        if (key) framePosterCache.set(key, poster);
+        if (key) touchPosterCache(key, poster);
     }
+    trimPosterCache();
 }
 
 /** True when URL is almost certainly a still image (not a video file). */
@@ -133,6 +153,8 @@ export default function VideoThumb({
     const [frameReady, setFrameReady] = useState(false);
     const [playing, setPlaying] = useState(false);
     const [inView, setInView] = useState(false);
+    /** Preview rails: only keep <video src> while near the viewport (avoids dozens of buffered decoders). */
+    const [mediaAttached, setMediaAttached] = useState(false);
     const [lifted, setLifted] = useState(false);
     const initialCaptured =
         src && !poster ? getCachedVideoPoster(src) ?? null : null;
@@ -146,7 +168,7 @@ export default function VideoThumb({
             : undefined;
     const budgetedPreview = previewMode && Boolean(clipPreviewSeconds);
     // Grids must not preload aggressively — hang prevention.
-    const preload = preloadProp ?? 'metadata';
+    const preload = previewMode && !mediaAttached ? 'none' : (preloadProp ?? 'metadata');
     const effectivePoster = poster || capturedPoster || undefined;
     // Only treat as still-image card when poster is not the video URL itself (CDN thumbs, data URLs).
     const stillOnly =
@@ -155,6 +177,7 @@ export default function VideoThumb({
         !previewMode &&
         (effectivePoster!.startsWith('data:') || effectivePoster !== src);
     const framedSrc = useMemo(() => (src ? withVideoTimeFragment(src, seekTo) : undefined), [src, seekTo]);
+    const activeSrc = previewMode ? (mediaAttached && src ? src : undefined) : framedSrc;
     const fit = mediaFitClass(className);
 
     useEffect(() => {
@@ -276,23 +299,82 @@ export default function VideoThumb({
     useEffect(() => {
         if (!previewMode || !rootRef.current) return;
         const node = rootRef.current;
-        const io = new IntersectionObserver(
+
+        // Attach media slightly before play so the first frame is ready; detach when far away.
+        const nearIo = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                const near = Boolean(entry?.isIntersecting);
+                if (!near) {
+                    // Snapshot a still before the decoder is torn down (React may clear src first).
+                    const video = videoRef.current;
+                    if (video && !poster && src && video.readyState >= 2 && !framePosterCache.has(src)) {
+                        const dataUrl = captureFrameDataUrl(video);
+                        if (dataUrl) {
+                            rememberVideoPoster(src, dataUrl, warmKey ? [warmKey] : []);
+                            setCapturedPoster(dataUrl);
+                        }
+                    }
+                    setInView(false);
+                }
+                setMediaAttached(near);
+            },
+            { rootMargin: '160px 0px', threshold: 0 },
+        );
+
+        // Only truly visible cards compete for the muted-preview budget.
+        const playIo = new IntersectionObserver(
             (entries) => {
                 const entry = entries[0];
                 setInView(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5));
             },
-            // Only truly visible cards compete for the muted-preview budget.
             { rootMargin: '0px', threshold: [0, 0.5, 1] },
         );
-        io.observe(node);
-        return () => io.disconnect();
-    }, [previewMode, src]);
+
+        nearIo.observe(node);
+        playIo.observe(node);
+        return () => {
+            nearIo.disconnect();
+            playIo.disconnect();
+        };
+    }, [previewMode, src, poster, warmKey]);
+
+    // Fully release decoder/network buffers when the card leaves the near-viewport band.
+    useEffect(() => {
+        if (!previewMode || mediaAttached) return;
+        setPlaying(false);
+        framedRef.current = false;
+        const video = videoRef.current;
+        if (!video) return;
+        if (budgetedPreview) releaseMutedPreview(video);
+        try {
+            video.pause();
+        } catch {
+            /* ignore */
+        }
+        if (!poster && src && video.readyState >= 2 && !framePosterCache.has(src)) {
+            const dataUrl = captureFrameDataUrl(video);
+            if (dataUrl) {
+                rememberVideoPoster(src, dataUrl, warmKey ? [warmKey] : []);
+                setCapturedPoster(dataUrl);
+            }
+        }
+        if (video.getAttribute('src') || video.src) {
+            video.removeAttribute('src');
+            try {
+                video.load();
+            } catch {
+                /* ignore */
+            }
+        }
+    }, [mediaAttached, previewMode, budgetedPreview, poster, src, warmKey]);
 
     useEffect(() => {
         if (!previewMode) return;
         if (lifted) return;
+        if (!mediaAttached) return;
         const video = videoRef.current;
-        if (!video) return;
+        if (!video || !activeSrc) return;
 
         if (inView) {
             video.muted = true;
@@ -326,7 +408,7 @@ export default function VideoThumb({
                 releaseMutedPreview(videoRef.current);
             }
         };
-    }, [inView, previewMode, src, lifted, budgetedPreview]);
+    }, [inView, previewMode, src, lifted, budgetedPreview, mediaAttached, activeSrc]);
 
     // If tab was hidden (budget wiped), resume when visible again while still in view.
     useEffect(() => {
@@ -334,7 +416,7 @@ export default function VideoThumb({
         const onVis = () => {
             if (document.visibilityState !== 'visible') return;
             const video = videoRef.current;
-            if (!video || !inView || lifted) return;
+            if (!video || !mediaAttached || !inView || lifted) return;
             video.muted = true;
             if (!requestMutedPreviewPlay(video)) {
                 setPlaying(false);
@@ -350,7 +432,7 @@ export default function VideoThumb({
         };
         document.addEventListener('visibilitychange', onVis);
         return () => document.removeEventListener('visibilitychange', onVis);
-    }, [budgetedPreview, inView, lifted, src]);
+    }, [budgetedPreview, inView, lifted, src, mediaAttached]);
 
     // If another preview steals our budget slot, keep React state in sync.
     useEffect(() => {
@@ -491,15 +573,17 @@ export default function VideoThumb({
             <div ref={hostRef} className={`absolute inset-0 ${lifted ? 'pointer-events-none opacity-0' : ''}`}>
                 <video
                     ref={videoRef}
-                    key={previewMode ? src : framedSrc}
-                    src={previewMode ? src : framedSrc}
+                    key={previewMode ? `preview:${src}` : framedSrc}
+                    src={activeSrc}
                     poster={effectivePoster}
                     muted={muted}
                     playsInline={playsInline}
                     loop={autoLoop && !clipPreviewSeconds}
                     preload={preload}
                     className={`absolute inset-0 size-full ${fit} transition-opacity duration-200 ${
-                        lifted || playing || previewMode || (!effectivePoster && frameReady) ? 'opacity-100' : 'opacity-0'
+                        lifted || playing || (previewMode && mediaAttached) || (!effectivePoster && frameReady)
+                            ? 'opacity-100'
+                            : 'opacity-0'
                     }`}
                     onLoadedMetadata={handleLoadedMetadata}
                     onLoadedData={(e) => freezeAt(e.currentTarget)}
