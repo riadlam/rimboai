@@ -235,7 +235,11 @@
     "genjutsuMotionHint": "Upload one 4–30s motion clip plus 1–8 character/product images. Output matches the source timing.",
     "genjutsuRestyleHint": "Upload one 4–30s clip, pick a style, and optionally add up to 5 character images. Source audio is kept when present.",
     "genjutsuStyles": "Restyle style",
-    "genjutsuStylesHint": "Required — choose one visual preset from Higgsfield."
+    "genjutsuStylesHint": "Required — choose one visual preset from Higgsfield.",
+    "genjutsuAwaitVideo": "Upload video",
+    "genjutsuDurationLocked": "Duration is set by your motion video (4–30s).",
+    "genjutsuTooShort": "Need at least 4s",
+    "genjutsuTrimmed": "Billed/trimmed to 30s"
   },
   "voice": {
     "title": "Voiceover",

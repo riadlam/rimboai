@@ -461,6 +461,25 @@ export default function VideoLabCreateForm({
     const durationPct =
         durationStops.length <= 1 ? 100 : (durationIndex / (durationStops.length - 1)) * 100;
 
+    /** Genjutsu output length follows the motion clip (API trims >30s). Show read-only bar. */
+    const genjutsuSourceSeconds = useMemo(() => {
+        if (!isGenjutsu) return 0;
+        return media
+            .filter((m) => m.kind === 'video')
+            .reduce((sum, m) => sum + Math.max(0, m.durationSeconds ?? 0), 0);
+    }, [isGenjutsu, media]);
+    const genjutsuBillableSeconds =
+        genjutsuSourceSeconds > 0
+            ? Math.min(30, Math.max(1, Math.ceil(genjutsuSourceSeconds - 1e-9)))
+            : 0;
+    const genjutsuDurationPct =
+        genjutsuBillableSeconds > 0 ? Math.min(100, (genjutsuBillableSeconds / 30) * 100) : 0;
+    const genjutsuDurationLabel =
+        genjutsuBillableSeconds > 0
+            ? `${genjutsuBillableSeconds}s`
+            : t('video.genjutsuAwaitVideo', { defaultValue: 'Upload video' });
+    const genjutsuDurationTooShort = genjutsuSourceSeconds > 0 && genjutsuSourceSeconds < 4;
+
     useEffect(() => {
         if (brands[0] && !brands.find((b) => b.name === selectedBrand)) {
             setSelectedBrand(brands[0].name);
@@ -1471,7 +1490,9 @@ export default function VideoLabCreateForm({
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-semibold text-white">{t('settings')}</span>
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/40">
-                                    {isGenjutsu ? `${resolution} · source` : `${durationLabel} · ${resolution}`}
+                                    {isGenjutsu
+                                        ? `${genjutsuBillableSeconds > 0 ? `${genjutsuBillableSeconds}s` : '4–30s'} · ${resolution}`
+                                        : `${durationLabel} · ${resolution}`}
                                 </span>
                             </div>
                             <svg
@@ -1496,13 +1517,63 @@ export default function VideoLabCreateForm({
                                 >
                                     <div className="space-y-5 border-t border-white/[0.05] px-3.5 pb-4 pt-3">
                                         {isGenjutsu ? (
-                                            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-                                                <p className="text-[13px] font-medium text-zinc-200">
-                                                    {t('video.genjutsuSourceDriven', {
-                                                        defaultValue: 'Length & framing follow your video',
-                                                    })}
-                                                </p>
-                                                <p className="mt-0.5 text-[11px] text-white/40">
+                                            <div className="space-y-2.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-[13px] font-medium text-zinc-200">{t('duration')}</p>
+                                                        <p className="text-[10px] text-white/30">
+                                                            {t('video.genjutsuSourceDriven', {
+                                                                defaultValue: 'Length & framing follow your video',
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                    <span
+                                                        className={`rounded-lg border px-2 py-0.5 text-[12px] font-semibold ${
+                                                            genjutsuDurationTooShort
+                                                                ? 'border-red-400/30 bg-red-500/10 text-red-200'
+                                                                : genjutsuBillableSeconds > 0
+                                                                  ? 'border-orange-400/25 bg-orange-500/10 text-orange-100'
+                                                                  : 'border-white/10 bg-white/[0.04] text-white/45'
+                                                        }`}
+                                                    >
+                                                        {genjutsuDurationLabel}
+                                                    </span>
+                                                </div>
+                                                <div className="relative px-0.5 pt-1">
+                                                    <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
+                                                        <div
+                                                            className={`absolute inset-y-0 start-0 rounded-full transition-[width] duration-300 ${
+                                                                genjutsuDurationTooShort
+                                                                    ? 'bg-gradient-to-r from-red-500 to-orange-400'
+                                                                    : 'bg-gradient-to-r from-[#FF5733] to-[#FF8C00]'
+                                                            }`}
+                                                            style={{ width: `${genjutsuDurationPct}%` }}
+                                                        />
+                                                    </div>
+                                                    {/* Read-only: Genjutsu has no duration API field */}
+                                                    <div
+                                                        className="absolute inset-x-0 top-0 h-4 w-full cursor-default"
+                                                        aria-hidden
+                                                        title={t('video.genjutsuDurationLocked', {
+                                                            defaultValue: 'Duration is set by your motion video (4–30s).',
+                                                        })}
+                                                    />
+                                                </div>
+                                                <div className="flex justify-between text-[11px] text-white/30">
+                                                    <span>4s</span>
+                                                    <span>
+                                                        {genjutsuDurationTooShort
+                                                            ? t('video.genjutsuTooShort', {
+                                                                  defaultValue: 'Need at least 4s',
+                                                              })
+                                                            : genjutsuSourceSeconds > 30
+                                                              ? t('video.genjutsuTrimmed', {
+                                                                    defaultValue: 'Billed/trimmed to 30s',
+                                                                })
+                                                              : '30s max'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-white/40">
                                                     {isGenjutsuMotion
                                                         ? t('video.genjutsuMotionHint', {
                                                               defaultValue:
@@ -1731,7 +1802,11 @@ export default function VideoLabCreateForm({
                         )}
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">{resolution}</span>
                         <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/65">
-                            {isGenjutsu ? '4–30s source' : durationLabel}
+                            {isGenjutsu
+                                ? genjutsuBillableSeconds > 0
+                                    ? `${genjutsuBillableSeconds}s source`
+                                    : '4–30s source'
+                                : durationLabel}
                         </span>
                         {supportsAudio && audioOn && (
                             <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">{t('video.audio')}</span>
