@@ -17,6 +17,7 @@ import {
     type LabReuseDraft,
 } from '@/lib/labReuse';
 import { discardCreations } from '@/lib/discardCreations';
+import { useCreationsPage, type CreationsPagePayload } from '@/lib/useCreationsPage';
 import type { Brand, PageProps } from '@/types';
 import Button from '@/Components/Button';
 import { LabToastProvider, useLabToast } from '@/Components/LabToast';
@@ -398,6 +399,42 @@ function mergeFetchedLabImages(prev: LabImage[], fetched: LabImage[]): LabImage[
     return [...localsToKeep, ...mergedServer];
 }
 
+function mergeFetchedLabTracks(prev: LabTrack[], fetched: LabTrack[]): LabTrack[] {
+    const serverByCreation = new Map<number, LabTrack>();
+    for (const item of fetched) {
+        if (item.creationId != null) serverByCreation.set(item.creationId, item);
+    }
+    const localsToKeep = prev.filter((local) => {
+        if (local.creationId != null && serverByCreation.has(local.creationId)) return false;
+        return isActiveStatus(local.status) || local.completing === true;
+    });
+    return [...localsToKeep, ...fetched];
+}
+
+function mergeFetchedLabVoices(prev: LabVoice[], fetched: LabVoice[]): LabVoice[] {
+    const serverByCreation = new Map<number, LabVoice>();
+    for (const item of fetched) {
+        if (item.creationId != null) serverByCreation.set(item.creationId, item);
+    }
+    const localsToKeep = prev.filter((local) => {
+        if (local.creationId != null && serverByCreation.has(local.creationId)) return false;
+        return isActiveStatus(local.status);
+    });
+    return [...localsToKeep, ...fetched];
+}
+
+function mapImagesPage(data: CreationsPagePayload): LabImage[] {
+    return ((data.images ?? []) as ApiImageItem[]).map(mapApiImage);
+}
+
+function mapTracksPage(data: CreationsPagePayload): LabTrack[] {
+    return ((data.tracks ?? []) as ApiTrackItem[]).map(mapApiTrack);
+}
+
+function mapVoicesPage(data: CreationsPagePayload): LabVoice[] {
+    return ((data.voices ?? []) as ApiVoiceItem[]).map((item, index) => mapApiVoice(item, index));
+}
+
 export default function LabWorkspace(props: Props) {
     return (
         <LabToastProvider>
@@ -444,9 +481,28 @@ function LabWorkspaceInner({
     );
 
     const usesStudioLab = isImageLab || isVideoLab || isMusicLab || isVoiceLab;
-    const [images, setImages] = useState<LabImage[]>([]);
-    const [tracks, setTracks] = useState<LabTrack[]>([]);
-    const [voices, setVoices] = useState<LabVoice[]>([]);
+    const musicLabType = type === 'text-to-sound' ? 'text-to-sound' : 'text-to-music';
+    const imagesPage = useCreationsPage<LabImage>({
+        type: isVideoLab ? 'text-to-video' : 'text-to-image',
+        enabled: usesStudioLab && !isGuest && (isImageLab || isVideoLab),
+        mapResponse: mapImagesPage,
+        mergeFirstPage: mergeFetchedLabImages,
+    });
+    const tracksPage = useCreationsPage<LabTrack>({
+        type: musicLabType,
+        enabled: usesStudioLab && !isGuest && isMusicLab,
+        mapResponse: mapTracksPage,
+        mergeFirstPage: mergeFetchedLabTracks,
+    });
+    const voicesPage = useCreationsPage<LabVoice>({
+        type: 'text-to-voice',
+        enabled: usesStudioLab && !isGuest && isVoiceLab,
+        mapResponse: mapVoicesPage,
+        mergeFirstPage: mergeFetchedLabVoices,
+    });
+    const { items: images, setItems: setImages, hasMore: imagesHasMore, loadingMore: imagesLoadingMore, scrollRootRef: imagesScrollRootRef, sentinelRef: imagesSentinelRef } = imagesPage;
+    const { items: tracks, setItems: setTracks, hasMore: tracksHasMore, loadingMore: tracksLoadingMore, scrollRootRef: tracksScrollRootRef, sentinelRef: tracksSentinelRef } = tracksPage;
+    const { items: voices, setItems: setVoices, hasMore: voicesHasMore, loadingMore: voicesLoadingMore, scrollRootRef: voicesScrollRootRef, sentinelRef: voicesSentinelRef } = voicesPage;
     const imagesRef = useRef(images);
     const tracksRef = useRef(tracks);
     const voicesRef = useRef(voices);
@@ -724,49 +780,6 @@ function LabWorkspaceInner({
             document.removeEventListener('visibilitychange', onVisible);
         };
     }, [isGuest, usesStudioLab, isImageLab, isVideoLab, isMusicLab, isVoiceLab, syncTokenBalance]);
-
-    useEffect(() => {
-        if (!usesStudioLab || isGuest) return;
-
-        let cancelled = false;
-        const labType = isMusicLab ? (type === 'text-to-sound' ? 'text-to-sound' : 'text-to-music') : type;
-
-        (async () => {
-            try {
-                if (isImageLab || isVideoLab) {
-                    const data = await apiGet<{ images: ApiImageItem[] }>(`/lab/creations?type=${encodeURIComponent(labType)}`);
-                    if (cancelled) return;
-
-                    const mapped = (data.images ?? []).map(mapApiImage);
-                    setImages((prev) => mergeFetchedLabImages(prev, mapped));
-
-                    return;
-                }
-
-                if (isMusicLab) {
-                    const data = await apiGet<{ tracks: ApiTrackItem[] }>(`/lab/creations?type=${encodeURIComponent(labType)}`);
-                    if (cancelled) return;
-                    const mapped = (data.tracks ?? []).map(mapApiTrack);
-                    setTracks(mapped);
-
-                    return;
-                }
-
-                if (isVoiceLab) {
-                    const data = await apiGet<{ voices: ApiVoiceItem[] }>(`/lab/creations?type=${encodeURIComponent(labType)}`);
-                    if (cancelled) return;
-                    const mapped = (data.voices ?? []).map((item, index) => mapApiVoice(item, index));
-                    setVoices(mapped);
-                }
-            } catch {
-                // Keep empty library if fetch fails.
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [type, usesStudioLab, isGuest, isImageLab, isVideoLab, isMusicLab, isVoiceLab]);
 
     const startImageGenerate = useCallback(
         async (nextPrompt?: string, options?: ImageGenerateOptions) => {
@@ -1450,6 +1463,10 @@ function LabWorkspaceInner({
                                     onToggleFavorite={toggleTrackFavorite}
                                     onDelete={deleteTracks}
                                     onRevealComplete={handleTrackRevealComplete}
+                                    scrollRootRef={tracksScrollRootRef}
+                                    sentinelRef={tracksSentinelRef}
+                                    hasMore={tracksHasMore}
+                                    loadingMore={tracksLoadingMore}
                                 />
                             ) : isVoiceLab ? (
                                 <VoiceLabLibrary
@@ -1457,6 +1474,10 @@ function LabWorkspaceInner({
                                     generating={loading}
                                     onToggleFavorite={toggleVoiceFavorite}
                                     onDelete={deleteVoices}
+                                    scrollRootRef={voicesScrollRootRef}
+                                    sentinelRef={voicesSentinelRef}
+                                    hasMore={voicesHasMore}
+                                    loadingMore={voicesLoadingMore}
                                 />
                             ) : (
                                 <ImageLabLibrary
@@ -1469,6 +1490,10 @@ function LabWorkspaceInner({
                                     onUseResult={handleUseResult}
                                     onUseLastFrame={handleUseLastFrame}
                                     onRevealComplete={handleImageRevealComplete}
+                                    scrollRootRef={imagesScrollRootRef}
+                                    sentinelRef={imagesSentinelRef}
+                                    hasMore={imagesHasMore}
+                                    loadingMore={imagesLoadingMore}
                                 />
                             )}
                         </div>

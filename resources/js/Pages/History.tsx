@@ -6,8 +6,9 @@ import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/Ima
 import { labWarmKey } from '@/lib/trendWarmVideo';
 import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiPost } from '@/lib/api';
 import { discardCreations, type DiscardCreationType } from '@/lib/discardCreations';
+import { useCreationsPage, type CreationsPagePayload, type LabCreationsType } from '@/lib/useCreationsPage';
 import {
     buildReuseSettingsDraft,
     buildUseLastFrameDraft,
@@ -222,6 +223,78 @@ function toReuseSource(item: HistoryItem) {
     };
 }
 
+function tabToCreationsType(tab: TabId): LabCreationsType | null {
+    switch (tab) {
+        case 'image':
+            return 'text-to-image';
+        case 'video':
+            return 'text-to-video';
+        case 'music':
+            return 'text-to-music';
+        case 'audio':
+            return 'text-to-voice';
+        default:
+            return null;
+    }
+}
+
+function mapActiveTabCreations(
+    tab: TabId,
+    data: CreationsPagePayload,
+    untitledTrack: string,
+    voiceFallback: string,
+): HistoryItem[] {
+    if (tab === 'image') {
+        const out: HistoryItem[] = [];
+        for (const item of (data.images ?? []) as ApiImageItem[]) {
+            const mapped = mapImageCreation(item);
+            if (mapped) out.push(mapped);
+        }
+        return out;
+    }
+    if (tab === 'video') {
+        const out: HistoryItem[] = [];
+        for (const item of (data.images ?? []) as ApiImageItem[]) {
+            const mapped = mapVideoCreation(item);
+            if (mapped) out.push(mapped);
+        }
+        return out;
+    }
+    if (tab === 'music') {
+        return ((data.tracks ?? []) as ApiTrackItem[])
+            .filter((track) => Boolean(track.cover))
+            .map((track) => ({
+                id: track.id,
+                creationId: track.creation_id ?? null,
+                tab: 'music' as const,
+                kind: 'music' as const,
+                title: track.title || untitledTrack,
+                prompt: track.style || '',
+                src: track.cover,
+                favorite: track.favorite,
+                isPublic: Boolean(track.is_public),
+                isFeatured: Boolean(track.is_featured),
+                archived: false,
+                createdAt: track.created_at ? new Date(track.created_at).getTime() : Date.now(),
+            }));
+    }
+    if (tab === 'audio') {
+        return ((data.voices ?? []) as ApiVoiceItem[]).map((voice) => ({
+            id: voice.id,
+            creationId: voice.creation_id ?? null,
+            tab: 'audio' as const,
+            kind: 'audio' as const,
+            title: voice.title || voiceFallback,
+            prompt: voice.text || voice.voice || '',
+            src: '',
+            favorite: voice.favorite,
+            archived: false,
+            createdAt: voice.created_at ? new Date(voice.created_at).getTime() : Date.now(),
+        }));
+    }
+    return [];
+}
+
 export default function History() {
     const { t } = useTranslation('history');
     return (
@@ -235,8 +308,20 @@ export default function History() {
 function HistoryWorkspace() {
     const { t } = useTranslation('history');
     const [tab, setTab] = useState<TabId>('image');
-    const [items, setItems] = useState<HistoryItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const creationsType = tabToCreationsType(tab);
+    const {
+        items,
+        setItems,
+        loading,
+        loadingMore,
+        hasMore,
+        scrollRootRef,
+        sentinelRef,
+    } = useCreationsPage<HistoryItem>({
+        type: creationsType,
+        enabled: creationsType != null,
+        mapResponse: (data) => mapActiveTabCreations(tab, data, t('untitledTrack'), t('voiceFallback')),
+    });
     const [search, setSearch] = useState('');
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -249,77 +334,6 @@ function HistoryWorkspace() {
     const [previewIndex, setPreviewIndex] = useState<number | null>(null);
     const [playingId, setPlayingId] = useState<string | null>(null);
     const filtersRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        (async () => {
-            setLoading(true);
-            try {
-                const [imagesRes, videosRes, musicRes, voiceRes] = await Promise.all([
-                    apiGet<{ images: ApiImageItem[] }>('/lab/creations?type=text-to-image'),
-                    apiGet<{ images: ApiImageItem[] }>('/lab/creations?type=text-to-video'),
-                    apiGet<{ tracks: ApiTrackItem[] }>('/lab/creations?type=text-to-music'),
-                    apiGet<{ voices: ApiVoiceItem[] }>('/lab/creations?type=text-to-voice'),
-                ]);
-
-                if (cancelled) return;
-
-                const next: HistoryItem[] = [];
-
-                for (const item of imagesRes.images ?? []) {
-                    const mapped = mapImageCreation(item);
-                    if (mapped) next.push(mapped);
-                }
-                for (const item of videosRes.images ?? []) {
-                    const mapped = mapVideoCreation(item);
-                    if (mapped) next.push(mapped);
-                }
-                for (const track of musicRes.tracks ?? []) {
-                    if (!track.cover) continue;
-                    next.push({
-                        id: track.id,
-                        creationId: track.creation_id ?? null,
-                        tab: 'music',
-                        kind: 'music',
-                        title: track.title || t('untitledTrack'),
-                        prompt: track.style || '',
-                        src: track.cover,
-                        favorite: track.favorite,
-                        isPublic: Boolean(track.is_public),
-                        isFeatured: Boolean(track.is_featured),
-                        archived: false,
-                        createdAt: track.created_at ? new Date(track.created_at).getTime() : Date.now(),
-                    });
-                }
-                for (const voice of voiceRes.voices ?? []) {
-                    next.push({
-                        id: voice.id,
-                        creationId: voice.creation_id ?? null,
-                        tab: 'audio',
-                        kind: 'audio',
-                        title: voice.title || t('voiceFallback'),
-                        prompt: voice.text || voice.voice || '',
-                        src: '',
-                        favorite: voice.favorite,
-                        archived: false,
-                        createdAt: voice.created_at ? new Date(voice.created_at).getTime() : Date.now(),
-                    });
-                }
-
-                next.sort((a, b) => b.createdAt - a.createdAt);
-                setItems(next);
-            } catch {
-                if (!cancelled) setItems([]);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [t]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -712,7 +726,7 @@ function HistoryWorkspace() {
                 </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-2 scrollbar-thin md:p-3">
+            <div ref={scrollRootRef} className="min-h-0 flex-1 overflow-y-auto p-2 scrollbar-thin md:p-3">
                 {loading ? (
                     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                         {Array.from({ length: Math.max(columns * 2, 8) }).map((_, i) => (
@@ -752,6 +766,7 @@ function HistoryWorkspace() {
                                                 src={item.videoUrl}
                                                 poster={item.src !== item.videoUrl ? item.src : undefined}
                                                 playOnHover={false}
+                                                preload="metadata"
                                                 warmKey={labWarmKey(item.id, item.videoUrl)}
                                                 className="absolute inset-0 size-full object-contain object-center"
                                             />
@@ -801,6 +816,20 @@ function HistoryWorkspace() {
                                 </button>
                             );
                         })}
+                        {(hasMore || loadingMore) && (
+                            <div
+                                ref={sentinelRef}
+                                className="col-span-full flex items-center justify-center py-4"
+                                style={{ gridColumn: '1 / -1' }}
+                                aria-hidden
+                            >
+                                {loadingMore ? (
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-orange-300" />
+                                ) : (
+                                    <span className="h-1 w-1" />
+                                )}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-1">
@@ -841,6 +870,15 @@ function HistoryWorkspace() {
                                 </button>
                             );
                         })}
+                        {(hasMore || loadingMore) && (
+                            <div ref={sentinelRef} className="flex items-center justify-center py-4" aria-hidden>
+                                {loadingMore ? (
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-orange-300" />
+                                ) : (
+                                    <span className="h-1 w-1" />
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

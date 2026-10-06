@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
@@ -57,6 +57,12 @@ type Props = {
     hidePrompt?: boolean;
     /** Scope preview prev/next to videos or images only */
     labKind?: 'image' | 'video';
+    /** Infinite-scroll: attach to the library scroll container */
+    scrollRootRef?: RefObject<HTMLDivElement | null>;
+    /** Infinite-scroll: sentinel at list bottom */
+    sentinelRef?: RefObject<HTMLDivElement | null>;
+    hasMore?: boolean;
+    loadingMore?: boolean;
 };
 
 function isVideoItem(img: LabImage): boolean {
@@ -171,6 +177,10 @@ export default function ImageLabLibrary({
     hideMethodFilters = false,
     hidePrompt = false,
     labKind,
+    scrollRootRef,
+    sentinelRef,
+    hasMore = false,
+    loadingMore = false,
 }: Props) {
     const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'albums'>('generation');
@@ -591,7 +601,7 @@ export default function ImageLabLibrary({
             </div>
 
             {/* Content */}
-            <div className="relative z-10 min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+            <div ref={scrollRootRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto scrollbar-thin">
                 <AnimatePresence mode="wait">
                     {tab === 'albums' ? (
                         <EmptyState
@@ -785,6 +795,19 @@ export default function ImageLabLibrary({
                                     </motion.div>
                                 );
                             })}
+                            {(hasMore || loadingMore) && (
+                                <div
+                                    ref={sentinelRef}
+                                    className="col-span-full flex items-center justify-center py-4"
+                                    aria-hidden
+                                >
+                                    {loadingMore ? (
+                                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-orange-300" />
+                                    ) : (
+                                        <span className="h-1 w-1" />
+                                    )}
+                                </div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>

@@ -146,7 +146,7 @@ export default function VideoThumb({
             : undefined;
     const budgetedPreview = previewMode && Boolean(clipPreviewSeconds);
     // Grids must not preload aggressively — hang prevention.
-    const preload = preloadProp ?? (previewMode ? 'metadata' : 'auto');
+    const preload = preloadProp ?? 'metadata';
     const effectivePoster = poster || capturedPoster || undefined;
     // Only treat as still-image card when poster is not the video URL itself (CDN thumbs, data URLs).
     const stillOnly =

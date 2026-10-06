@@ -17,7 +17,7 @@ class LabCreationsController extends Controller
 {
     public function index(Request $request, FalWebhookProcessor $processor): JsonResponse
     {
-        $type = $request->validate([
+        $data = $request->validate([
             'type' => ['required', 'string', Rule::in([
                 'text-to-image',
                 'text-to-video',
@@ -25,31 +25,51 @@ class LabCreationsController extends Controller
                 'text-to-sound',
                 'text-to-voice',
             ])],
-        ])['type'];
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:40'],
+        ]);
 
+        $type = $data['type'];
+        $cursor = isset($data['cursor']) ? (int) $data['cursor'] : null;
+        $limit = max(1, min(40, (int) ($data['limit'] ?? 20)));
         $userId = $request->user()->id;
 
-        // One-shot catch-up if fal webhook was missed (no browser polling loop).
-        $this->syncActiveCreations($userId, $type, $processor);
+        // One-shot fal catch-up only on the first page (avoid sync on every scroll page).
+        if ($cursor === null) {
+            $this->syncActiveCreations($userId, $type, $processor);
+        }
 
         return match ($type) {
             'text-to-image' => response()->json([
                 'type' => $type,
-                'images' => $this->loadImageCreations($userId),
+                ...$this->pagePayload('images', $this->loadImageCreations($userId, $cursor, $limit)),
             ]),
             'text-to-video' => response()->json([
                 'type' => $type,
-                'images' => $this->loadVideoCreations($userId),
+                ...$this->pagePayload('images', $this->loadVideoCreations($userId, $cursor, $limit)),
             ]),
             'text-to-music', 'text-to-sound' => response()->json([
                 'type' => $type,
-                'tracks' => $this->loadMusicCreations($userId),
+                ...$this->pagePayload('tracks', $this->loadMusicCreations($userId, $cursor, $limit)),
             ]),
             'text-to-voice' => response()->json([
                 'type' => $type,
-                'voices' => $this->loadVoiceCreations($userId),
+                ...$this->pagePayload('voices', $this->loadVoiceCreations($userId, $cursor, $limit)),
             ]),
         };
+    }
+
+    /**
+     * @param  array{items: list<array<string, mixed>>, next_cursor: int|null, has_more: bool}  $page
+     * @return array<string, mixed>
+     */
+    private function pagePayload(string $itemsKey, array $page): array
+    {
+        return [
+            $itemsKey => $page['items'],
+            'next_cursor' => $page['next_cursor'],
+            'has_more' => $page['has_more'],
+        ];
     }
 
     /**
@@ -174,16 +194,26 @@ class LabCreationsController extends Controller
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array{items: list<array<string, mixed>>, next_cursor: int|null, has_more: bool}
      */
-    private function loadImageCreations(int $userId): array
+    private function loadImageCreations(int $userId, ?int $cursor, int $limit): array
     {
-        $creations = UserImageCreation::query()
+        $query = UserImageCreation::query()
             ->where('user_id', $userId)
             ->notDiscarded()
-            ->orderByDesc('created_at')
-            ->limit(120)
-            ->get();
+            ->orderByDesc('id');
+        if ($cursor !== null) {
+            $query->where('id', '<', $cursor);
+        }
+
+        $creations = $query->limit($limit + 1)->get();
+        $hasMore = $creations->count() > $limit;
+        if ($hasMore) {
+            $creations = $creations->take($limit);
+        }
+        $nextCursor = $hasMore && $creations->isNotEmpty()
+            ? (int) $creations->last()->id
+            : null;
 
         $items = [];
 
@@ -286,23 +316,37 @@ class LabCreationsController extends Controller
             }
         }
 
-        return $items;
+        return [
+            'items' => $items,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+        ];
     }
 
     /**
      * Video lab reuses the image grid — cards for active + completed videos.
      *
-     * @return array<int, array<string, mixed>>
+     * @return array{items: list<array<string, mixed>>, next_cursor: int|null, has_more: bool}
      */
-    private function loadVideoCreations(int $userId): array
+    private function loadVideoCreations(int $userId, ?int $cursor, int $limit): array
     {
-        $creations = UserVideoCreation::query()
+        $query = UserVideoCreation::query()
             ->where('user_id', $userId)
             ->notDiscarded()
             ->where('mode', 'not like', 'tool:%')
-            ->orderByDesc('created_at')
-            ->limit(100)
-            ->get();
+            ->orderByDesc('id');
+        if ($cursor !== null) {
+            $query->where('id', '<', $cursor);
+        }
+
+        $creations = $query->limit($limit + 1)->get();
+        $hasMore = $creations->count() > $limit;
+        if ($hasMore) {
+            $creations = $creations->take($limit);
+        }
+        $nextCursor = $hasMore && $creations->isNotEmpty()
+            ? (int) $creations->last()->id
+            : null;
 
         $items = [];
 
@@ -410,15 +454,19 @@ class LabCreationsController extends Controller
             ]);
         }
 
-        return $items;
+        return [
+            'items' => $items,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+        ];
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array{items: list<array<string, mixed>>, next_cursor: int|null, has_more: bool}
      */
-    private function loadMusicCreations(int $userId): array
+    private function loadMusicCreations(int $userId, ?int $cursor, int $limit): array
     {
-        return UserMusicCreation::query()
+        $query = UserMusicCreation::query()
             ->where('user_id', $userId)
             ->notDiscarded()
             ->whereIn('status', [
@@ -428,9 +476,21 @@ class LabCreationsController extends Controller
                 UserMusicCreation::STATUS_COMPLETED,
                 UserMusicCreation::STATUS_FAILED,
             ])
-            ->orderByDesc('created_at')
-            ->limit(100)
-            ->get()
+            ->orderByDesc('id');
+        if ($cursor !== null) {
+            $query->where('id', '<', $cursor);
+        }
+
+        $creations = $query->limit($limit + 1)->get();
+        $hasMore = $creations->count() > $limit;
+        if ($hasMore) {
+            $creations = $creations->take($limit);
+        }
+        $nextCursor = $hasMore && $creations->isNotEmpty()
+            ? (int) $creations->last()->id
+            : null;
+
+        $items = $creations
             ->map(function (UserMusicCreation $creation) {
                 $duration = $creation->duration_seconds;
                 $durationLabel = null;
@@ -453,7 +513,7 @@ class LabCreationsController extends Controller
                     'cover' => $cover,
                     'favorite' => (bool) $creation->is_favorite,
                     'is_public' => (bool) $creation->is_public,
-                'is_featured' => (bool) ($creation->is_featured ?? false),
+                    'is_featured' => (bool) ($creation->is_featured ?? false),
                     'created_at' => $creation->created_at?->toIso8601String(),
                     'instrumental' => (bool) $creation->instrumental,
                     'model' => $creation->model_name,
@@ -475,14 +535,20 @@ class LabCreationsController extends Controller
             })
             ->values()
             ->all();
+
+        return [
+            'items' => $items,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+        ];
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array{items: list<array<string, mixed>>, next_cursor: int|null, has_more: bool}
      */
-    private function loadVoiceCreations(int $userId): array
+    private function loadVoiceCreations(int $userId, ?int $cursor, int $limit): array
     {
-        return UserVoiceCreation::query()
+        $query = UserVoiceCreation::query()
             ->where('user_id', $userId)
             ->notDiscarded()
             ->whereIn('status', [
@@ -492,9 +558,21 @@ class LabCreationsController extends Controller
                 UserVoiceCreation::STATUS_COMPLETED,
                 UserVoiceCreation::STATUS_FAILED,
             ])
-            ->orderByDesc('created_at')
-            ->limit(100)
-            ->get()
+            ->orderByDesc('id');
+        if ($cursor !== null) {
+            $query->where('id', '<', $cursor);
+        }
+
+        $creations = $query->limit($limit + 1)->get();
+        $hasMore = $creations->count() > $limit;
+        if ($hasMore) {
+            $creations = $creations->take($limit);
+        }
+        $nextCursor = $hasMore && $creations->isNotEmpty()
+            ? (int) $creations->last()->id
+            : null;
+
+        $items = $creations
             ->map(function (UserVoiceCreation $creation) {
                 $settings = is_array($creation->settings) ? $creation->settings : [];
                 $text = $creation->prompt ?? '';
@@ -506,8 +584,8 @@ class LabCreationsController extends Controller
                     'text' => $text,
                     'voice' => $creation->voice_name ?? 'Unknown voice',
                     'favorite' => (bool) $creation->is_favorite,
-                'is_public' => (bool) $creation->is_public,
-                'is_featured' => (bool) ($creation->is_featured ?? false),
+                    'is_public' => (bool) $creation->is_public,
+                    'is_featured' => (bool) ($creation->is_featured ?? false),
                     'created_at' => $creation->created_at?->toIso8601String(),
                     'model' => $creation->model_name,
                     'duration' => isset($creation->duration_seconds)
@@ -524,6 +602,12 @@ class LabCreationsController extends Controller
             })
             ->values()
             ->all();
+
+        return [
+            'items' => $items,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+        ];
     }
 
     /**

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import VoiceLabPreviewModal from '@/Components/VoiceLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
@@ -29,6 +29,10 @@ type Props = {
     onToggleFavorite?: (id: string) => void;
     onDelete?: (ids: string[]) => void;
     generating?: boolean;
+    scrollRootRef?: RefObject<HTMLDivElement | null>;
+    sentinelRef?: RefObject<HTMLDivElement | null>;
+    hasMore?: boolean;
+    loadingMore?: boolean;
 };
 
 const TIME_FILTERS = [
@@ -46,6 +50,10 @@ export default function VoiceLabLibrary({
     onToggleFavorite,
     onDelete,
     generating = false,
+    scrollRootRef,
+    sentinelRef,
+    hasMore = false,
+    loadingMore = false,
 }: Props) {
     const { t } = useTranslation('lab');
     const [tab, setTab] = useState<'generation' | 'playlists'>('generation');
@@ -364,7 +372,7 @@ export default function VoiceLabLibrary({
                 )}
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+            <div ref={scrollRootRef} className="relative min-h-0 flex-1 overflow-y-auto scrollbar-thin">
                 {tab === 'playlists' ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
@@ -538,6 +546,15 @@ export default function VoiceLabLibrary({
                                         </motion.div>
                                     );
                                 })}
+                            </div>
+                        )}
+                        {(hasMore || loadingMore) && (
+                            <div ref={sentinelRef} className="flex items-center justify-center py-4" aria-hidden>
+                                {loadingMore ? (
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-orange-300" />
+                                ) : (
+                                    <span className="h-1 w-1" />
+                                )}
                             </div>
                         )}
                     </div>
