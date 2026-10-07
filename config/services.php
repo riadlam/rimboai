@@ -68,6 +68,8 @@ return [
         // Bot 2 — user creations + token purchase alerts
         'creations_bot_token' => env('TELEGRAM_CREATIONS_BOT_TOKEN'),
         'creations_chat_id' => env('TELEGRAM_CREATIONS_CHAT_ID'),
+        // Secret for X-Telegram-Bot-Api-Secret-Token on /webhooks/telegram/creations
+        'creations_webhook_secret' => env('TELEGRAM_CREATIONS_WEBHOOK_SECRET'),
     ],
 
     'sofizpay' => [

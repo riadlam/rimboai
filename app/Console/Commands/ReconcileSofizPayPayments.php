@@ -8,15 +8,15 @@ use Illuminate\Console\Command;
 
 /**
  * Safety net for the case where a user pays on SATIM but never returns to the
- * return URL (closed the tab, lost connection, etc.). Without this, the money
- * is taken but the tokens are never credited.
+ * return URL (closed the tab, lost connection, etc.).
  *
- * This re-verifies every pending SofizPay payment server-to-server and credits
- * tokens through the same idempotent path used by the browser return handler,
- * so a payment can never be fulfilled twice.
+ * This re-verifies every pending SofizPay payment server-to-server. Bank-paid
+ * rows move to status=review (Telegram Accept/Decline); tokens are NOT credited
+ * here. Rows already in review are left alone.
  *
- * Pending rows older than the lookback window that never became paid are marked
- * canceled (abandoned) so Telegram and billing history stop showing them as live.
+ * Pending (not review) rows older than the lookback window that never settled
+ * are marked canceled (abandoned) so Telegram and billing history stop showing
+ * them as live.
  */
 class ReconcileSofizPayPayments extends Command
 {
@@ -24,7 +24,7 @@ class ReconcileSofizPayPayments extends Command
         {--hours=48 : Only look at pending payments created within the last N hours}
         {--limit=200 : Maximum number of payments to process in one run}';
 
-    protected $description = 'Verify pending SofizPay payments and credit tokens for any that were actually paid';
+    protected $description = 'Verify pending SofizPay payments and move bank-paid ones into review';
 
     public function handle(SofizPayFulfillmentService $fulfillment): int
     {
@@ -41,7 +41,7 @@ class ReconcileSofizPayPayments extends Command
             ->limit($limit)
             ->get();
 
-        $paid = 0;
+        $inReview = 0;
         $stillPending = 0;
         $canceled = 0;
         $failed = 0;
@@ -62,11 +62,20 @@ class ReconcileSofizPayPayments extends Command
                 continue;
             }
 
+            $freshStatus = (string) ($payment->fresh()?->status ?? '');
+
             switch ($result['status']) {
+                case 'pending':
+                    if ($freshStatus === 'review') {
+                        $inReview++;
+                        $this->line("  #{$payment->id} ({$payment->reference}): review — awaiting Accept");
+                    } else {
+                        $stillPending++;
+                    }
+                    break;
                 case 'success':
-                    $paid++;
-                    $note = $result['credited'] ? 'credited' : 'already credited';
-                    $this->line("  #{$payment->id} ({$payment->reference}): paid — {$note}");
+                    // Should not credit from reconcile anymore; log if somehow paid.
+                    $this->line("  #{$payment->id} ({$payment->reference}): already paid");
                     break;
                 case 'canceled':
                     $canceled++;
@@ -76,9 +85,6 @@ class ReconcileSofizPayPayments extends Command
                     $failed++;
                     $this->line("  #{$payment->id} ({$payment->reference}): failed");
                     break;
-                case 'pending':
-                    $stillPending++;
-                    break;
                 default:
                     $errors++;
                     $this->warn("  #{$payment->id} ({$payment->reference}): {$result['message']}");
@@ -86,6 +92,7 @@ class ReconcileSofizPayPayments extends Command
             }
         }
 
+        // Never abandon review rows — bank already took the money.
         $stale = Payment::query()
             ->where('provider', 'sofizpay')
             ->where('status', 'pending')
@@ -119,7 +126,7 @@ class ReconcileSofizPayPayments extends Command
         }
 
         $this->newLine();
-        $this->info("Done. paid={$paid} still_pending={$stillPending} canceled={$canceled} failed={$failed} errors={$errors}");
+        $this->info("Done. in_review={$inReview} still_pending={$stillPending} canceled={$canceled} failed={$failed} errors={$errors}");
 
         return self::SUCCESS;
     }

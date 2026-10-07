@@ -30,6 +30,7 @@ class SofizPayPaymentTelegramTest extends TestCase
             'services.sofizpay.min_amount_dzd' => 75,
             'services.telegram.creations_bot_token' => 'test-creations-token',
             'services.telegram.creations_chat_id' => '12345',
+            'services.telegram.creations_webhook_secret' => 'test-webhook-secret',
             'services.telegram.bot_token' => null,
             'services.telegram.chat_id' => null,
         ]);
@@ -73,6 +74,8 @@ class SofizPayPaymentTelegramTest extends TestCase
             $table->json('last_check_response')->nullable();
             $table->unsignedBigInteger('telegram_message_id')->nullable();
             $table->timestamp('paid_at')->nullable();
+            $table->timestamp('reviewed_at')->nullable();
+            $table->string('review_decision', 16)->nullable();
             $table->timestamps();
         });
 
@@ -133,7 +136,7 @@ class SofizPayPaymentTelegramTest extends TestCase
         $this->assertStringNotContainsString('cib-order-1', $body);
     }
 
-    public function test_paid_edits_the_same_telegram_message(): void
+    public function test_bank_paid_moves_to_review_without_crediting(): void
     {
         $user = User::factory()->create(['tokens' => 10, 'email' => 'buyer@example.com']);
         $payment = $this->pendingPayment($user, telegramMessageId: 9001);
@@ -142,21 +145,144 @@ class SofizPayPaymentTelegramTest extends TestCase
 
         $result = app(SofizPayFulfillmentService::class)->verifyAndFulfill($payment);
 
-        $this->assertSame('success', $result['status']);
-        $this->assertTrue($result['credited']);
-        $this->assertSame('paid', $payment->fresh()->status);
-        $this->assertSame(5010, (int) $user->fresh()->tokens);
-        $this->assertSame(9001, (int) $payment->fresh()->telegram_message_id);
+        $this->assertSame('pending', $result['status']);
+        $this->assertFalse($result['credited']);
+        $this->assertSame('review', $payment->fresh()->status);
+        $this->assertSame(10, (int) $user->fresh()->tokens);
+        $this->assertNull($payment->fresh()->paid_at);
 
         $this->assertCount(0, $this->recordedContaining('sendMessage'));
         $edits = $this->recordedContaining('editMessageText');
         $this->assertCount(1, $edits);
         $edit = $edits[0][0]->data();
         $body = (string) ($edit['text'] ?? '');
+        $markup = json_decode((string) ($edit['reply_markup'] ?? '{}'), true);
         $this->assertSame('9001', (string) ($edit['message_id'] ?? ''));
+        $this->assertStringContainsString('Status: <b>review</b>', $body);
+        $this->assertSame('pay:ok:'.$payment->id, $markup['inline_keyboard'][0][0]['callback_data'] ?? null);
+        $this->assertSame('pay:no:'.$payment->id, $markup['inline_keyboard'][0][1]['callback_data'] ?? null);
+    }
+
+    public function test_return_url_after_bank_paid_redirects_pending_without_tokens(): void
+    {
+        $user = User::factory()->create(['tokens' => 10]);
+        $payment = $this->pendingPayment($user, telegramMessageId: 9001);
+
+        $this->fakeGateway(paid: true, telegramMessageId: 9001);
+
+        $eid = Crypt::encryptString((string) $payment->id);
+        $response = $this->get('/billing/sofizpay/return?eid='.rawurlencode($eid));
+        $response->assertRedirect();
+        $location = (string) $response->headers->get('Location');
+        $this->assertStringContainsString('payment=pending', $location);
+        $this->assertStringNotContainsString('tokens=', $location);
+        $this->assertSame('review', $payment->fresh()->status);
+        $this->assertSame(10, (int) $user->fresh()->tokens);
+    }
+
+    public function test_accept_credits_once_and_second_accept_is_noop(): void
+    {
+        $user = User::factory()->create(['tokens' => 10, 'email' => 'buyer@example.com']);
+        $payment = $this->pendingPayment($user, telegramMessageId: 9001);
+        $payment->update(['status' => 'review']);
+
+        $this->fakeGateway(paid: true, telegramMessageId: 9001);
+
+        $service = app(SofizPayFulfillmentService::class);
+        $first = $service->creditApprovedPayment($payment->fresh());
+        $this->assertTrue($first['credited']);
+        $this->assertSame('paid', $payment->fresh()->status);
+        $this->assertSame(5010, (int) $user->fresh()->tokens);
+        $this->assertSame('accepted', $payment->fresh()->review_decision);
+
+        $second = $service->creditApprovedPayment($payment->fresh());
+        $this->assertFalse($second['credited']);
+        $this->assertSame(5010, (int) $user->fresh()->tokens);
+
+        $edits = $this->recordedContaining('editMessageText');
+        $this->assertGreaterThanOrEqual(1, $edits->count());
+        $body = (string) ($edits[0][0]->data()['text'] ?? '');
         $this->assertStringContainsString('Status: <b>paid</b>', $body);
-        $this->assertStringNotContainsString('https://cib.satim.dz', $body);
-        $this->assertStringNotContainsString('payment_url', $body);
+    }
+
+    public function test_decline_marks_failed_without_credit_and_blocks_later_accept(): void
+    {
+        $user = User::factory()->create(['tokens' => 10]);
+        $payment = $this->pendingPayment($user, telegramMessageId: 9001);
+        $payment->update(['status' => 'review']);
+
+        $this->fakeGateway(paid: true, telegramMessageId: 9001);
+
+        $service = app(SofizPayFulfillmentService::class);
+        $declined = $service->declinePayment($payment->fresh());
+        $this->assertTrue($declined['ok']);
+        $this->assertSame('failed', $payment->fresh()->status);
+        $this->assertSame('declined', $payment->fresh()->review_decision);
+        $this->assertSame(10, (int) $user->fresh()->tokens);
+
+        $accept = $service->creditApprovedPayment($payment->fresh());
+        $this->assertFalse($accept['credited']);
+        $this->assertSame(10, (int) $user->fresh()->tokens);
+
+        // Re-verify must not reopen a declined payment.
+        $verify = $service->verifyAndFulfill($payment->fresh());
+        $this->assertSame('failed', $verify['status']);
+        $this->assertSame('failed', $payment->fresh()->status);
+    }
+
+    public function test_webhook_accept_credits_tokens(): void
+    {
+        $user = User::factory()->create(['tokens' => 10]);
+        $payment = $this->pendingPayment($user, telegramMessageId: 9001);
+        $payment->update(['status' => 'review']);
+
+        $this->fakeGateway(paid: true, telegramMessageId: 9001);
+
+        $response = $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'test-webhook-secret')
+            ->postJson('/webhooks/telegram/creations', [
+                'callback_query' => [
+                    'id' => 'cb-1',
+                    'data' => 'pay:ok:'.$payment->id,
+                    'message' => ['chat' => ['id' => 12345]],
+                ],
+            ]);
+
+        $response->assertOk()->assertJson(['ok' => true]);
+        $this->assertSame('paid', $payment->fresh()->status);
+        $this->assertSame(5010, (int) $user->fresh()->tokens);
+        $this->assertCount(1, $this->recordedContaining('answerCallbackQuery'));
+    }
+
+    public function test_webhook_rejects_bad_secret(): void
+    {
+        $response = $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'wrong')
+            ->postJson('/webhooks/telegram/creations', [
+                'callback_query' => [
+                    'id' => 'cb-1',
+                    'data' => 'pay:ok:1',
+                    'message' => ['chat' => ['id' => 12345]],
+                ],
+            ]);
+
+        $response->assertUnauthorized();
+    }
+
+    public function test_history_maps_review_to_pending(): void
+    {
+        $user = User::factory()->create(['tokens' => 10]);
+        $this->pendingPayment($user, telegramMessageId: 9001)->update(['status' => 'review']);
+
+        $response = $this->actingAs($user)->get('/billing/history');
+        $response->assertOk();
+        $payments = $response->viewData('page')['props']['payments']['data'] ?? null;
+        if ($payments === null) {
+            // Inertia props may be under different key in this test harness.
+            $props = $response->original->getData()['page']['props'] ?? [];
+            $payments = $props['payments']['data'] ?? [];
+        }
+        $this->assertNotEmpty($payments);
+        $this->assertSame('pending', $payments[0]['status']);
+        $this->assertStringNotContainsString('"review"', $response->getContent());
     }
 
     public function test_cancel_on_return_edits_status_without_crediting(): void
@@ -191,7 +317,7 @@ class SofizPayPaymentTelegramTest extends TestCase
         $this->assertCount(0, $this->recordedContaining('sendMessage'));
     }
 
-    public function test_paid_still_credits_if_row_was_canceled(): void
+    public function test_bank_paid_still_enters_review_if_row_was_canceled(): void
     {
         $user = User::factory()->create(['tokens' => 10, 'email' => 'buyer@example.com']);
         $payment = $this->pendingPayment($user, telegramMessageId: 9001);
@@ -201,14 +327,10 @@ class SofizPayPaymentTelegramTest extends TestCase
 
         $result = app(SofizPayFulfillmentService::class)->verifyAndFulfill($payment->fresh());
 
-        $this->assertSame('success', $result['status']);
-        $this->assertTrue($result['credited']);
-        $this->assertSame('paid', $payment->fresh()->status);
-        $this->assertSame(5010, (int) $user->fresh()->tokens);
-
-        $edits = $this->recordedContaining('editMessageText');
-        $this->assertCount(1, $edits);
-        $this->assertStringContainsString('Status: <b>paid</b>', (string) ($edits[0][0]->data()['text'] ?? ''));
+        $this->assertSame('pending', $result['status']);
+        $this->assertFalse($result['credited']);
+        $this->assertSame('review', $payment->fresh()->status);
+        $this->assertSame(10, (int) $user->fresh()->tokens);
     }
 
     public function test_pending_return_does_not_cancel_or_edit_telegram(): void
@@ -250,6 +372,24 @@ class SofizPayPaymentTelegramTest extends TestCase
         $body = (string) ($edits[0][0]->data()['text'] ?? '');
         $this->assertStringContainsString('Status: <b>canceled</b>', $body);
         $this->assertStringContainsString('No payment within 48 hours', $body);
+    }
+
+    public function test_stale_review_is_not_abandoned(): void
+    {
+        $user = User::factory()->create(['tokens' => 10]);
+        $payment = $this->pendingPayment($user, telegramMessageId: 9001);
+        $payment->forceFill([
+            'status' => 'review',
+            'created_at' => now()->subHours(49),
+            'updated_at' => now()->subHours(49),
+        ])->save();
+
+        $this->fakeGateway(paid: true, telegramMessageId: 9001);
+
+        $this->artisan('payments:reconcile-sofizpay', ['--hours' => 48])->assertSuccessful();
+
+        $this->assertSame('review', $payment->fresh()->status);
+        $this->assertSame(10, (int) $user->fresh()->tokens);
     }
 
     /**
@@ -303,7 +443,7 @@ class SofizPayPaymentTelegramTest extends TestCase
                 ]);
             }
 
-            if (str_contains($url, 'editMessageText')) {
+            if (str_contains($url, 'editMessageText') || str_contains($url, 'answerCallbackQuery')) {
                 return Http::response([
                     'ok' => true,
                     'result' => ['message_id' => $telegramMessageId],

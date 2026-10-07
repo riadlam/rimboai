@@ -25,6 +25,8 @@ class Payment extends Model
         'last_check_response',
         'telegram_message_id',
         'paid_at',
+        'reviewed_at',
+        'review_decision',
     ];
 
     protected function casts(): array
@@ -36,7 +38,19 @@ class Payment extends Model
             'last_check_response' => 'array',
             'telegram_message_id' => 'integer',
             'paid_at' => 'datetime',
+            'reviewed_at' => 'datetime',
         ];
+    }
+
+    /** Bank-verified, waiting for Telegram Accept before tokens are credited. */
+    public function isAwaitingReview(): bool
+    {
+        return $this->status === 'review';
+    }
+
+    public function wasDeclined(): bool
+    {
+        return $this->status === 'failed' && $this->review_decision === 'declined';
     }
 
     public function user(): BelongsTo

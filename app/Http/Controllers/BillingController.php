@@ -36,7 +36,8 @@ class BillingController extends Controller
 
         $base = Payment::query()->where('user_id', $user->id);
         $payments = (clone $base)
-            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($status === 'pending', fn ($query) => $query->whereIn('status', ['pending', 'review']))
+            ->when($status !== 'all' && $status !== 'pending', fn ($query) => $query->where('status', $status))
             ->latest('id')
             ->paginate(12)
             ->withQueryString()
@@ -46,7 +47,8 @@ class BillingController extends Controller
                 'tokens' => (int) $payment->tokens,
                 'amount' => (float) $payment->amount,
                 'currency' => $payment->currency,
-                'status' => $payment->status,
+                // Never expose internal "review" — customers only see pending.
+                'status' => $payment->status === 'review' ? 'pending' : $payment->status,
                 'created_at' => $payment->created_at?->toIso8601String(),
                 'paid_at' => $payment->paid_at?->toIso8601String(),
             ]);
@@ -235,9 +237,15 @@ class BillingController extends Controller
             return $this->redirectResult('success', __('messages.payment_confirmed'), $payment->tokens);
         }
 
+        // Bank-verified, waiting for admin Accept — anonymous pending for the customer.
+        if ($payment->isAwaitingReview()) {
+            return $this->redirectResult('pending', __('messages.payment_pending'));
+        }
+
         $result = $fulfillment->verifyAndFulfill($payment);
 
-        $tokensCredited = $result['status'] === 'success' ? $payment->fresh()->tokens : null;
+        // Tokens are only credited after Telegram Accept; never claim success here
+        // unless the row is already paid (handled above).
         $redirectStatus = match ($result['status']) {
             'success' => 'success',
             'canceled' => 'canceled',
@@ -245,6 +253,11 @@ class BillingController extends Controller
             'pending' => 'pending',
             default => 'failed',
         };
+
+        $tokensCredited = null;
+        if ($redirectStatus === 'success' && $payment->fresh()?->isPaid()) {
+            $tokensCredited = (int) $payment->tokens;
+        }
 
         return $this->redirectResult($redirectStatus, $result['message'], $tokensCredited);
     }

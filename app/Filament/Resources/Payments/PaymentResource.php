@@ -55,7 +55,8 @@ class PaymentResource extends Resource
                     ->default('DZD'),
                 TextInput::make('status')
                     ->required()
-                    ->default('pending'),
+                    ->default('pending')
+                    ->helperText('pending|review|paid|failed|canceled'),
                 TextInput::make('transaction_id')
                     ->default(null),
                 TextInput::make('cib_order_number')
@@ -69,6 +70,10 @@ class PaymentResource extends Resource
                     ->default(null)
                     ->columnSpanFull(),
                 DateTimePicker::make('paid_at'),
+                DateTimePicker::make('reviewed_at'),
+                TextInput::make('review_decision')
+                    ->default(null)
+                    ->helperText('accepted|declined'),
             ]);
     }
 

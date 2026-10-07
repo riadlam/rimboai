@@ -231,7 +231,7 @@ export default function Pricing() {
         } else if (result === 'failed' || result === 'error') {
             setPaymentResult({ kind: 'failed', detail: message });
         } else if (result === 'pending') {
-            setNotice({ type: 'info', text: message || t('notices.paymentFailed') });
+            setNotice({ type: 'info', text: message || t('notices.paymentPending') });
         }
 
         params.delete('payment');

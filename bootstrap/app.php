@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'webhooks/fal',
             'webhooks/higgsfield',
+            'webhooks/telegram/creations',
         ]);
 
         $middleware->web(append: [

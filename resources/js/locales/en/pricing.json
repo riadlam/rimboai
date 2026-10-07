@@ -66,6 +66,7 @@
   "notices": {
     "paymentOk": "Payment confirmed.",
     "tokensAdded": "{{count}} tokens added.",
+    "paymentPending": "Payment not confirmed yet. If you already paid, wait a moment and try again.",
     "paymentFailed": "Payment was not completed.",
     "switchDzd": "Payments are processed in Algerian Dinar (DZD) via Algerie Post. Prices switched to DZD — tap Get Started again to continue.",
     "checkoutError": "Could not start the payment. Please try again.",

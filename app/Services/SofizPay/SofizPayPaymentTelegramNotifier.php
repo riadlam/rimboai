@@ -11,6 +11,7 @@ use Throwable;
 /**
  * One Telegram message per SofizPay checkout on the creations bot.
  * Sent when the Algérie Poste URL is ready; edited when status changes.
+ * Bank-paid (status=review) includes Accept / Decline inline buttons.
  */
 class SofizPayPaymentTelegramNotifier
 {
@@ -39,13 +40,20 @@ class SofizPayPaymentTelegramNotifier
 
         try {
             $text = $this->render($payment, $hint);
+            $keyboard = $this->keyboardFor($payment);
             $existingId = (int) ($payment->telegram_message_id ?? 0);
 
-            if ($existingId > 0 && $this->telegram->edit($existingId, $text)) {
-                return;
+            if ($existingId > 0) {
+                $edited = $keyboard !== null
+                    ? $this->telegram->edit($existingId, $text, $keyboard)
+                    : $this->telegram->edit($existingId, $text, null, $this->shouldRemoveKeyboard($payment));
+
+                if ($edited) {
+                    return;
+                }
             }
 
-            $newId = $this->telegram->sendReturningId($text);
+            $newId = $this->telegram->sendReturningId($text, $keyboard);
             if ($newId === null) {
                 return;
             }
@@ -63,6 +71,30 @@ class SofizPayPaymentTelegramNotifier
         }
     }
 
+    private function shouldRemoveKeyboard(Payment $payment): bool
+    {
+        return in_array((string) $payment->status, ['paid', 'failed', 'canceled'], true);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function keyboardFor(Payment $payment): ?array
+    {
+        if ((string) $payment->status !== 'review') {
+            return null;
+        }
+
+        $id = (int) $payment->id;
+
+        return [
+            'inline_keyboard' => [[
+                ['text' => '✅ Accept', 'callback_data' => 'pay:ok:'.$id],
+                ['text' => '❌ Decline', 'callback_data' => 'pay:no:'.$id],
+            ]],
+        ];
+    }
+
     private function render(Payment $payment, ?string $hint): string
     {
         $user = $payment->relationLoaded('user')
@@ -71,11 +103,14 @@ class SofizPayPaymentTelegramNotifier
 
         $status = (string) $payment->status;
         $email = (string) ($user?->email ?? '');
+        $declined = $payment->wasDeclined();
 
-        [$title, $subtitle, $statusEmoji] = match ($status) {
-            'paid' => ['🎉 <b>Token purchase — paid!</b>', 'tokens just landed in their wallet', '🟢'],
-            'canceled' => ['😅 <b>Token purchase — canceled</b>', 'they bailed at Algérie Poste', '🟠'],
-            'failed' => ['😵 <b>Token purchase — failed</b>', 'the bank said nope', '🔴'],
+        [$title, $subtitle, $statusEmoji] = match (true) {
+            $status === 'paid' => ['🎉 <b>Token purchase — paid!</b>', 'tokens credited after Accept', '🟢'],
+            $declined => ['🚫 <b>Token purchase — declined</b>', 'bank paid but tokens NOT credited', '🔴'],
+            $status === 'canceled' => ['😅 <b>Token purchase — canceled</b>', 'they bailed at Algérie Poste', '🟠'],
+            $status === 'failed' => ['😵 <b>Token purchase — failed</b>', 'the bank said nope', '🔴'],
+            $status === 'review' => ['💰 <b>Token purchase — confirm credit</b>', 'bank paid · Accept to credit tokens', '🟣'],
             default => ['🛒 <b>Token purchase — checkout live</b>', 'waiting at Algérie Poste', '🟡'],
         };
 
@@ -94,6 +129,11 @@ class SofizPayPaymentTelegramNotifier
         if ($status === 'pending') {
             $lines[] = $this->hr();
             $lines[] = '⏳ Checkout: waiting at Algérie Poste';
+        }
+
+        if ($status === 'review') {
+            $lines[] = $this->hr();
+            $lines[] = '⚡ Charge wallet if needed, then Accept or Decline';
         }
 
         if ($status === 'paid' && $payment->paid_at) {

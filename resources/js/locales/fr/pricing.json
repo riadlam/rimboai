@@ -66,6 +66,7 @@
   "notices": {
     "paymentOk": "Paiement confirmé.",
     "tokensAdded": "{{count}} jetons ajoutés.",
+    "paymentPending": "Paiement pas encore confirmé. Si vous avez déjà payé, patientez un instant et réessayez.",
     "paymentFailed": "Le paiement n'a pas été finalisé.",
     "switchDzd": "Les paiements sont traités en dinar algérien (DZD) via Algérie Post. Prix basculés en DZD — appuyez à nouveau sur Commencer pour continuer.",
     "checkoutError": "Impossible de démarrer le paiement. Veuillez réessayer.",

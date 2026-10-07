@@ -19,6 +19,7 @@ use App\Http\Controllers\ToolGenerationController;
 use App\Http\Controllers\VoiceGenerationController;
 use App\Http\Controllers\FalWebhookController;
 use App\Http\Controllers\HiggsfieldWebhookController;
+use App\Http\Controllers\TelegramCreationsWebhookController;
 use App\Http\Controllers\ClientBootReportController;
 
 // fal.ai completion callbacks (CSRF exempt; signature-verified in controller).
@@ -30,6 +31,11 @@ Route::post('/webhooks/fal', FalWebhookController::class)
 Route::post('/webhooks/higgsfield', HiggsfieldWebhookController::class)
     ->middleware('throttle:120,1')
     ->name('webhooks.higgsfield');
+
+// Creations bot: SofizPay Accept / Decline (secret-token verified).
+Route::post('/webhooks/telegram/creations', TelegramCreationsWebhookController::class)
+    ->middleware('throttle:120,1')
+    ->name('webhooks.telegram.creations');
 
 // Tiny same-origin pixel used only while the React application is still booting.
 Route::get('/client/boot-report.gif', ClientBootReportController::class)

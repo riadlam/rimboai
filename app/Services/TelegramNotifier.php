@@ -58,10 +58,17 @@ class TelegramNotifier
         return ! empty($this->token) && ! empty($this->chatId);
     }
 
+    public function chatId(): ?string
+    {
+        return $this->chatId !== null && $this->chatId !== '' ? (string) $this->chatId : null;
+    }
+
     /**
      * Send a message. Long messages are split to respect Telegram's 4096-char limit.
+     *
+     * @param  array<string, mixed>|null  $replyMarkup
      */
-    public function send(string $message): bool
+    public function send(string $message, ?array $replyMarkup = null): bool
     {
         if (! $this->isConfigured()) {
             $this->logUnconfigured();
@@ -71,8 +78,9 @@ class TelegramNotifier
 
         $ok = true;
 
-        foreach ($this->chunk($message) as $part) {
-            $ok = $this->postSendMessage($part)['ok'] && $ok;
+        foreach ($this->chunk($message) as $i => $part) {
+            // Only attach keyboard to the first chunk.
+            $ok = $this->postSendMessage($part, $i === 0 ? $replyMarkup : null)['ok'] && $ok;
         }
 
         return $ok;
@@ -80,8 +88,10 @@ class TelegramNotifier
 
     /**
      * Send a message and return Telegram's message_id (first chunk).
+     *
+     * @param  array<string, mixed>|null  $replyMarkup
      */
-    public function sendReturningId(string $text): ?int
+    public function sendReturningId(string $text, ?array $replyMarkup = null): ?int
     {
         if (! $this->isConfigured()) {
             $this->logUnconfigured();
@@ -92,7 +102,7 @@ class TelegramNotifier
         $firstId = null;
 
         foreach ($this->chunk($text) as $i => $part) {
-            $result = $this->postSendMessage($part);
+            $result = $this->postSendMessage($part, $i === 0 ? $replyMarkup : null);
             if (! $result['ok']) {
                 return $firstId;
             }
@@ -107,23 +117,33 @@ class TelegramNotifier
     /**
      * Edit an existing message in the same chat. Returns false if the message
      * is gone so the caller can send a replacement.
+     *
+     * @param  array<string, mixed>|null  $replyMarkup  Pass [] inline_keyboard via removeKeyboard
      */
-    public function edit(int $messageId, string $text): bool
+    public function edit(int $messageId, string $text, ?array $replyMarkup = null, bool $removeKeyboard = false): bool
     {
         if (! $this->isConfigured() || $messageId <= 0) {
             return false;
         }
 
         try {
+            $payload = [
+                'chat_id' => $this->chatId,
+                'message_id' => $messageId,
+                'text' => $text,
+                'parse_mode' => 'HTML',
+                'disable_web_page_preview' => true,
+            ];
+
+            if ($removeKeyboard) {
+                $payload['reply_markup'] = json_encode(['inline_keyboard' => []], JSON_THROW_ON_ERROR);
+            } elseif ($replyMarkup !== null) {
+                $payload['reply_markup'] = json_encode($replyMarkup, JSON_THROW_ON_ERROR);
+            }
+
             $response = Http::asForm()
                 ->timeout(15)
-                ->post("https://api.telegram.org/bot{$this->token}/editMessageText", [
-                    'chat_id' => $this->chatId,
-                    'message_id' => $messageId,
-                    'text' => $text,
-                    'parse_mode' => 'HTML',
-                    'disable_web_page_preview' => true,
-                ]);
+                ->post("https://api.telegram.org/bot{$this->token}/editMessageText", $payload);
 
             if ($response->successful()) {
                 return true;
@@ -148,20 +168,53 @@ class TelegramNotifier
         }
     }
 
+    public function answerCallbackQuery(string $callbackQueryId, ?string $text = null, bool $showAlert = false): bool
+    {
+        if (! $this->isConfigured() || $callbackQueryId === '') {
+            return false;
+        }
+
+        try {
+            $payload = [
+                'callback_query_id' => $callbackQueryId,
+                'show_alert' => $showAlert ? 'true' : 'false',
+            ];
+            if ($text !== null && $text !== '') {
+                $payload['text'] = $text;
+            }
+
+            $response = Http::asForm()
+                ->timeout(10)
+                ->post("https://api.telegram.org/bot{$this->token}/answerCallbackQuery", $payload);
+
+            return $response->successful();
+        } catch (\Throwable $e) {
+            Log::error("Telegram [{$this->channel}] answerCallbackQuery error: ".$e->getMessage());
+
+            return false;
+        }
+    }
+
     /**
+     * @param  array<string, mixed>|null  $replyMarkup
      * @return array{ok: bool, message_id: int|null}
      */
-    private function postSendMessage(string $text): array
+    private function postSendMessage(string $text, ?array $replyMarkup = null): array
     {
         try {
+            $payload = [
+                'chat_id' => $this->chatId,
+                'text' => $text,
+                'parse_mode' => 'HTML',
+                'disable_web_page_preview' => true,
+            ];
+            if ($replyMarkup !== null) {
+                $payload['reply_markup'] = json_encode($replyMarkup, JSON_THROW_ON_ERROR);
+            }
+
             $response = Http::asForm()
                 ->timeout(15)
-                ->post("https://api.telegram.org/bot{$this->token}/sendMessage", [
-                    'chat_id' => $this->chatId,
-                    'text' => $text,
-                    'parse_mode' => 'HTML',
-                    'disable_web_page_preview' => true,
-                ]);
+                ->post("https://api.telegram.org/bot{$this->token}/sendMessage", $payload);
 
             if (! $response->successful()) {
                 Log::error("Telegram [{$this->channel}] sendMessage failed", [
