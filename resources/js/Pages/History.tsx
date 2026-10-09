@@ -3,12 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal, { type ImageLabPreviewItem } from '@/Components/ImageLabPreviewModal';
+import MobileCreationPlaceholder from '@/Components/MobileCreationPlaceholder';
 import { labWarmKey } from '@/lib/trendWarmVideo';
 import VideoThumb from '@/Components/VideoThumb';
 import AppLayout from '@/Layouts/AppLayout';
 import { apiPost } from '@/lib/api';
 import { discardCreations, type DiscardCreationType } from '@/lib/discardCreations';
 import { useCreationsPage, type CreationsPagePayload, type LabCreationsType } from '@/lib/useCreationsPage';
+import { useMobileViewport } from '@/lib/viewport';
 import {
     buildReuseSettingsDraft,
     buildUseLastFrameDraft,
@@ -307,6 +309,7 @@ export default function History() {
 
 function HistoryWorkspace() {
     const { t } = useTranslation('history');
+    const isMobile = useMobileViewport();
     const [tab, setTab] = useState<TabId>('image');
     const creationsType = tabToCreationsType(tab);
     const {
@@ -760,7 +763,9 @@ function HistoryWorkspace() {
                                     }`}
                                     style={{ aspectRatio: '1 / 1' }}
                                 >
-                                    {item.src ? (
+                                    {isMobile ? (
+                                        <MobileCreationPlaceholder kind={item.kind} />
+                                    ) : item.src ? (
                                         item.kind === 'video' && item.videoUrl ? (
                                             <VideoThumb
                                                 src={item.videoUrl}

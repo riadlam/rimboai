@@ -3,10 +3,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } 
 import { useTranslation } from 'react-i18next';
 import ImageLabPreviewModal from '@/Components/ImageLabPreviewModal';
 import LabFailedCard from '@/Components/LabFailedCard';
+import MobileCreationPlaceholder from '@/Components/MobileCreationPlaceholder';
 import VideoThumb, { getCachedVideoPoster, isLikelyImageUrl } from '@/Components/VideoThumb';
 import { labWarmKey } from '@/lib/trendWarmVideo';
 import { downloadMediaAsset } from '@/lib/downloadMedia';
 import { labCompletingRampMs, labEffectiveProgressPercent, labPhaseLabel, labProgressPercent } from '@/lib/labProgress';
+import { useMobileViewport } from '@/lib/viewport';
 
 export type LabImage = {
     id: string;
@@ -183,6 +185,7 @@ export default function ImageLabLibrary({
     loadingMore = false,
 }: Props) {
     const { t } = useTranslation('lab');
+    const isMobile = useMobileViewport();
     const [tab, setTab] = useState<'generation' | 'albums'>('generation');
     const [search, setSearch] = useState('');
     const [columns, setColumns] = useState(6);
@@ -693,10 +696,10 @@ export default function ImageLabLibrary({
                                 return (
                                     <motion.div
                                         key={img.id}
-                                        layout
-                                        initial={{ opacity: 0, scale: 0.96 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        transition={{ delay: Math.min(index * 0.03, 0.2), duration: 0.2 }}
+                                        layout={!isMobile}
+                                        initial={isMobile ? false : { opacity: 0, scale: 0.96 }}
+                                        animate={isMobile ? undefined : { opacity: 1, scale: 1 }}
+                                        transition={isMobile ? undefined : { delay: Math.min(index * 0.03, 0.2), duration: 0.2 }}
                                         data-testid={`media-item-${img.id}`}
                                         className={`group relative w-full cursor-pointer overflow-hidden rounded-[5px] bg-[#14141c] transition-opacity ${
                                             isSelected ? 'ring-2 ring-orange-500/50' : ''
@@ -708,50 +711,57 @@ export default function ImageLabLibrary({
                                             className="absolute inset-0 overflow-hidden"
                                             onClick={() => (selectMode ? toggleSelect(img.id) : openPreview(img.id))}
                                         >
-                                            {/* Soft fill — image blur only when we have a real still (never a second video load). */}
-                                            {isVideo ? (
-                                                posterSrc ? (
-                                                    <img
-                                                        aria-hidden
-                                                        src={posterSrc}
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                        className="absolute inset-0 size-full scale-110 object-cover object-center opacity-40 blur-xl"
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        aria-hidden
-                                                        className="absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950"
-                                                    />
-                                                )
+                                            {/* Phone: never fetch tile media — open preview to load. Desktop keeps thumbs. */}
+                                            {isMobile ? (
+                                                <MobileCreationPlaceholder kind={isVideo ? 'video' : 'image'} />
                                             ) : (
-                                                <img
-                                                    aria-hidden
-                                                    src={mediaSrc}
-                                                    alt=""
-                                                    loading="lazy"
-                                                    decoding="async"
-                                                    className="absolute inset-0 size-full scale-110 object-cover object-center opacity-40 blur-xl"
-                                                />
-                                            )}
-                                            {isVideo ? (
-                                                <VideoThumb
-                                                    src={mediaSrc}
-                                                    poster={posterSrc}
-                                                    seekTo={0.15}
-                                                    playOnHover={false}
-                                                    warmKey={labWarmKey(img.id, mediaSrc)}
-                                                    className="absolute inset-0 size-full object-contain object-center"
-                                                />
-                                            ) : (
-                                                <img
-                                                    src={mediaSrc}
-                                                    alt={img.prompt}
-                                                    loading="lazy"
-                                                    decoding="async"
-                                                    className="absolute inset-0 size-full object-contain object-center"
-                                                />
+                                                <>
+                                                    {/* Soft fill — image blur only when we have a real still (never a second video load). */}
+                                                    {isVideo ? (
+                                                        posterSrc ? (
+                                                            <img
+                                                                aria-hidden
+                                                                src={posterSrc}
+                                                                alt=""
+                                                                loading="lazy"
+                                                                decoding="async"
+                                                                className="absolute inset-0 size-full scale-110 object-cover object-center opacity-40 blur-xl"
+                                                            />
+                                                        ) : (
+                                                            <div
+                                                                aria-hidden
+                                                                className="absolute inset-0 bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950"
+                                                            />
+                                                        )
+                                                    ) : (
+                                                        <img
+                                                            aria-hidden
+                                                            src={mediaSrc}
+                                                            alt=""
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            className="absolute inset-0 size-full scale-110 object-cover object-center opacity-40 blur-xl"
+                                                        />
+                                                    )}
+                                                    {isVideo ? (
+                                                        <VideoThumb
+                                                            src={mediaSrc}
+                                                            poster={posterSrc}
+                                                            seekTo={0.15}
+                                                            playOnHover={false}
+                                                            warmKey={labWarmKey(img.id, mediaSrc)}
+                                                            className="absolute inset-0 size-full object-contain object-center"
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={mediaSrc}
+                                                            alt={img.prompt}
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            className="absolute inset-0 size-full object-contain object-center"
+                                                        />
+                                                    )}
+                                                </>
                                             )}
                                         </button>
                                         {!selectMode && (
