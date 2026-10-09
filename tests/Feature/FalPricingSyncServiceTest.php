@@ -228,4 +228,88 @@ class FalPricingSyncServiceTest extends TestCase
         $this->assertSame(1, $summary['quarantined']);
         $this->assertEqualsWithDelta(0.025, (float) \Illuminate\Support\Facades\DB::table('text_to_image_models')->value('unit_price'), 1e-6);
     }
+
+    public function test_non_fal_higgsfield_endpoints_are_skipped_and_reactivated(): void
+    {
+        Schema::create('text_to_video_models', function (Blueprint $table) {
+            $table->id();
+            $table->string('endpoint_id');
+            $table->string('name')->nullable();
+            $table->string('status')->default('active');
+            $table->string('unit')->nullable();
+            $table->decimal('unit_price', 12, 6)->nullable();
+            $table->timestamp('pricing_fetched_at')->nullable();
+            $table->unsignedTinyInteger('status_missing_streak')->default(0);
+            $table->timestamps();
+        });
+
+        \Illuminate\Support\Facades\DB::table('text_to_video_models')->insert([
+            [
+                'endpoint_id' => 'higgsfield/genjutsu/motion-transfer/v1.0',
+                'name' => 'Genjutsu Motion',
+                'status' => 'inactive',
+                'status_missing_streak' => 3,
+                'unit' => 'seconds',
+                'unit_price' => 0.681,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'endpoint_id' => 'fal-ai/kling-video/v2.1/master/text-to-video',
+                'name' => 'Kling',
+                'status' => 'active',
+                'status_missing_streak' => 0,
+                'unit' => 'seconds',
+                'unit_price' => 0.1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $url = $request->url();
+            $this->assertStringNotContainsString('higgsfield', $url);
+
+            if (str_contains($url, '/models/pricing')) {
+                return Http::response([
+                    'prices' => [[
+                        'endpoint_id' => 'fal-ai/kling-video/v2.1/master/text-to-video',
+                        'unit_price' => 0.12,
+                        'unit' => 'seconds',
+                        'currency' => 'USD',
+                    ]],
+                    'has_more' => false,
+                ], 200);
+            }
+
+            return Http::response([
+                'models' => [[
+                    'endpoint_id' => 'fal-ai/kling-video/v2.1/master/text-to-video',
+                    'metadata' => ['status' => 'active'],
+                ]],
+            ], 200);
+        });
+
+        $summary = app(FalPricingSyncService::class)->run(['text_to_video_models'], false, false, 0);
+
+        $this->assertFalse($summary['failed']);
+        $this->assertSame(1, $summary['priced']);
+        $this->assertSame(1, $summary['external_skipped']);
+        $this->assertGreaterThanOrEqual(1, $summary['reactivated']);
+
+        $genjutsu = \Illuminate\Support\Facades\DB::table('text_to_video_models')
+            ->where('endpoint_id', 'higgsfield/genjutsu/motion-transfer/v1.0')
+            ->first();
+        $this->assertSame('active', $genjutsu->status);
+        $this->assertSame(0, (int) $genjutsu->status_missing_streak);
+        $this->assertEqualsWithDelta(0.681, (float) $genjutsu->unit_price, 1e-6);
+
+        $kling = \Illuminate\Support\Facades\DB::table('text_to_video_models')
+            ->where('endpoint_id', 'fal-ai/kling-video/v2.1/master/text-to-video')
+            ->first();
+        $this->assertEqualsWithDelta(0.12, (float) $kling->unit_price, 1e-6);
+
+        $this->assertTrue(FalPricingSyncService::isFalCatalogEndpoint('fal-ai/flux/dev'));
+        $this->assertFalse(FalPricingSyncService::isFalCatalogEndpoint('higgsfield/genjutsu/restyle/v1.0'));
+    }
 }

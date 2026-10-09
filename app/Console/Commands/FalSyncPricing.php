@@ -56,12 +56,13 @@ class FalSyncPricing extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            'Done. priced=%d price_failed=%d deactivated=%d reactivated=%d quarantined=%d coverage=%.2f active=%d%s',
+            'Done. priced=%d price_failed=%d deactivated=%d reactivated=%d quarantined=%d external_skipped=%d coverage=%.2f active=%d%s',
             $summary['priced'],
             $summary['price_failed'],
             $summary['deactivated'],
             $summary['reactivated'],
             $summary['quarantined'],
+            $summary['external_skipped'] ?? 0,
             $summary['coverage'],
             $summary['total_active'],
             $summary['dry_run'] ? ' (dry-run: nothing written)' : '',
@@ -129,6 +130,9 @@ class FalSyncPricing extends Command
         $lines[] = sprintf('💲 Priced OK · <b>%d</b>    ⚠️ Failed · <b>%d</b>', $data['priced'], $data['price_failed']);
         $lines[] = sprintf('📦 Coverage · <b>%.0f%%</b>    🚫 Quarantined · <b>%d</b>', $data['coverage'] * 100, $data['quarantined']);
         $lines[] = sprintf('♻️ Reactivated · <b>%d</b>    🔻 Deactivated · <b>%d</b>', $data['reactivated'], $data['deactivated']);
+        if (($data['external_skipped'] ?? 0) > 0) {
+            $lines[] = sprintf('🔌 Non-fal kept · <b>%d</b> <i>(skipped fal catalog)</i>', (int) $data['external_skipped']);
+        }
         $lines[] = sprintf('⏱️ Duration · <b>%ss</b>', $data['duration']);
 
         if ($deactivations !== []) {

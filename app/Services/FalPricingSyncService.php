@@ -33,6 +33,25 @@ class FalPricingSyncService
     private const BATCH_SIZE = 50;
 
     /**
+     * Endpoints priced/managed outside fal's catalog API.
+     * Including them in fal batch requests 404s the whole chunk and tanks coverage.
+     */
+    public static function isFalCatalogEndpoint(string $endpointId): bool
+    {
+        $id = strtolower(trim($endpointId));
+        if ($id === '') {
+            return false;
+        }
+
+        // Direct Higgsfield Genjutsu (Motion Transfer / Restyle) — not on fal.
+        if (str_starts_with($id, 'higgsfield/')) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @param  list<string>  $tables
      * @return array<string, mixed>
      */
@@ -61,6 +80,7 @@ class FalPricingSyncService
         $keptLastGood = 0;
         $published = 0;
         $requested = 0;
+        $externalSkipped = 0;
         $changeEvents = [];
         $publishQueue = [];
 
@@ -90,8 +110,18 @@ class FalPricingSyncService
                     ->orderBy('id')
                     ->get($select);
 
-                $requested += $rows->count();
-                $chunks = $rows->chunk(self::BATCH_SIZE)->values();
+                $falRows = $rows->filter(
+                    fn ($row) => self::isFalCatalogEndpoint((string) $row->endpoint_id)
+                )->values();
+                $externalRows = $rows->reject(
+                    fn ($row) => self::isFalCatalogEndpoint((string) $row->endpoint_id)
+                )->values();
+
+                $externalSkipped += $externalRows->count();
+                $this->queueExternalPreserves($table, $externalRows, $publishQueue, $changeEvents, $reactivated);
+
+                $requested += $falRows->count();
+                $chunks = $falRows->chunk(self::BATCH_SIZE)->values();
 
                 foreach ($chunks as $chunkIndex => $chunk) {
                     $endpointIds = $chunk->pluck('endpoint_id')->unique()->values()->all();
@@ -150,8 +180,36 @@ class FalPricingSyncService
                 }
             }
 
-            $coverage = $requested > 0 ? $priced / $requested : 0.0;
-            $publishAllowed = $coverage + 1e-9 >= $minCoverage;
+            $coverage = $requested > 0 ? $priced / $requested : 1.0;
+            $publishAllowed = $requested === 0 || ($coverage + 1e-9 >= $minCoverage);
+
+            if (! $dryRun) {
+                // On fal coverage failure still apply non-fal preserves (status/streak only).
+                $toPublish = $publishAllowed
+                    ? $publishQueue
+                    : array_values(array_filter(
+                        $publishQueue,
+                        static function (array $item): bool {
+                            $keys = array_keys($item['changes']);
+
+                            return $keys !== [] && empty(array_diff($keys, ['status', 'status_missing_streak', 'updated_at']));
+                        },
+                    ));
+
+                DB::transaction(function () use ($toPublish, &$published) {
+                    foreach ($toPublish as $item) {
+                        $item['changes']['updated_at'] = now();
+                        DB::table($item['table'])->where('id', $item['id'])->update($item['changes']);
+                        $published++;
+                    }
+                });
+
+                if ($toPublish !== [] && $changeEvents !== [] && Schema::hasTable('model_change_logs')) {
+                    $this->logChanges($changeEvents);
+                }
+
+                CatalogCache::forgetBrands();
+            }
 
             if (! $publishAllowed) {
                 $run->forceFill([
@@ -159,11 +217,11 @@ class FalPricingSyncService
                     'requested' => $requested,
                     'observed' => $requested,
                     'priced' => $priced,
-                    'published' => 0,
+                    'published' => $dryRun ? 0 : $published,
                     'quarantined' => $quarantined,
                     'kept_last_good' => $keptLastGood,
                     'deactivated' => 0,
-                    'reactivated' => 0,
+                    'reactivated' => $reactivated,
                     'coverage' => round($coverage, 4),
                     'error' => sprintf('Coverage %.2f below minimum %.2f — last-known-good prices kept.', $coverage, $minCoverage),
                     'finished_at' => now(),
@@ -174,25 +232,10 @@ class FalPricingSyncService
                     'min' => $minCoverage,
                     'priced' => $priced,
                     'requested' => $requested,
+                    'external_skipped' => $externalSkipped,
                 ]);
 
-                return $this->summary($run->fresh(), $changeEvents, $priceFailed);
-            }
-
-            if (! $dryRun) {
-                DB::transaction(function () use ($publishQueue, &$published) {
-                    foreach ($publishQueue as $item) {
-                        $item['changes']['updated_at'] = now();
-                        DB::table($item['table'])->where('id', $item['id'])->update($item['changes']);
-                        $published++;
-                    }
-                });
-
-                if ($changeEvents !== [] && Schema::hasTable('model_change_logs')) {
-                    $this->logChanges($changeEvents);
-                }
-
-                CatalogCache::forgetBrands();
+                return $this->summary($run->fresh(), $changeEvents, $priceFailed, $externalSkipped);
             }
 
             $run->forceFill([
@@ -219,7 +262,7 @@ class FalPricingSyncService
             throw $e;
         }
 
-        return $this->summary($run->fresh(), $changeEvents, $priceFailed);
+        return $this->summary($run->fresh(), $changeEvents, $priceFailed, $externalSkipped);
     }
 
     /**
@@ -752,6 +795,48 @@ class FalPricingSyncService
     }
 
     /**
+     * Keep direct-provider models (e.g. Higgsfield) active with seeded prices.
+     * Never send them to fal; clear stale missing-streaks from prior bad syncs.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $externalRows
+     * @param  list<array{table: string, id: int, changes: array<string, mixed>}>  $publishQueue
+     * @param  list<array<string, mixed>>  $changeEvents
+     */
+    private function queueExternalPreserves(
+        string $table,
+        $externalRows,
+        array &$publishQueue,
+        array &$changeEvents,
+        int &$reactivated,
+    ): void {
+        foreach ($externalRows as $row) {
+            $endpointId = (string) $row->endpoint_id;
+            $label = $row->name ?: $endpointId;
+            $changes = [];
+
+            if (Schema::hasColumn($table, 'status_missing_streak') && (int) ($row->status_missing_streak ?? 0) !== 0) {
+                $changes['status_missing_streak'] = 0;
+            }
+
+            if ((string) $row->status !== 'active') {
+                $changes['status'] = 'active';
+                $changeEvents[] = $this->event($table, $endpointId, $label, 'status', $row->status, 'active');
+                $reactivated++;
+            }
+
+            if ($changes === []) {
+                continue;
+            }
+
+            $publishQueue[] = [
+                'table' => $table,
+                'id' => (int) $row->id,
+                'changes' => $changes,
+            ];
+        }
+    }
+
+    /**
      * @return array{table: string, endpoint: string, name: string, field: string, old: mixed, new: mixed}
      */
     private function event(string $table, string $endpoint, string $name, string $field, mixed $old, mixed $new): array
@@ -793,7 +878,7 @@ class FalPricingSyncService
      * @param  list<array<string, mixed>>  $events
      * @return array<string, mixed>
      */
-    private function summary(FalPricingSyncRun $run, array $events, int $priceFailed): array
+    private function summary(FalPricingSyncRun $run, array $events, int $priceFailed, int $externalSkipped = 0): array
     {
         $tables = is_array($run->tables) ? $run->tables : [];
         $activeCounts = [];
@@ -825,6 +910,7 @@ class FalPricingSyncService
             'failed' => $run->status === 'failed',
             'error' => $run->error,
             'events' => $events,
+            'external_skipped' => $externalSkipped,
         ];
     }
 
