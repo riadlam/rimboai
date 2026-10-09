@@ -125,10 +125,33 @@ class FalPricingSyncService
 
                 foreach ($chunks as $chunkIndex => $chunk) {
                     $endpointIds = $chunk->pluck('endpoint_id')->unique()->values()->all();
-                    $statusMap = $skipStatus ? [] : $this->fetchStatusBatch($key, $endpointIds);
-                    $priceMap = $this->fetchPricingBatch($key, $endpointIds);
+                    $statusFetch = $skipStatus
+                        ? ['map' => [], 'unknown' => []]
+                        : $this->fetchStatusBatch($key, $endpointIds);
+                    $priceFetch = $this->fetchPricingBatch($key, $endpointIds);
+                    $statusMap = $statusFetch['map'];
+                    $priceMap = $priceFetch['map'];
+                    // Only pricing-catalog 404s are excluded from coverage (status may omit IDs).
+                    $unknownSet = array_fill_keys($priceFetch['unknown'], true);
 
                     foreach ($chunk as $row) {
+                        $endpointId = (string) $row->endpoint_id;
+
+                        // Unknown to fal catalog (404 alone) — keep seeded price, don't tank coverage.
+                        if (isset($unknownSet[$endpointId])) {
+                            $externalSkipped++;
+                            $this->queueExternalPreserves(
+                                $table,
+                                collect([$row]),
+                                $publishQueue,
+                                $changeEvents,
+                                $reactivated,
+                            );
+                            $requested = max(0, $requested - 1);
+
+                            continue;
+                        }
+
                         $result = $this->decideRow($table, $row, $statusMap, $priceMap, $skipStatus, $maxRatio);
                         $this->recordObservation($run->id, $table, $row, $result);
 
@@ -598,119 +621,173 @@ class FalPricingSyncService
 
     /**
      * @param  list<string>  $endpointIds
-     * @return array<string, string>|null
+     * @return array{map: array<string, string>, unknown: list<string>}
      */
-    public function fetchStatusBatch(string $key, array $endpointIds): ?array
+    public function fetchStatusBatch(string $key, array $endpointIds): array
     {
-        if ($endpointIds === []) {
-            return [];
-        }
-
-        $models = $this->requestJson($key, 'https://api.fal.ai/v1/models?'.$this->idQuery($endpointIds), 'models');
-        if ($models === null) {
-            return null;
-        }
-
-        $map = [];
-        $seen = [];
-        foreach ($models as $model) {
-            if (! is_array($model)) {
-                continue;
+        return $this->fetchWithSplit($key, $endpointIds, function (string $key, array $ids): array {
+            $response = $this->requestJson($key, 'https://api.fal.ai/v1/models?'.$this->idQuery($ids), 'models');
+            if (! ($response['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'not_found' => (bool) ($response['not_found'] ?? false),
+                ];
             }
-            $eid = $model['endpoint_id'] ?? null;
-            if (! is_string($eid)) {
-                continue;
-            }
-            $seen[$eid] = true;
-            $status = $model['metadata']['status'] ?? null;
-            if (! is_string($status) || $status === '') {
-                continue;
-            }
-            $map[$eid] = strtolower($status) === 'active' ? 'active' : 'inactive';
-        }
 
-        foreach ($endpointIds as $eid) {
-            if (! isset($seen[$eid]) && ! array_key_exists($eid, $map)) {
-                // Omitted from a successful page — treat as unknown, not inactive.
+            $map = [];
+            foreach ($response['list'] ?? [] as $model) {
+                if (! is_array($model)) {
+                    continue;
+                }
+                $eid = $model['endpoint_id'] ?? null;
+                if (! is_string($eid)) {
+                    continue;
+                }
+                $status = $model['metadata']['status'] ?? null;
+                if (! is_string($status) || $status === '') {
+                    continue;
+                }
+                $map[$eid] = strtolower($status) === 'active' ? 'active' : 'inactive';
             }
-        }
 
-        return $map;
+            return ['ok' => true, 'map' => $map];
+        });
     }
 
     /**
      * @param  list<string>  $endpointIds
-     * @return array<string, array{unit: string|null, unit_price: float|null, currency: string|null, payload: array<string, mixed>}>
+     * @return array{
+     *   map: array<string, array{unit: string|null, unit_price: float|null, currency: string|null, payload: array<string, mixed>}>,
+     *   unknown: list<string>
+     * }
      */
     public function fetchPricingBatch(string $key, array $endpointIds): array
     {
-        if ($endpointIds === []) {
-            return [];
-        }
+        return $this->fetchWithSplit($key, $endpointIds, function (string $key, array $ids): array {
+            $map = [];
+            $cursor = null;
 
-        $map = [];
-        $cursor = null;
-
-        for ($page = 0; $page < 8; $page++) {
-            $url = 'https://api.fal.ai/v1/models/pricing?'.$this->idQuery($endpointIds);
-            if (is_string($cursor) && $cursor !== '') {
-                $url .= '&cursor='.rawurlencode($cursor);
-            }
-
-            $body = $this->requestRaw($key, $url);
-            if ($body === null) {
-                return $map;
-            }
-
-            $prices = $body['prices'] ?? [];
-            if (! is_array($prices)) {
-                return $map;
-            }
-
-            foreach ($prices as $price) {
-                if (! is_array($price)) {
-                    continue;
+            for ($page = 0; $page < 8; $page++) {
+                $url = 'https://api.fal.ai/v1/models/pricing?'.$this->idQuery($ids);
+                if (is_string($cursor) && $cursor !== '') {
+                    $url .= '&cursor='.rawurlencode($cursor);
                 }
-                $eid = $price['endpoint_id'] ?? null;
-                if (! is_string($eid)) {
-                    continue;
+
+                $raw = $this->requestRaw($key, $url);
+                if (! ($raw['ok'] ?? false)) {
+                    return [
+                        'ok' => false,
+                        'not_found' => (bool) ($raw['not_found'] ?? false),
+                    ];
                 }
-                $map[$eid] = [
-                    'unit' => isset($price['unit']) && is_string($price['unit']) ? $price['unit'] : null,
-                    'unit_price' => isset($price['unit_price']) ? (float) $price['unit_price'] : null,
-                    'currency' => isset($price['currency']) && is_string($price['currency']) ? $price['currency'] : 'USD',
-                    'payload' => $price,
-                ];
+
+                $body = $raw['body'] ?? [];
+                $prices = $body['prices'] ?? [];
+                if (! is_array($prices)) {
+                    return ['ok' => false, 'not_found' => false];
+                }
+
+                foreach ($prices as $price) {
+                    if (! is_array($price)) {
+                        continue;
+                    }
+                    $eid = $price['endpoint_id'] ?? null;
+                    if (! is_string($eid)) {
+                        continue;
+                    }
+                    $map[$eid] = [
+                        'unit' => isset($price['unit']) && is_string($price['unit']) ? $price['unit'] : null,
+                        'unit_price' => isset($price['unit_price']) ? (float) $price['unit_price'] : null,
+                        'currency' => isset($price['currency']) && is_string($price['currency']) ? $price['currency'] : 'USD',
+                        'payload' => $price,
+                    ];
+                }
+
+                $hasMore = (bool) ($body['has_more'] ?? false);
+                $cursor = $body['next_cursor'] ?? null;
+                if (! $hasMore || ! is_string($cursor) || $cursor === '') {
+                    break;
+                }
             }
 
-            $hasMore = (bool) ($body['has_more'] ?? false);
-            $cursor = $body['next_cursor'] ?? null;
-            if (! $hasMore || ! is_string($cursor) || $cursor === '') {
-                break;
-            }
-        }
-
-        return $map;
+            return ['ok' => true, 'map' => $map];
+        });
     }
 
     /**
-     * @return list<array<string, mixed>>|null
+     * fal 404s an entire multi-id query when any single endpoint is unknown.
+     * Binary-split until good IDs succeed and bad IDs are isolated.
+     *
+     * @param  list<string>  $endpointIds
+     * @param  callable(string, list<string>): array{ok: bool, not_found?: bool, map?: array<string, mixed>}  $fetcher
+     * @return array{map: array<string, mixed>, unknown: list<string>}
      */
-    private function requestJson(string $key, string $url, string $listKey): ?array
+    private function fetchWithSplit(string $key, array $endpointIds, callable $fetcher): array
     {
-        $body = $this->requestRaw($key, $url);
-        if ($body === null) {
-            return null;
+        $endpointIds = array_values(array_unique(array_filter($endpointIds, static fn ($id) => is_string($id) && $id !== '')));
+        if ($endpointIds === []) {
+            return ['map' => [], 'unknown' => []];
         }
-        $list = $body[$listKey] ?? [];
 
-        return is_array($list) ? $list : [];
+        $result = $fetcher($key, $endpointIds);
+        if (($result['ok'] ?? false) === true) {
+            return ['map' => $result['map'] ?? [], 'unknown' => []];
+        }
+
+        $notFound = (bool) ($result['not_found'] ?? false);
+
+        if (count($endpointIds) === 1) {
+            if ($notFound) {
+                Log::warning('fal catalog endpoint unknown — skipped for sync', [
+                    'endpoint_id' => $endpointIds[0],
+                ]);
+
+                return ['map' => [], 'unknown' => [$endpointIds[0]]];
+            }
+
+            // Transient/other error — keep empty map entry so coverage still counts the miss.
+            return ['map' => [], 'unknown' => []];
+        }
+
+        if (! $notFound) {
+            // Don't binary-split on 5xx/network — whole chunk already empty.
+            return ['map' => [], 'unknown' => []];
+        }
+
+        $mid = (int) floor(count($endpointIds) / 2);
+        $left = $this->fetchWithSplit($key, array_slice($endpointIds, 0, $mid), $fetcher);
+        $right = $this->fetchWithSplit($key, array_slice($endpointIds, $mid), $fetcher);
+
+        return [
+            'map' => $left['map'] + $right['map'],
+            'unknown' => array_values(array_merge($left['unknown'], $right['unknown'])),
+        ];
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array{ok: bool, not_found?: bool, list?: list<array<string, mixed>>}
      */
-    private function requestRaw(string $key, string $url): ?array
+    private function requestJson(string $key, string $url, string $listKey): array
+    {
+        $raw = $this->requestRaw($key, $url);
+        if (! ($raw['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'not_found' => (bool) ($raw['not_found'] ?? false),
+            ];
+        }
+        $list = $raw['body'][$listKey] ?? [];
+
+        return [
+            'ok' => true,
+            'list' => is_array($list) ? $list : [],
+        ];
+    }
+
+    /**
+     * @return array{ok: bool, not_found?: bool, body?: array<string, mixed>}
+     */
+    private function requestRaw(string $key, string $url): array
     {
         $maxRetries = 5;
 
@@ -727,13 +804,17 @@ class FalPricingSyncService
                     continue;
                 }
 
-                return null;
+                return ['ok' => false, 'not_found' => false];
             }
 
             if ($response->successful()) {
                 $json = $response->json();
 
-                return is_array($json) ? $json : null;
+                return [
+                    'ok' => is_array($json),
+                    'not_found' => false,
+                    'body' => is_array($json) ? $json : [],
+                ];
             }
 
             if (in_array($response->status(), [429, 500, 502, 503, 504], true) && $attempt < $maxRetries - 1) {
@@ -743,10 +824,13 @@ class FalPricingSyncService
 
             Log::warning('fal pricing HTTP failed', ['url' => $url, 'status' => $response->status()]);
 
-            return null;
+            return [
+                'ok' => false,
+                'not_found' => $response->status() === 404,
+            ];
         }
 
-        return null;
+        return ['ok' => false, 'not_found' => false];
     }
 
     /**

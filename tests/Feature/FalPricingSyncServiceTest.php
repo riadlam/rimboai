@@ -312,4 +312,69 @@ class FalPricingSyncServiceTest extends TestCase
         $this->assertTrue(FalPricingSyncService::isFalCatalogEndpoint('fal-ai/flux/dev'));
         $this->assertFalse(FalPricingSyncService::isFalCatalogEndpoint('higgsfield/genjutsu/restyle/v1.0'));
     }
+
+    public function test_batch_404_splits_so_valid_siblings_still_price(): void
+    {
+        \Illuminate\Support\Facades\DB::table('text_to_image_models')->insert([
+            [
+                'endpoint_id' => 'fal-ai/flux/dev',
+                'name' => 'Flux',
+                'status' => 'active',
+                'status_missing_streak' => 0,
+                'unit' => 'image',
+                'unit_price' => 0.02,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'endpoint_id' => 'google/gemini-omni-flash',
+                'name' => 'Broken Omni',
+                'status' => 'inactive',
+                'status_missing_streak' => 2,
+                'unit' => 'image',
+                'unit_price' => 0.05,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $url = $request->url();
+            preg_match_all('/endpoint_id=([^&]+)/', (string) parse_url($url, PHP_URL_QUERY), $matches);
+            $ids = array_map(static fn (string $id): string => rawurldecode($id), $matches[1] ?? []);
+
+            if (in_array('google/gemini-omni-flash', $ids, true)) {
+                return Http::response(['error' => 'not_found'], 404);
+            }
+
+            if (str_contains($url, '/models/pricing')) {
+                return Http::response([
+                    'prices' => [[
+                        'endpoint_id' => 'fal-ai/flux/dev',
+                        'unit_price' => 0.03,
+                        'unit' => 'image',
+                        'currency' => 'USD',
+                    ]],
+                    'has_more' => false,
+                ], 200);
+            }
+
+            return Http::response([
+                'models' => [[
+                    'endpoint_id' => 'fal-ai/flux/dev',
+                    'metadata' => ['status' => 'active'],
+                ]],
+            ], 200);
+        });
+
+        $summary = app(FalPricingSyncService::class)->run(['text_to_image_models'], false, false, 0);
+
+        $this->assertFalse($summary['failed']);
+        $this->assertSame(1, $summary['priced']);
+        $this->assertGreaterThanOrEqual(1, $summary['external_skipped']);
+        $this->assertEqualsWithDelta(0.03, (float) \Illuminate\Support\Facades\DB::table('text_to_image_models')->where('endpoint_id', 'fal-ai/flux/dev')->value('unit_price'), 1e-6);
+        $broken = \Illuminate\Support\Facades\DB::table('text_to_image_models')->where('endpoint_id', 'google/gemini-omni-flash')->first();
+        $this->assertSame('active', $broken->status);
+        $this->assertEqualsWithDelta(0.05, (float) $broken->unit_price, 1e-6);
+    }
 }
