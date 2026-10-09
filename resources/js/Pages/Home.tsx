@@ -498,9 +498,9 @@ function Hero() {
             <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-start gap-3 pb-0 pt-5 sm:justify-center sm:gap-4 sm:py-4 lg:gap-5">
                 {/* Headline */}
                 <motion.div
-                    initial={entranceInitial({ opacity: 0, y: 28, filter: 'blur(12px)' })}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+                    initial={entranceInitial({ y: 20 })}
+                    animate={{ y: 0 }}
+                    transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                     className="shrink-0 text-center"
                 >
                     <h1 className="font-[family-name:Outfit,sans-serif] text-[28px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-[52px] xl:text-[56px]">
@@ -522,9 +522,9 @@ function Hero() {
                         <span className="text-white">{t('headlineEnd')}</span>
                     </h1>
                     <motion.p
-                        initial={entranceInitial({ opacity: 0 })}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.35 }}
+                        initial={entranceInitial({ y: 8 })}
+                        animate={{ y: 0 }}
+                        transition={{ delay: 0.2, duration: 0.4 }}
                         className="mx-auto mt-2 max-w-xl text-[13px] text-white/45 sm:text-sm"
                     >
                         {t('subtitle')}
@@ -633,9 +633,9 @@ function Hero() {
                 <motion.button
                     type="button"
                     onClick={() => router.visit('/lab?type=text-to-video')}
-                    initial={entranceInitial({ opacity: 0, y: 18 })}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4, duration: 0.45 }}
+                    initial={entranceInitial({ y: 12 })}
+                    animate={{ y: 0 }}
+                    transition={{ delay: 0.25, duration: 0.4 }}
                     whileHover={{ scale: 1.008 }}
                     whileTap={{ scale: 0.99 }}
                     className="group relative flex w-full shrink-0 items-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 text-left backdrop-blur transition hover:border-[#FF5733]/40 sm:p-3.5"
@@ -664,9 +664,9 @@ function Hero() {
                             key={c.id}
                             type="button"
                             onClick={() => router.visit(c.href)}
-                            initial={entranceInitial({ opacity: 0, y: 14 })}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.48 + i * 0.05, duration: 0.4 }}
+                            initial={entranceInitial({ y: 10 })}
+                            animate={{ y: 0 }}
+                            transition={{ delay: 0.3 + i * 0.04, duration: 0.35 }}
                             whileTap={{ scale: 0.97 }}
                             className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.035] p-3 text-left transition active:border-white/20"
                         >
@@ -736,14 +736,14 @@ function CreateTypeIcon({ id }: { id: string }) {
     );
 }
 
-const BUBBLES = Array.from({ length: 22 }, (_, i) => {
-    const size = 5 + ((i * 7) % 28);
+const BUBBLES = Array.from({ length: 6 }, (_, i) => {
+    const size = 8 + ((i * 7) % 22);
     return {
         size,
-        left: (i * 47) % 100,
-        delay: (i % 7) * 0.75,
-        duration: 8 + ((i * 3) % 11),
-        drift: (i % 2 === 0 ? 1 : -1) * (12 + ((i * 5) % 34)),
+        left: (i * 17) % 100,
+        delay: (i % 4) * 0.9,
+        duration: 10 + ((i * 3) % 8),
+        drift: (i % 2 === 0 ? 1 : -1) * (10 + ((i * 5) % 24)),
         tint: ['bg-[#FF5733]/25', 'bg-amber-400/20', 'bg-violet-500/20', 'bg-cyan-400/20', 'bg-rose-500/20'][i % 5],
     };
 });
@@ -934,10 +934,10 @@ function ToolRail({ tools }: { tools: Tool[] }) {
 
     return (
         <motion.section
-            initial={entranceInitial({ opacity: 0, y: 28 })}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            initial={entranceInitial({ y: 20 })}
+            whileInView={{ y: 0 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-gradient-to-br from-white/[0.04] via-[#0c0c10] to-[#0a0a0c]"
         >
             {/* Ambient wash */}
@@ -952,8 +952,8 @@ function ToolRail({ tools }: { tools: Tool[] }) {
                 <div className="flex w-full shrink-0 flex-col lg:w-[260px] xl:w-[280px]">
                     <div>
                         <motion.span
-                            initial={entranceInitial({ opacity: 0, y: 8 })}
-                            whileInView={{ opacity: 1, y: 0 }}
+                            initial={entranceInitial({ y: 6 })}
+                            whileInView={{ y: 0 }}
                             viewport={{ once: true }}
                             className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50"
                         >
@@ -1058,8 +1058,11 @@ function ToolChip({
     const isNew = badge === 'New' || label === t('new');
     const rootRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [mediaAttached, setMediaAttached] = useState(false);
+    const [nearView, setNearView] = useState(false);
     const [inView, setInView] = useState(false);
+    const hasPoster = Boolean(tool.poster);
+    // Poster-first: only attach video while the chip is actually in view.
+    const mediaAttached = hasPoster ? inView : nearView;
 
     useEffect(() => {
         const root = rootRef.current;
@@ -1068,16 +1071,16 @@ function ToolChip({
         const nearIo = new IntersectionObserver(
             ([entry]) => {
                 const near = Boolean(entry?.isIntersecting);
-                setMediaAttached(near);
+                setNearView(near);
                 if (!near) setInView(false);
             },
-            { rootMargin: '160px 0px', threshold: 0 },
+            { rootMargin: '48px 0px', threshold: 0 },
         );
         const playIo = new IntersectionObserver(
             ([entry]) => {
-                setInView(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5));
+                setInView(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.45));
             },
-            { rootMargin: '0px', threshold: [0, 0.5, 1] },
+            { rootMargin: '0px', threshold: [0, 0.45, 0.5, 1] },
         );
         nearIo.observe(root);
         playIo.observe(root);
@@ -1146,10 +1149,10 @@ function ToolChip({
 
     return (
         <motion.div
-            initial={entranceInitial({ opacity: 0, y: 16 })}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={entranceInitial({ y: 12 })}
+            whileInView={{ y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: Math.min(index * 0.05, 0.35), duration: 0.4 }}
+            transition={{ delay: Math.min(index * 0.04, 0.28), duration: 0.35 }}
         >
             <Link
                 href={path}
@@ -1169,11 +1172,11 @@ function ToolChip({
                         </span>
                     )}
 
-                    {tool.poster && !mediaAttached && (
+                    {tool.poster && (
                         <img
                             src={tool.poster}
                             alt=""
-                            className="absolute inset-0 size-full object-cover"
+                            className={`absolute inset-0 size-full object-cover transition-opacity ${mediaAttached ? 'opacity-0' : 'opacity-100'}`}
                             draggable={false}
                             loading="lazy"
                         />
@@ -1183,7 +1186,7 @@ function ToolChip({
                         ref={videoRef}
                         src={mediaAttached ? tool.video : undefined}
                         poster={tool.poster}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        className="relative h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                         muted
                         playsInline
                         preload={mediaAttached ? 'metadata' : 'none'}
@@ -1283,10 +1286,10 @@ function CatalogRail({
 
     return (
         <motion.section
-            initial={entranceInitial({ opacity: 0, y: 20 })}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.5 }}
+            initial={entranceInitial({ y: 16 })}
+            whileInView={{ y: 0 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.4 }}
         >
             <RailHeader title={title} sub={sub} href={href} />
             <div className="scrollbar-hide -mx-1 grid auto-cols-[calc((100%-1.5rem)/3)] grid-flow-col gap-3 overflow-x-auto snap-x snap-mandatory px-1 pb-2 sm:auto-cols-[calc((100%-2rem)/3)] sm:gap-4">
@@ -1355,10 +1358,10 @@ function InnovationRail({ section }: { section: HomeInnovationSection }) {
 
     return (
         <motion.section
-            initial={entranceInitial({ opacity: 0, y: 20 })}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.5 }}
+            initial={entranceInitial({ y: 16 })}
+            whileInView={{ y: 0 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.4 }}
         >
             <RailHeader title={section.name} href={href} />
             <div className="scrollbar-hide -mx-1 overflow-x-auto px-1 pb-2">

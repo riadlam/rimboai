@@ -153,8 +153,8 @@ export default function VideoThumb({
     const [frameReady, setFrameReady] = useState(false);
     const [playing, setPlaying] = useState(false);
     const [inView, setInView] = useState(false);
-    /** Preview rails: only keep <video src> while near the viewport (avoids dozens of buffered decoders). */
-    const [mediaAttached, setMediaAttached] = useState(false);
+    /** Near-viewport band used only when we still need to capture a first frame. */
+    const [nearView, setNearView] = useState(false);
     const [lifted, setLifted] = useState(false);
     const initialCaptured =
         src && !poster ? getCachedVideoPoster(src) ?? null : null;
@@ -167,9 +167,15 @@ export default function VideoThumb({
             ? autoPreviewSeconds
             : undefined;
     const budgetedPreview = previewMode && Boolean(clipPreviewSeconds);
+    const effectivePoster = poster || capturedPoster || undefined;
+    const hasStill = Boolean(effectivePoster);
+    /**
+     * Poster-first: with a still, attach <video src> only while truly in view (play budget).
+     * Without a still, attach slightly early so we can capture one frame, then unload.
+     */
+    const mediaAttached = !previewMode || (hasStill ? inView : nearView);
     // Grids must not preload aggressively — hang prevention.
     const preload = previewMode && !mediaAttached ? 'none' : (preloadProp ?? 'metadata');
-    const effectivePoster = poster || capturedPoster || undefined;
     // Only treat as still-image card when poster is not the video URL itself (CDN thumbs, data URLs).
     const stillOnly =
         Boolean(effectivePoster) &&
@@ -300,35 +306,39 @@ export default function VideoThumb({
         if (!previewMode || !rootRef.current) return;
         const node = rootRef.current;
 
-        // Attach media slightly before play so the first frame is ready; detach when far away.
+        const snapshotPoster = () => {
+            const video = videoRef.current;
+            if (video && !poster && src && video.readyState >= 2 && !framePosterCache.has(src)) {
+                const dataUrl = captureFrameDataUrl(video);
+                if (dataUrl) {
+                    rememberVideoPoster(src, dataUrl, warmKey ? [warmKey] : []);
+                    setCapturedPoster(dataUrl);
+                }
+            }
+        };
+
+        // Prefetch / frame-capture band (kept tight to avoid dozens of near-viewport decoders).
         const nearIo = new IntersectionObserver(
             (entries) => {
-                const entry = entries[0];
-                const near = Boolean(entry?.isIntersecting);
+                const near = Boolean(entries[0]?.isIntersecting);
                 if (!near) {
-                    // Snapshot a still before the decoder is torn down (React may clear src first).
-                    const video = videoRef.current;
-                    if (video && !poster && src && video.readyState >= 2 && !framePosterCache.has(src)) {
-                        const dataUrl = captureFrameDataUrl(video);
-                        if (dataUrl) {
-                            rememberVideoPoster(src, dataUrl, warmKey ? [warmKey] : []);
-                            setCapturedPoster(dataUrl);
-                        }
-                    }
+                    snapshotPoster();
                     setInView(false);
                 }
-                setMediaAttached(near);
+                setNearView(near);
             },
-            { rootMargin: '160px 0px', threshold: 0 },
+            { rootMargin: '48px 0px', threshold: 0 },
         );
 
         // Only truly visible cards compete for the muted-preview budget.
         const playIo = new IntersectionObserver(
             (entries) => {
                 const entry = entries[0];
-                setInView(Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.5));
+                const visible = Boolean(entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.45);
+                if (!visible) snapshotPoster();
+                setInView(visible);
             },
-            { rootMargin: '0px', threshold: [0, 0.5, 1] },
+            { rootMargin: '0px', threshold: [0, 0.45, 0.5, 1] },
         );
 
         nearIo.observe(node);

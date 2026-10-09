@@ -404,7 +404,7 @@ function TemplateCard({ template: tmpl, index, onOpen }: { template: TrendTempla
 
     return (
         <motion.div
-            variants={{ hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}
+            variants={{ hidden: { y: 14 }, show: { y: 0, transition: { duration: 0.35, ease: EASE } } }}
             className="group relative"
         >
             <motion.button
@@ -531,8 +531,8 @@ export function TemplateDetailModal({
     }, []);
 
     const contentReveal = {
-        hidden: { opacity: 0, y: 14 },
-        show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: 0.12 + i * 0.05, duration: 0.4, ease: EASE } }),
+        hidden: { y: 10 },
+        show: (i: number) => ({ y: 0, transition: { delay: 0.08 + i * 0.04, duration: 0.35, ease: EASE } }),
     };
 
     const mediaEl = (

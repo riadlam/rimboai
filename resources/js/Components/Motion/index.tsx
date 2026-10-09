@@ -8,9 +8,10 @@ const skipEntrance = shouldSkipEntranceMotion();
 export function PageFade({ children, className }: { children: ReactNode; className?: string }) {
     return (
         <motion.div
-            initial={skipEntrance ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: easeOut }}
+            // Transform-only: opacity-0 entrances can stick invisible under video main-thread load.
+            initial={skipEntrance ? false : { y: 10 }}
+            animate={{ y: 0 }}
+            transition={{ duration: 0.3, ease: easeOut }}
             className={`min-w-0 w-full ${className ?? ''}`}
         >
             {children}
@@ -73,13 +74,12 @@ export function StaggerChildren({
 
 export const staggerItem = skipEntrance
     ? {
-          hidden: { opacity: 1, y: 0 },
-          show: { opacity: 1, y: 0 },
+          hidden: { y: 0 },
+          show: { y: 0 },
       }
     : {
-          hidden: { opacity: 0, y: 16 },
+          hidden: { y: 14 },
           show: {
-              opacity: 1,
               y: 0,
               transition: { duration: 0.35, ease: easeOut },
           },

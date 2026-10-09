@@ -3,7 +3,8 @@
  * Caps concurrent decoders to avoid browser hangs.
  */
 
-export const MAX_MUTED_PREVIEW_PLAYERS = 2;
+/** One continuous muted preview at a time — two decoders still hung weaker devices. */
+export const MAX_MUTED_PREVIEW_PLAYERS = 1;
 
 type Entry = {
     el: HTMLVideoElement;
